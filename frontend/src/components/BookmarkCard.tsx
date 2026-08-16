@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ExternalLink, Eye, Share2, Trash2, Globe, Edit3, RefreshCw } from 'lucide-react';
+import { ExternalLink, Eye, Share2, Trash2, Globe, Edit3, RefreshCw, FileText } from 'lucide-react';
 import { Bookmark } from '../types';
 
 interface BookmarkCardProps {
@@ -22,6 +22,7 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
   onTagClick
 }) => {
   const [rescaping, setRescraping] = useState(false);
+  const [showNote, setShowNote] = useState(false);
 
   let hostname = '';
   try {
@@ -125,6 +126,38 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
           <p className="card-description">{bookmark.description}</p>
         )}
 
+        {/* Personal Sticky Note Preview */}
+        {bookmark.personal_note && !showNote && (
+          <div
+            className="card-note-preview-badge"
+            onClick={() => setShowNote(true)}
+            title="View personal note"
+          >
+            <FileText size={12} className="note-badge-icon" />
+            <span className="note-badge-text">{bookmark.personal_note}</span>
+          </div>
+        )}
+
+        {/* Expanded Note Drawer */}
+        {showNote && (
+          <div className="card-note-drawer">
+            <div className="card-note-header">
+              <span className="card-note-label">📝 Personal Note</span>
+              <button
+                type="button"
+                className="card-note-close"
+                onClick={() => setShowNote(false)}
+                title="Close note"
+              >
+                ×
+              </button>
+            </div>
+            <p className="card-note-text">
+              {bookmark.personal_note || <em>No note written yet. Click Edit to add thoughts.</em>}
+            </p>
+          </div>
+        )}
+
         {bookmark.tags && bookmark.tags.length > 0 && (
           <div className="card-tags">
             {bookmark.tags.slice(0, 3).map((t) => (
@@ -157,6 +190,14 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
               <Eye size={15} />
             </button>
           )}
+
+          <button
+            className={`icon-btn ${bookmark.personal_note ? 'has-note-btn' : ''}`}
+            title={bookmark.personal_note ? 'View / Toggle Personal Note' : 'Add Personal Note'}
+            onClick={() => setShowNote(!showNote)}
+          >
+            <FileText size={14} />
+          </button>
 
           <button
             className="icon-btn"

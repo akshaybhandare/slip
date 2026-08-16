@@ -6,12 +6,23 @@ export interface Tag {
   count?: number;
 }
 
+export interface Highlight {
+  id: number;
+  bookmark_id: number;
+  user_id: number;
+  text: string;
+  color: string;
+  note?: string | null;
+  created_at: string;
+}
+
 export interface Bookmark {
   id: number;
   user_id: number;
   url: string;
   title: string;
   description?: string;
+  personal_note?: string | null;
   content_type: ContentType;
   image_path?: string | null;
   favicon_path?: string | null;

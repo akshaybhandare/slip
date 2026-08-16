@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { X, Edit3 } from 'lucide-react';
+import { X, Edit3, FileText } from 'lucide-react';
 import { Bookmark, ContentType, Tag } from '../types';
 import { TagInput } from './TagInput';
 
 interface EditBookmarkModalProps {
   bookmark: Bookmark | null;
   onClose: () => void;
-  onUpdate: (id: number, data: { title: string; description: string; contentType: string; tags: string[] }) => Promise<void>;
+  onUpdate: (id: number, data: { title: string; description: string; personalNote?: string; contentType: string; tags: string[] }) => Promise<void>;
   availableTags?: Tag[];
 }
 
@@ -18,6 +18,7 @@ export const EditBookmarkModal: React.FC<EditBookmarkModalProps> = ({
 }) => {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
+  const [personalNote, setPersonalNote] = useState('');
   const [contentType, setContentType] = useState<ContentType>('website');
   const [tags, setTags] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
@@ -27,6 +28,7 @@ export const EditBookmarkModal: React.FC<EditBookmarkModalProps> = ({
     if (bookmark) {
       setTitle(bookmark.title || '');
       setDescription(bookmark.description || '');
+      setPersonalNote(bookmark.personal_note || '');
       setContentType(bookmark.content_type || 'website');
       setTags((bookmark.tags || []).map((t) => t.name));
       setError('');
@@ -46,6 +48,7 @@ export const EditBookmarkModal: React.FC<EditBookmarkModalProps> = ({
       await onUpdate(bookmark.id, {
         title: title.trim(),
         description: description.trim(),
+        personalNote: personalNote.trim(),
         contentType,
         tags
       });
@@ -93,9 +96,24 @@ export const EditBookmarkModal: React.FC<EditBookmarkModalProps> = ({
             <label className="form-label">Description</label>
             <textarea
               className="form-input"
-              rows={3}
+              rows={2}
               value={description}
               onChange={(e) => setDescription(e.target.value)}
+              style={{ resize: 'vertical' }}
+            />
+          </div>
+
+          <div className="form-group">
+            <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <FileText size={14} style={{ color: 'var(--color-primary)' }} />
+              <span>Personal Sticky Note</span>
+            </label>
+            <textarea
+              className="form-input"
+              rows={3}
+              placeholder="Add your private reflections, highlights, or reminders..."
+              value={personalNote}
+              onChange={(e) => setPersonalNote(e.target.value)}
               style={{ resize: 'vertical' }}
             />
           </div>
@@ -116,15 +134,29 @@ export const EditBookmarkModal: React.FC<EditBookmarkModalProps> = ({
           </div>
 
           <div className="form-group">
-            <label className="form-label">Tags & Collection</label>
-            <TagInput tags={tags} onChange={setTags} availableTags={availableTags} />
+            <label className="form-label">Tags</label>
+            <TagInput
+              tags={tags}
+              onChange={setTags}
+              availableTags={availableTags}
+              placeholder="Add tag and press Enter..."
+            />
           </div>
 
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '24px' }}>
-            <button type="button" className="btn btn-secondary" onClick={onClose} disabled={loading}>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '24px' }}>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={onClose}
+              disabled={loading}
+            >
               Cancel
             </button>
-            <button type="submit" className="btn btn-primary" disabled={loading}>
+            <button
+              type="submit"
+              className="btn btn-primary"
+              disabled={loading}
+            >
               {loading ? 'Saving...' : 'Save Changes'}
             </button>
           </div>

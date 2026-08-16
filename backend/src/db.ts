@@ -50,6 +50,7 @@ export function initDb(dbPath = getDbPath()): Database.Database {
       url TEXT NOT NULL,
       title TEXT NOT NULL,
       description TEXT,
+      personal_note TEXT,
       content_type TEXT DEFAULT 'website',
       reader_html TEXT,
       raw_text TEXT,
@@ -76,6 +77,21 @@ export function initDb(dbPath = getDbPath()): Database.Database {
       FOREIGN KEY(bookmark_id) REFERENCES bookmarks(id) ON DELETE CASCADE,
       FOREIGN KEY(tag_id) REFERENCES tags(id) ON DELETE CASCADE
     );
+
+    CREATE TABLE IF NOT EXISTS highlights (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      bookmark_id INTEGER NOT NULL,
+      user_id INTEGER NOT NULL,
+      text TEXT NOT NULL,
+      color TEXT DEFAULT 'yellow',
+      note TEXT,
+      created_at TEXT DEFAULT (datetime('now')),
+      FOREIGN KEY(bookmark_id) REFERENCES bookmarks(id) ON DELETE CASCADE,
+      FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_highlights_bookmark ON highlights(bookmark_id);
+    CREATE INDEX IF NOT EXISTS idx_highlights_user ON highlights(user_id);
 
     CREATE TABLE IF NOT EXISTS shared_links (
       token TEXT PRIMARY KEY,
@@ -116,6 +132,13 @@ export function initDb(dbPath = getDbPath()): Database.Database {
     );
   `);
 
+  // Safe schema migration for existing databases
+  try {
+    db.exec(`ALTER TABLE bookmarks ADD COLUMN personal_note TEXT;`);
+  } catch {
+    // Column already present
+  }
+
   // Setup FTS5 virtual table
   try {
     db.exec(`
@@ -123,6 +146,7 @@ export function initDb(dbPath = getDbPath()): Database.Database {
         bookmark_id UNINDEXED,
         title,
         description,
+        personal_note,
         raw_text,
         content = 'bookmarks',
         content_rowid = 'id'
@@ -132,20 +156,20 @@ export function initDb(dbPath = getDbPath()): Database.Database {
     // Create triggers to sync FTS5
     db.exec(`
       CREATE TRIGGER IF NOT EXISTS t_bookmarks_ai AFTER INSERT ON bookmarks BEGIN
-        INSERT INTO bookmarks_fts(rowid, bookmark_id, title, description, raw_text)
-        VALUES (new.id, new.id, new.title, new.description, new.raw_text);
+        INSERT INTO bookmarks_fts(rowid, bookmark_id, title, description, personal_note, raw_text)
+        VALUES (new.id, new.id, new.title, new.description, new.personal_note, new.raw_text);
       END;
 
       CREATE TRIGGER IF NOT EXISTS t_bookmarks_ad AFTER DELETE ON bookmarks BEGIN
-        INSERT INTO bookmarks_fts(bookmarks_fts, rowid, bookmark_id, title, description, raw_text)
-        VALUES('delete', old.id, old.id, old.title, old.description, old.raw_text);
+        INSERT INTO bookmarks_fts(bookmarks_fts, rowid, bookmark_id, title, description, personal_note, raw_text)
+        VALUES('delete', old.id, old.id, old.title, old.description, old.personal_note, old.raw_text);
       END;
 
       CREATE TRIGGER IF NOT EXISTS t_bookmarks_au AFTER UPDATE ON bookmarks BEGIN
-        INSERT INTO bookmarks_fts(bookmarks_fts, rowid, bookmark_id, title, description, raw_text)
-        VALUES('delete', old.id, old.id, old.title, old.description, old.raw_text);
-        INSERT INTO bookmarks_fts(rowid, bookmark_id, title, description, raw_text)
-        VALUES (new.id, new.id, new.title, new.description, new.raw_text);
+        INSERT INTO bookmarks_fts(bookmarks_fts, rowid, bookmark_id, title, description, personal_note, raw_text)
+        VALUES('delete', old.id, old.id, old.title, old.description, old.personal_note, old.raw_text);
+        INSERT INTO bookmarks_fts(rowid, bookmark_id, title, description, personal_note, raw_text)
+        VALUES (new.id, new.id, new.title, new.description, new.personal_note, new.raw_text);
       END;
     `);
   } catch (err) {

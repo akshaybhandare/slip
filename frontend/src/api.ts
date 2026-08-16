@@ -107,12 +107,41 @@ export async function createBookmark(data: {
 export async function updateBookmark(id: number, data: {
   title?: string;
   description?: string;
+  personalNote?: string;
   tags?: string[];
   contentType?: string;
 }): Promise<Bookmark> {
   return apiFetch<Bookmark>(`/bookmarks/${id}`, {
     method: 'PUT',
     body: JSON.stringify(data)
+  });
+}
+
+export async function updateBookmarkNote(id: number, note: string): Promise<Bookmark> {
+  return apiFetch<Bookmark>(`/bookmarks/${id}/note`, {
+    method: 'PUT',
+    body: JSON.stringify({ note })
+  });
+}
+
+export async function fetchHighlights(bookmarkId: number): Promise<any[]> {
+  return apiFetch<any[]>(`/bookmarks/${bookmarkId}/highlights`);
+}
+
+export async function createHighlight(bookmarkId: number, data: {
+  text: string;
+  color?: string;
+  note?: string;
+}): Promise<any> {
+  return apiFetch<any>(`/bookmarks/${bookmarkId}/highlights`, {
+    method: 'POST',
+    body: JSON.stringify(data)
+  });
+}
+
+export async function deleteHighlight(bookmarkId: number, highlightId: number): Promise<{ message: string }> {
+  return apiFetch<{ message: string }>(`/bookmarks/${bookmarkId}/highlights/${highlightId}`, {
+    method: 'DELETE'
   });
 }
 

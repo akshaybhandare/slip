@@ -22,8 +22,10 @@ import { ShareModal } from './components/ShareModal';
 import { ImportModal } from './components/ImportModal';
 import { AuthModal } from './components/AuthModal';
 import { BookmarkPlus, Plus } from 'lucide-react';
+import { useTheme } from './hooks/useTheme';
 
 export const App: React.FC = () => {
+  const { themeMode, toggleTheme } = useTheme();
   const [user, setUser] = useState<User | null>(null);
   const [bookmarks, setBookmarks] = useState<Bookmark[]>([]);
   const [tags, setTags] = useState<Tag[]>([]);
@@ -113,7 +115,7 @@ export const App: React.FC = () => {
 
   const handleUpdateBookmark = async (
     id: number,
-    data: { title: string; description: string; contentType: string; tags: string[] }
+    data: { title: string; description: string; personalNote?: string; contentType: string; tags: string[] }
   ) => {
     const updated = await updateBookmark(id, data);
     setBookmarks((prev) => prev.map((b) => (b.id === id ? updated : b)));
@@ -171,6 +173,8 @@ export const App: React.FC = () => {
         isRescrapingAll={isRescrapingAll}
         onLogoutClick={handleLogout}
         user={user}
+        themeMode={themeMode}
+        onToggleTheme={toggleTheme}
       />
 
       <FilterTabs

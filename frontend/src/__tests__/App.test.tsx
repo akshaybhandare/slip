@@ -143,4 +143,14 @@ describe('Frontend SPA Component Architecture & Mobile UI Interactions', () => {
     fireEvent.click(fabBtn);
     expect(screen.getByText('Save to Slip')).toBeInTheDocument();
   });
+
+  it('toggles light, dark, and system themes when theme toggle button is clicked', async () => {
+    render(<App />);
+
+    const themeToggleBtn = screen.getByLabelText(/Toggle light, dark, and system theme/i);
+    expect(themeToggleBtn).toBeInTheDocument();
+
+    fireEvent.click(themeToggleBtn);
+    expect(document.documentElement.getAttribute('data-theme')).toBeTruthy();
+  });
 });

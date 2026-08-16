@@ -117,6 +117,52 @@ describe('Bookmark CRUD & Local Thumbnail Cache Integrations', () => {
     expect(response.status).toBe(404);
   });
 
+  test('PUT /api/bookmarks/:id/note should update personal sticky note', async () => {
+    const response = await request(app)
+      .put(`/api/bookmarks/${createdBookmarkId}/note`)
+      .set('Cookie', user1Cookie)
+      .send({
+        note: 'Important architectural reference for second brain project.'
+      });
+
+    expect(response.status).toBe(200);
+    expect(response.body.personal_note).toBe('Important architectural reference for second brain project.');
+  });
+
+  test('POST /api/bookmarks/:id/highlights should save text highlight', async () => {
+    const response = await request(app)
+      .post(`/api/bookmarks/${createdBookmarkId}/highlights`)
+      .set('Cookie', user1Cookie)
+      .send({
+        text: 'In WAL mode, readers do not block writers.',
+        color: 'yellow',
+        note: 'Key insight for concurrency'
+      });
+
+    expect(response.status).toBe(201);
+    expect(response.body).toHaveProperty('id');
+    expect(response.body.text).toBe('In WAL mode, readers do not block writers.');
+    expect(response.body.color).toBe('yellow');
+
+    const highlightId = response.body.id;
+
+    // List highlights
+    const listRes = await request(app)
+      .get(`/api/bookmarks/${createdBookmarkId}/highlights`)
+      .set('Cookie', user1Cookie);
+
+    expect(listRes.status).toBe(200);
+    expect(listRes.body.length).toBe(1);
+    expect(listRes.body[0].id).toBe(highlightId);
+
+    // Delete highlight
+    const delRes = await request(app)
+      .delete(`/api/bookmarks/${createdBookmarkId}/highlights/${highlightId}`)
+      .set('Cookie', user1Cookie);
+
+    expect(delRes.status).toBe(200);
+  });
+
   test('GET /api/cache/:filename should block directory traversal attempts', async () => {
     const response = await request(app)
       .get('/api/cache/..%2f..%2f..%2fpackage.json');

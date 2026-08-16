@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Save to Slip</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="popup-container">
+    <div class="popup-header">
+      <div class="brand">
+        <img src="icon.svg" alt="Slip" class="logo" />
+        <span class="brand-title">Slip</span>
+      </div>
+      <button class="settings-btn" id="open-settings" title="Extension Settings">⚙️</button>
+    </div>
+
+    <!-- Not Configured View -->
+    <div id="unconfigured-view" class="view hidden">
+      <p class="unconfigured-text">Please configure your Slip Server URL and API key to start clipping.</p>
+      <button id="btn-config" class="btn btn-primary">Open Settings</button>
+    </div>
+
+    <!-- Main Clipper View -->
+    <div id="clipper-view" class="view">
+      <div class="page-preview">
+        <div class="preview-title" id="page-title">Loading page...</div>
+        <div class="preview-domain" id="page-domain">...</div>
+      </div>
+
+      <div class="tags-section">
+        <label for="tag-input" class="section-label">Tags (Optional)</label>
+        <div class="tag-input-box" id="tag-box">
+          <div id="tags-chips"></div>
+          <input type="text" id="tag-input" placeholder="Type tag & press Enter..." />
+        </div>
+      </div>
+
+      <div class="action-row">
+        <button id="save-btn" class="btn btn-primary full-width">
+          <span id="save-btn-text">Save to Slip</span>
+          <span id="save-spinner" class="spinner hidden"></span>
+        </button>
+      </div>
+
+      <div id="save-feedback" class="feedback-msg hidden"></div>
+    </div>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

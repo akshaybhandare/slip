@@ -17,7 +17,7 @@ router.get('/', (req: AuthenticatedRequest, res: Response) => {
   try {
     const db = getDb();
     let query = `
-      SELECT b.id, b.user_id, b.url, b.title, b.description, b.content_type, 
+      SELECT b.id, b.user_id, b.url, b.title, b.description, b.personal_note, b.content_type, 
              b.image_path, b.favicon_path, b.created_at, b.updated_at
       FROM bookmarks b
     `;
@@ -111,7 +111,7 @@ router.get('/search', (req: AuthenticatedRequest, res: Response) => {
     if (sanitizedTerms) {
       try {
         const ftsQuery = `
-          SELECT b.id, b.user_id, b.url, b.title, b.description, b.content_type, 
+          SELECT b.id, b.user_id, b.url, b.title, b.description, b.personal_note, b.content_type, 
                  b.image_path, b.favicon_path, b.created_at, b.updated_at,
                  snippet(bookmarks_fts, -1, '<mark>', '</mark>', '...', 25) as snippet,
                  bm25(bookmarks_fts) as rank
@@ -128,16 +128,16 @@ router.get('/search', (req: AuthenticatedRequest, res: Response) => {
     }
 
     if (bookmarks.length === 0 && terms.length > 0) {
-      const conditions = terms.map(() => '(b.title LIKE ? OR b.description LIKE ? OR b.raw_text LIKE ?)').join(' AND ');
+      const conditions = terms.map(() => '(b.title LIKE ? OR b.description LIKE ? OR b.personal_note LIKE ? OR b.raw_text LIKE ?)').join(' AND ');
       const params: any[] = [userId];
       for (const w of terms) {
         const p = `%${w}%`;
-        params.push(p, p, p);
+        params.push(p, p, p, p);
       }
       params.push(Number(limit), Number(offset));
 
       const likeQuery = `
-        SELECT b.id, b.user_id, b.url, b.title, b.description, b.content_type, 
+        SELECT b.id, b.user_id, b.url, b.title, b.description, b.personal_note, b.content_type, 
                b.image_path, b.favicon_path, b.created_at, b.updated_at
         FROM bookmarks b
         WHERE b.user_id = ? AND (${conditions})
@@ -306,7 +306,7 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
 router.put('/:id', (req: AuthenticatedRequest, res: Response) => {
   const userId = req.user!.id;
   const { id } = req.params;
-  const { title, description, contentType, tags } = req.body;
+  const { title, description, personalNote, contentType, tags } = req.body;
 
   try {
     const db = getDb();
@@ -327,6 +327,10 @@ router.put('/:id', (req: AuthenticatedRequest, res: Response) => {
       if (description !== undefined) {
         updates.push('description = ?');
         params.push(description);
+      }
+      if (personalNote !== undefined) {
+        updates.push('personal_note = ?');
+        params.push(personalNote);
       }
       if (contentType !== undefined) {
         updates.push('content_type = ?');
@@ -373,6 +377,108 @@ router.put('/:id', (req: AuthenticatedRequest, res: Response) => {
     res.status(200).json(updated);
   } catch (err) {
     console.error('Update bookmark error:', err);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+// 5.1 Quick Update Personal Sticky Note
+router.put('/:id/note', (req: AuthenticatedRequest, res: Response) => {
+  const userId = req.user!.id;
+  const { id } = req.params;
+  const { note } = req.body;
+
+  try {
+    const db = getDb();
+    const result = db.prepare(`
+      UPDATE bookmarks SET personal_note = ?, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ? AND user_id = ?
+    `).run(note !== undefined ? note : null, id, userId);
+
+    if (result.changes === 0) {
+      return res.status(404).json({ message: 'Bookmark not found or unauthorized' });
+    }
+
+    const updated = db.prepare(`SELECT * FROM bookmarks WHERE id = ?`).get(id) as any;
+    const attachedTags = db.prepare(`
+      SELECT t.id, t.name FROM tags t
+      JOIN bookmark_tags bt ON t.id = bt.tag_id
+      WHERE bt.bookmark_id = ?
+    `).all(id);
+    updated.tags = attachedTags;
+
+    res.status(200).json(updated);
+  } catch (err) {
+    console.error('Update note error:', err);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+// 5.2 Get Highlights for Bookmark
+router.get('/:id/highlights', (req: AuthenticatedRequest, res: Response) => {
+  const userId = req.user!.id;
+  const { id } = req.params;
+
+  try {
+    const db = getDb();
+    const highlights = db.prepare(`
+      SELECT * FROM highlights WHERE bookmark_id = ? AND user_id = ? ORDER BY created_at ASC
+    `).all(id, userId);
+
+    res.status(200).json(highlights);
+  } catch (err) {
+    console.error('Get highlights error:', err);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+// 5.3 Add Text Highlight to Bookmark
+router.post('/:id/highlights', (req: AuthenticatedRequest, res: Response) => {
+  const userId = req.user!.id;
+  const { id } = req.params;
+  const { text, color = 'yellow', note } = req.body;
+
+  if (!text || typeof text !== 'string' || text.trim() === '') {
+    return res.status(400).json({ message: 'Highlight text is required' });
+  }
+
+  try {
+    const db = getDb();
+    const bm = db.prepare('SELECT id FROM bookmarks WHERE id = ? AND user_id = ?').get(id, userId);
+    if (!bm) {
+      return res.status(404).json({ message: 'Bookmark not found or unauthorized' });
+    }
+
+    const result = db.prepare(`
+      INSERT INTO highlights (bookmark_id, user_id, text, color, note)
+      VALUES (?, ?, ?, ?, ?)
+    `).run(id, userId, text.trim(), color, note || null);
+
+    const created = db.prepare('SELECT * FROM highlights WHERE id = ?').get(result.lastInsertRowid);
+    res.status(201).json(created);
+  } catch (err) {
+    console.error('Create highlight error:', err);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+// 5.4 Delete Text Highlight
+router.delete('/:id/highlights/:highlightId', (req: AuthenticatedRequest, res: Response) => {
+  const userId = req.user!.id;
+  const { id, highlightId } = req.params;
+
+  try {
+    const db = getDb();
+    const result = db.prepare(`
+      DELETE FROM highlights WHERE id = ? AND bookmark_id = ? AND user_id = ?
+    `).run(highlightId, id, userId);
+
+    if (result.changes === 0) {
+      return res.status(404).json({ message: 'Highlight not found or unauthorized' });
+    }
+
+    res.status(200).json({ message: 'Highlight deleted successfully' });
+  } catch (err) {
+    console.error('Delete highlight error:', err);
     res.status(500).json({ message: 'Internal server error' });
   }
 });

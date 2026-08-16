@@ -6,9 +6,10 @@ interface TagInputProps {
   tags: string[];
   onChange: (tags: string[]) => void;
   availableTags: Tag[];
+  placeholder?: string;
 }
 
-export const TagInput: React.FC<TagInputProps> = ({ tags, onChange, availableTags }) => {
+export const TagInput: React.FC<TagInputProps> = ({ tags, onChange, availableTags, placeholder }) => {
   const [inputValue, setInputValue] = useState('');
 
   const addTag = (tagName: string) => {
@@ -61,7 +62,7 @@ export const TagInput: React.FC<TagInputProps> = ({ tags, onChange, availableTag
           <input
             type="text"
             className="tag-inline-input"
-            placeholder={tags.length === 0 ? 'Type tag & press Enter...' : 'Add more...'}
+            placeholder={placeholder || (tags.length === 0 ? 'Type tag & press Enter...' : 'Add more...')}
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value)}
             onKeyDown={handleKeyDown}

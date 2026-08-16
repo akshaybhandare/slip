@@ -80,3 +80,29 @@ For each story:
     *   [x] **Task 8.2**: Write permission wrapper entrypoint `docker-entrypoint.sh` to map `PUID`/`PGID` host-container files.
     *   [x] **Task 8.3**: Write `docker-compose.yml` defining port exposure, volume mounts, and log rotation sizes.
     *   [x] **Task 8.4**: Run automated validation check of Docker runtime permissions and compose container status.
+
+### Story 9: Dark Mode & OLED True-Black Theme
+*   **Status**: Completed
+*   **Tasks**:
+    *   [x] **Task 9.1**: Define CSS custom properties for `[data-theme="dark"]` in `frontend/src/index.css` (tokens, background, surface, borders, text contrast, shadows).
+    *   [x] **Task 9.2**: Create `useTheme` hook with persistence (`localStorage`), 3-state toggle (Light ☀️, Dark 🌙, System 📱), and `matchMedia` system preference listener.
+    *   [x] **Task 9.3**: Add theme toggle button to navigation bar and synchronize iOS `<meta name="theme-color">` dynamically.
+    *   [x] **Task 9.4**: Write unit/UI tests verifying theme switching, persistence, and CSS class toggling.
+
+### Story 10: Zero-Friction Ingestion (Browser Extension & iOS Shortcut)
+*   **Status**: Completed
+*   **Tasks**:
+    *   [x] **Task 10.1**: Build Manifest V3 browser extension (`extension/manifest.json`, `popup.html`, `popup.js`, `options.html`, `options.js`) with keyboard shortcut `Cmd+Shift+S`.
+    *   [x] **Task 10.2**: Implement extension HUD popup with instant save, tag suggestions, and direct API key authorization against the self-hosted server.
+    *   [x] **Task 10.3**: Create iOS Apple Shortcut template & instructions for 1-tap background sharing from mobile share sheets (Twitter, YouTube, Reddit, Safari).
+    *   [x] **Task 10.4**: Add backend automated tests & extension build scripts for packing extension `.zip` distribution.
+
+### Story 11: Reader Highlights & Personal Sticky Notes
+*   **Status**: Completed
+*   **Tasks**:
+    *   [x] **Task 11.1**: Add `personal_note` column to `bookmarks` table and create `highlights` table in SQLite schema with cascade deletion.
+    *   [x] **Task 11.2**: Update SQLite `bookmarks_fts` FTS5 virtual table and triggers to index `personal_note` for full-text search.
+    *   [x] **Task 11.3**: Implement backend REST endpoints (`PUT /api/bookmarks/:id/note`, `GET /api/bookmarks/:id/highlights`, `POST /api/bookmarks/:id/highlights`, `DELETE /api/highlights/:id`).
+    *   [x] **Task 11.4**: Build text selection floating toolbar and highlights aggregator sidebar in `ReaderModal.tsx`.
+    *   [x] **Task 11.5**: Build sticky note preview drawer and quick editor in `BookmarkCard.tsx` and `EditBookmarkModal.tsx`.
+    *   [x] **Task 11.6**: Write comprehensive backend tests and frontend UI tests for notes and highlights.

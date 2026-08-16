@@ -1,6 +1,7 @@
 import React from 'react';
-import { Bookmark as BookmarkIcon, Search, Plus, Upload, Download, LogOut, RefreshCw, X } from 'lucide-react';
+import { Bookmark as BookmarkIcon, Search, Plus, Upload, Download, LogOut, RefreshCw, X, Sun, Moon, Monitor } from 'lucide-react';
 import { User } from '../types';
+import { ThemeMode } from '../hooks/useTheme';
 
 interface NavbarProps {
   searchQuery: string;
@@ -11,6 +12,8 @@ interface NavbarProps {
   isRescrapingAll: boolean;
   onLogoutClick: () => void;
   user: User | null;
+  themeMode?: ThemeMode;
+  onToggleTheme?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -21,8 +24,22 @@ export const Navbar: React.FC<NavbarProps> = ({
   onRescrapeAllClick,
   isRescrapingAll,
   onLogoutClick,
-  user
+  user,
+  themeMode = 'system',
+  onToggleTheme
 }) => {
+  const getThemeIcon = () => {
+    if (themeMode === 'light') return <Sun size={15} />;
+    if (themeMode === 'dark') return <Moon size={15} />;
+    return <Monitor size={15} />;
+  };
+
+  const getThemeTitle = () => {
+    if (themeMode === 'light') return 'Theme: Light (Click for Dark)';
+    if (themeMode === 'dark') return 'Theme: Dark (Click for System)';
+    return 'Theme: System Auto (Click for Light)';
+  };
+
   return (
     <header className="top-nav">
       <div className="nav-header-row">
@@ -48,6 +65,17 @@ export const Navbar: React.FC<NavbarProps> = ({
             <RefreshCw size={15} className={isRescrapingAll ? 'spin-animation' : ''} />
             <span className="btn-text-hide-mobile">{isRescrapingAll ? 'Syncing...' : 'Sync All'}</span>
           </button>
+
+          {onToggleTheme && (
+            <button
+              className="btn btn-secondary theme-toggle-btn"
+              onClick={onToggleTheme}
+              title={getThemeTitle()}
+              aria-label="Toggle light, dark, and system theme"
+            >
+              {getThemeIcon()}
+            </button>
+          )}
 
           <button className="btn btn-secondary" onClick={onImportClick} title="Import HTML Bookmarks">
             <Upload size={15} />

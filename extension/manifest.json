@@ -1,0 +1,37 @@
+{
+  "manifest_version": 3,
+  "name": "Slip — Visual Web Clipper",
+  "version": "1.0.0",
+  "description": "1-click visual bookmark archive clipper for your self-hosted Slip instance.",
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Save to Slip (Cmd+Shift+S)",
+    "default_icon": {
+      "16": "icon.svg",
+      "48": "icon.svg",
+      "128": "icon.svg"
+    }
+  },
+  "options_ui": {
+    "page": "options.html",
+    "open_in_tab": true
+  },
+  "permissions": [
+    "activeTab",
+    "storage"
+  ],
+  "commands": {
+    "_execute_action": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+S",
+        "mac": "Command+Shift+S"
+      },
+      "description": "Save current page to Slip"
+    }
+  },
+  "icons": {
+    "16": "icon.svg",
+    "48": "icon.svg",
+    "128": "icon.svg"
+  }
+}
