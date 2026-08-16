@@ -153,4 +153,20 @@ describe('Frontend SPA Component Architecture & Mobile UI Interactions', () => {
     fireEvent.click(themeToggleBtn);
     expect(document.documentElement.getAttribute('data-theme')).toBeTruthy();
   });
+
+  it('opens mobile overflow menu and presents sync, import, export, and logout options', async () => {
+    render(<App />);
+
+    const moreBtn = screen.getByLabelText('Open menu');
+    expect(moreBtn).toBeInTheDocument();
+
+    fireEvent.click(moreBtn);
+
+    await waitFor(() => {
+      expect(screen.getByText(/Sync & Re-scrape All/i)).toBeInTheDocument();
+      expect(screen.getByText(/Import HTML Bookmarks/i)).toBeInTheDocument();
+      expect(screen.getByText(/Export HTML Bookmarks/i)).toBeInTheDocument();
+      expect(screen.getByText(/Log out \(@testuser\)/i)).toBeInTheDocument();
+    });
+  });
 });
