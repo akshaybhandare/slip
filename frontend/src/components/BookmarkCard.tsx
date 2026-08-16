@@ -43,6 +43,7 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
   };
 
   const handleShareClick = async () => {
+    // 1. Try standard Web Share API (available on HTTPS or localhost)
     if (typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
       try {
         await navigator.share({
@@ -57,6 +58,21 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
         }
       }
     }
+
+    // 2. Android Intent fallback (launches native system share sheet directly even on HTTP/LAN)
+    const userAgent = typeof navigator !== 'undefined' ? navigator.userAgent || '' : '';
+    const isAndroid = /android/i.test(userAgent);
+    if (isAndroid) {
+      const shareText = bookmark.description
+        ? `${bookmark.title}\n${bookmark.description}\n${bookmark.url}`
+        : `${bookmark.title}\n${bookmark.url}`;
+
+      const intentUri = `intent:#Intent;action=android.intent.action.SEND;type=text/plain;S.android.intent.extra.TEXT=${encodeURIComponent(shareText)};S.android.intent.extra.SUBJECT=${encodeURIComponent(bookmark.title)};end`;
+      window.location.href = intentUri;
+      return;
+    }
+
+    // 3. Desktop fallback to Slip public share link modal
     onShare(bookmark);
   };
 

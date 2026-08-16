@@ -49,6 +49,10 @@ export const ShareModal: React.FC<ShareModalProps> = ({ bookmark, onClose }) => 
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const userAgent = typeof navigator !== 'undefined' ? navigator.userAgent || '' : '';
+  const isAndroid = /android/i.test(userAgent);
+  const hasNativeShare = (typeof navigator !== 'undefined' && typeof navigator.share === 'function') || isAndroid;
+
   const handleNativeShare = async () => {
     if (typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
       try {
@@ -57,11 +61,16 @@ export const ShareModal: React.FC<ShareModalProps> = ({ bookmark, onClose }) => 
           text: bookmark.description || bookmark.title,
           url: shareUrl || bookmark.url
         });
+        return;
       } catch (err: any) {
-        if (err.name !== 'AbortError') {
-          setError('Native sharing failed');
-        }
+        if (err.name === 'AbortError') return;
       }
+    }
+
+    if (isAndroid) {
+      const shareText = `${bookmark.title}\n${shareUrl || bookmark.url}`;
+      const intentUri = `intent:#Intent;action=android.intent.action.SEND;type=text/plain;S.android.intent.extra.TEXT=${encodeURIComponent(shareText)};S.android.intent.extra.SUBJECT=${encodeURIComponent(bookmark.title)};end`;
+      window.location.href = intentUri;
     }
   };
 
@@ -77,8 +86,6 @@ export const ShareModal: React.FC<ShareModalProps> = ({ bookmark, onClose }) => 
       setLoading(false);
     }
   };
-
-  const hasNativeShare = typeof navigator !== 'undefined' && typeof navigator.share === 'function';
 
   return (
     <div className="modal-overlay" onClick={onClose}>
