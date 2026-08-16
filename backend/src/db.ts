@@ -109,6 +109,11 @@ export function initDb(dbPath = getDbPath()): Database.Database {
     );
 
     CREATE INDEX IF NOT EXISTS idx_api_keys_hash ON api_keys(token_hash);
+
+    CREATE TABLE IF NOT EXISTS settings (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL
+    );
   `);
 
   // Setup FTS5 virtual table
