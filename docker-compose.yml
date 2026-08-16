@@ -9,19 +9,20 @@ services:
     container_name: slip
     restart: unless-stopped
     ports:
-      - "3000:3000"
+      - "${HOST_PORT:-3000}:${PORT:-3000}"
     volumes:
       - ./config:/config
     environment:
-      - NODE_ENV=production
-      - PORT=3000
-      - HOST=0.0.0.0
-      - DB_PATH=/config/bookmarks.db
-      - CACHE_DIR=/config/cache
-      - PUID=99
-      - PGID=100
+      - NODE_ENV=${NODE_ENV:-production}
+      - PORT=${PORT:-3000}
+      - HOST=${HOST:-0.0.0.0}
+      - DB_PATH=${DB_PATH:-/config/bookmarks.db}
+      - CACHE_DIR=${CACHE_DIR:-/config/cache}
+      - PUID=${PUID:-99}
+      - PGID=${PGID:-100}
+      - COOKIE_SECURE=${COOKIE_SECURE:-false}
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/health"]
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:${PORT:-3000}/health"]
       interval: 30s
       timeout: 5s
       retries: 3

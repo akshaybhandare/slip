@@ -54,19 +54,20 @@ services:
     container_name: slip
     restart: unless-stopped
     ports:
-      - "3000:3000"
+      - "${HOST_PORT:-3000}:${PORT:-3000}"
     volumes:
       - /mnt/user/appdata/slip:/config
     environment:
-      - NODE_ENV=production
-      - PORT=3000
-      - HOST=0.0.0.0
-      - DB_PATH=/config/bookmarks.db
-      - CACHE_DIR=/config/cache
-      - PUID=99
-      - PGID=100
+      - NODE_ENV=${NODE_ENV:-production}
+      - PORT=${PORT:-3000}
+      - HOST=${HOST:-0.0.0.0}
+      - DB_PATH=${DB_PATH:-/config/bookmarks.db}
+      - CACHE_DIR=${CACHE_DIR:-/config/cache}
+      - PUID=${PUID:-99}
+      - PGID=${PGID:-100}
+      - COOKIE_SECURE=${COOKIE_SECURE:-false}
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/health"]
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:${PORT:-3000}/health"]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -97,7 +98,8 @@ curl -f http://localhost:3000/health
 
 | Variable | Default | Description |
 | :--- | :--- | :--- |
-| `PORT` | `3000` | Port on which the HTTP server listens. |
+| `HOST_PORT` | `3000` | Port on your host/Unraid to access Slip (e.g. `3080`). |
+| `PORT` | `3000` | Port on which the HTTP server listens inside the container. |
 | `HOST` | `0.0.0.0` | Bind host address. |
 | `NODE_ENV` | `production` | Node runtime environment (`production`, `development`, `test`). |
 | `DB_PATH` | `/config/bookmarks.db` | Path to the SQLite database file on host/container storage. |
@@ -105,7 +107,7 @@ curl -f http://localhost:3000/health
 | `FRONTEND_DIST`| `/app/frontend/dist` | Path to compiled React SPA static distribution. |
 | `PUID` | `99` | User ID for file permissions (Unraid `nobody` default). |
 | `PGID` | `100` | Group ID for file permissions (Unraid `users` default). |
-| `ALLOWED_ORIGINS` | `http://localhost:3000,http://localhost:5173` | Allowed CORS origins for cross-origin API access. |
+| `COOKIE_SECURE` | `false` | Set to `true` if hosting behind an HTTPS reverse proxy. |
 
 ---
 
