@@ -8,6 +8,7 @@
   --color-primary: #e42b0c;
   --color-primary-contrast: #ffffff;
   --color-secondary: #000000;
+  --color-on-secondary: #ffffff;
   --color-tertiary: #f0f0f0;
   --color-background: #f5f5f5;
   --color-surface: #ffffff;
@@ -52,6 +53,7 @@
   --color-primary: #e42b0c;
   --color-primary-contrast: #ffffff;
   --color-secondary: #ffffff;
+  --color-on-secondary: #0d0e11;
   --color-tertiary: #202126;
   --color-background: #0d0e11;
   --color-surface: #16171b;
@@ -415,7 +417,7 @@ body {
 
 .filter-tab.active {
   background: var(--color-secondary);
-  color: #ffffff;
+  color: var(--color-on-secondary);
   border-color: var(--color-secondary);
 }
 
@@ -1168,7 +1170,7 @@ body {
 }
 
 .reader-tab-btn.active {
-  color: #ffffff;
+  color: var(--color-on-secondary);
   background: var(--color-secondary);
 }
 

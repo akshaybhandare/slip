@@ -42,6 +42,24 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
     }
   };
 
+  const handleShareClick = async () => {
+    if (typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
+      try {
+        await navigator.share({
+          title: bookmark.title,
+          text: bookmark.description || bookmark.title,
+          url: bookmark.url
+        });
+        return;
+      } catch (err: any) {
+        if (err.name === 'AbortError') {
+          return;
+        }
+      }
+    }
+    onShare(bookmark);
+  };
+
   return (
     <article className="bookmark-card">
       {bookmark.image_path ? (
@@ -229,7 +247,7 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
           <button
             className="icon-btn"
             title="Share Bookmark"
-            onClick={() => onShare(bookmark)}
+            onClick={handleShareClick}
           >
             <Share2 size={15} />
           </button>

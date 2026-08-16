@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Copy, Check, Share2, Trash2 } from 'lucide-react';
+import { X, Copy, Check, Share2, Trash2, Smartphone } from 'lucide-react';
 import { Bookmark } from '../types';
 import { shareBookmark, revokeShareBookmark } from '../api';
 
@@ -49,6 +49,22 @@ export const ShareModal: React.FC<ShareModalProps> = ({ bookmark, onClose }) => 
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const handleNativeShare = async () => {
+    if (typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
+      try {
+        await navigator.share({
+          title: bookmark.title,
+          text: bookmark.description || bookmark.title,
+          url: shareUrl || bookmark.url
+        });
+      } catch (err: any) {
+        if (err.name !== 'AbortError') {
+          setError('Native sharing failed');
+        }
+      }
+    }
+  };
+
   const handleRevoke = async () => {
     setLoading(true);
     try {
@@ -61,6 +77,8 @@ export const ShareModal: React.FC<ShareModalProps> = ({ bookmark, onClose }) => 
       setLoading(false);
     }
   };
+
+  const hasNativeShare = typeof navigator !== 'undefined' && typeof navigator.share === 'function';
 
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -89,7 +107,7 @@ export const ShareModal: React.FC<ShareModalProps> = ({ bookmark, onClose }) => 
           <p style={{ color: 'var(--color-muted)', fontSize: '14px' }}>Generating secure link...</p>
         ) : shareUrl ? (
           <div>
-            <div style={{ display: 'flex', gap: '8px', marginBottom: '24px' }}>
+            <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
               <input
                 type="text"
                 readOnly
@@ -103,7 +121,18 @@ export const ShareModal: React.FC<ShareModalProps> = ({ bookmark, onClose }) => 
               </button>
             </div>
 
-            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+            {hasNativeShare && (
+              <button
+                className="btn btn-secondary"
+                onClick={handleNativeShare}
+                style={{ width: '100%', marginBottom: '20px' }}
+              >
+                <Smartphone size={15} />
+                <span>Share via Android / iOS Apps</span>
+              </button>
+            )}
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '12px' }}>
               <button className="btn btn-danger" onClick={handleRevoke}>
                 <Trash2 size={14} />
                 <span>Revoke Share Link</span>
