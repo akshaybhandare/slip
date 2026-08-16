@@ -62,6 +62,10 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   min-height: 100vh;
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
 }
 
 /* App Container */
@@ -770,7 +774,7 @@ body {
   .mobile-fab {
     display: flex;
     position: fixed;
-    bottom: 24px;
+    bottom: calc(24px + env(safe-area-inset-bottom));
     right: 24px;
     width: 56px;
     height: 56px;
