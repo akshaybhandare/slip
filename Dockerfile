@@ -5,7 +5,7 @@ FROM node:20-alpine AS frontend-builder
 WORKDIR /app/frontend
 
 COPY frontend/package*.json ./
-RUN npm ci
+RUN npm ci --legacy-peer-deps || npm install --legacy-peer-deps
 
 COPY frontend/ ./
 RUN npm run build
@@ -20,7 +20,7 @@ WORKDIR /app/backend
 RUN apk add --no-cache python3 make g++
 
 COPY backend/package*.json ./
-RUN npm ci
+RUN npm ci --legacy-peer-deps || npm install --legacy-peer-deps
 
 COPY backend/ ./
 RUN npm run build
@@ -38,7 +38,7 @@ RUN apk add --no-cache su-exec shadow wget
 COPY backend/package*.json ./backend/
 WORKDIR /app/backend
 RUN apk add --no-cache --virtual .build-deps python3 make g++ && \
-    npm ci --omit=dev && \
+    (npm ci --omit=dev --legacy-peer-deps || npm install --omit=dev --legacy-peer-deps) && \
     apk del .build-deps
 
 WORKDIR /app
