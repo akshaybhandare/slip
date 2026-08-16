@@ -5,6 +5,7 @@ import {
   searchBookmarks,
   fetchTags,
   createBookmark,
+  uploadImageBookmark,
   updateBookmark,
   deleteBookmark,
   rescrapeBookmark,
@@ -38,10 +39,35 @@ export const App: React.FC = () => {
 
   // Modals
   const [isAddOpen, setIsAddOpen] = useState(false);
+  const [droppedFile, setDroppedFile] = useState<File | null>(null);
   const [isImportOpen, setIsImportOpen] = useState(false);
   const [readerBookmark, setReaderBookmark] = useState<Bookmark | null>(null);
   const [shareTargetBookmark, setShareTargetBookmark] = useState<Bookmark | null>(null);
   const [editingBookmark, setEditingBookmark] = useState<Bookmark | null>(null);
+
+  // Window-level drag-and-drop support for quick image bookmarking
+  useEffect(() => {
+    const handleDragOver = (e: DragEvent) => {
+      e.preventDefault();
+    };
+    const handleDrop = (e: DragEvent) => {
+      e.preventDefault();
+      if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+        const file = e.dataTransfer.files[0];
+        if (file.type.startsWith('image/')) {
+          setDroppedFile(file);
+          setIsAddOpen(true);
+        }
+      }
+    };
+
+    window.addEventListener('dragover', handleDragOver);
+    window.addEventListener('drop', handleDrop);
+    return () => {
+      window.removeEventListener('dragover', handleDragOver);
+      window.removeEventListener('drop', handleDrop);
+    };
+  }, []);
 
   // Verify session on mount
   useEffect(() => {
@@ -113,7 +139,21 @@ export const App: React.FC = () => {
     loadData();
   };
 
+  const handleSaveImageBookmark = async (data: {
+    file?: File;
+    imageData?: string;
+    filename?: string;
+    title?: string;
+    description?: string;
+    personalNote?: string;
+    tags?: string[];
+  }) => {
+    await uploadImageBookmark(data);
+    loadData();
+  };
+
   const handleUpdateBookmark = async (
+
     id: number,
     data: { title: string; description: string; personalNote?: string; contentType: string; tags: string[] }
   ) => {
@@ -229,10 +269,16 @@ export const App: React.FC = () => {
 
       <AddBookmarkModal
         isOpen={isAddOpen}
-        onClose={() => setIsAddOpen(false)}
+        onClose={() => {
+          setIsAddOpen(false);
+          setDroppedFile(null);
+        }}
         onSave={handleSaveBookmark}
+        onSaveImage={handleSaveImageBookmark}
+        initialFile={droppedFile}
         availableTags={tags}
       />
+
 
       <EditBookmarkModal
         bookmark={editingBookmark}

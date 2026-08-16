@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ExternalLink, Eye, Share2, Trash2, Globe, Edit3, RefreshCw, FileText } from 'lucide-react';
+import { ExternalLink, Eye, Share2, Trash2, Globe, Edit3, RefreshCw, FileText, Image as ImageIcon } from 'lucide-react';
 import { Bookmark } from '../types';
 
 interface BookmarkCardProps {
@@ -24,11 +24,17 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
   const [rescaping, setRescraping] = useState(false);
   const [showNote, setShowNote] = useState(false);
 
+  const isLocalImage = bookmark.content_type === 'image' && (bookmark.url.startsWith('/api/cache') || bookmark.url.startsWith('local://'));
+
   let hostname = '';
-  try {
-    hostname = new URL(bookmark.url).hostname.replace(/^www\./, '');
-  } catch {
-    hostname = bookmark.url;
+  if (isLocalImage) {
+    hostname = 'Local Image';
+  } else {
+    try {
+      hostname = new URL(bookmark.url).hostname.replace(/^www\./, '');
+    } catch {
+      hostname = bookmark.url;
+    }
   }
 
   const isArticle = bookmark.content_type === 'article' || (bookmark.reader_html && bookmark.reader_html.length > 0);
@@ -139,6 +145,8 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
           <div className="card-header-info">
             {bookmark.favicon_path ? (
               <img src={bookmark.favicon_path} alt="" className="favicon-icon" />
+            ) : isLocalImage ? (
+              <ImageIcon size={13} style={{ color: 'var(--color-muted)' }} />
             ) : (
               <Globe size={13} />
             )}

@@ -26,9 +26,25 @@ async function apiFetch<T>(endpoint: string, init?: RequestInit): Promise<T> {
     if (res.status === 401) {
       localStorage.removeItem('slip_token');
     }
-    const errorData = await res.json().catch(() => ({ message: 'Network response was not ok' }));
-    throw new Error(errorData.message || `Request failed with status ${res.status}`);
+    let errorMessage = `Request failed with status ${res.status}`;
+    try {
+      const text = await res.text();
+      try {
+        const json = JSON.parse(text);
+        if (json && json.message) {
+          errorMessage = json.message;
+        }
+      } catch {
+        if (text && text.trim().length > 0 && text.length < 200) {
+          errorMessage = text.trim();
+        }
+      }
+    } catch {
+      // Fallback
+    }
+    throw new Error(errorMessage);
   }
+
 
   return res.json();
 }
@@ -103,6 +119,45 @@ export async function createBookmark(data: {
     body: JSON.stringify(data)
   });
 }
+
+export async function uploadImageBookmark(data: {
+  file?: File;
+  imageData?: string;
+  filename?: string;
+  title?: string;
+  description?: string;
+  personalNote?: string;
+  tags?: string[];
+}): Promise<Bookmark> {
+  let base64 = data.imageData;
+  let filename = data.filename || data.file?.name;
+
+  if (data.file && !base64) {
+    base64 = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(data.file!);
+    });
+  }
+
+  if (!base64) {
+    throw new Error('Please select an image file to upload.');
+  }
+
+  return apiFetch<Bookmark>('/bookmarks/upload', {
+    method: 'POST',
+    body: JSON.stringify({
+      image_data: base64,
+      filename,
+      title: data.title,
+      description: data.description,
+      personal_note: data.personalNote,
+      tags: data.tags
+    })
+  });
+}
+
 
 export async function updateBookmark(id: number, data: {
   title?: string;

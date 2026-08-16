@@ -1,6 +1,6 @@
 # 📱 Slip — Apple iOS Share Sheet Shortcut Setup
 
-Save links, articles, tweets, and YouTube videos directly to your **Slip Visual Mind** with 1-tap from your iPhone or iPad native Share Sheet.
+Save links, articles, tweets, YouTube videos, and **local images/photos** directly to your **Slip Visual Mind** with 1-tap from your iPhone or iPad native Share Sheet.
 
 ---
 
@@ -8,7 +8,7 @@ Save links, articles, tweets, and YouTube videos directly to your **Slip Visual 
 
 Setting up the shortcut takes **about 2 minutes** and consists of two parts:
 1. **[Step 0: Get Your API Key & Server URL](#-step-0-get-your-api-key--server-url)** (1-time key generation)
-2. **[Step 1-5: Build the iOS Shortcut](#-step-by-step-ios-shortcut-creation)** (Visual step-by-step in the Shortcuts app)
+2. **[Step 1-5: Build the Universal iOS Shortcut](#-universal-ios-shortcut-urls--images)** (Saves links AND Photos/Images)
 
 ---
 
@@ -50,14 +50,14 @@ If you are logged into Slip in your web browser:
 ---
 
 #### Method B: Terminal / cURL
-Run this command on your Mac/Linux terminal (replace `YOUR_SERVER_IP`, `YOUR_PORT`, `YOUR_USERNAME`, and `YOUR_PASSWORD`):
+Run this command on your Mac/Linux terminal:
 
 ```bash
-curl -s -X POST http://<YOUR_SERVER_IP>:<PORT>/api/auth/login \
+curl -s -X POST http://<YOUR_SERVER_IP>:3080/api/auth/login \
   -H "Content-Type: application/json" \
   -d '{"username": "YOUR_USERNAME", "password": "YOUR_PASSWORD"}' \
   -c /tmp/slip_cookie.txt > /dev/null && \
-curl -s -X POST http://<YOUR_SERVER_IP>:<PORT>/api/auth/apikey \
+curl -s -X POST http://<YOUR_SERVER_IP>:3080/api/auth/apikey \
   -H "Content-Type: application/json" \
   -d '{"name": "iOS Shortcut"}' \
   -b /tmp/slip_cookie.txt && rm -f /tmp/slip_cookie.txt
@@ -65,116 +65,129 @@ curl -s -X POST http://<YOUR_SERVER_IP>:<PORT>/api/auth/apikey \
 
 ---
 
-## 🛠️ Step-by-Step iOS Shortcut Creation
+## 🛠️ Universal iOS Shortcut (URLs + Images)
 
-Open the built-in **Shortcuts** app on your iPhone or iPad and follow these 5 steps:
+This smart shortcut automatically detects whether you are sharing a **web link** (Safari, Twitter, YouTube) or a **photo/image** (Apple Photos, Screenshots, Files) and routes it to your Slip archive.
 
 ### 1️⃣ Step 1: Create a New Shortcut
 1. In the **Shortcuts** app, tap the **`+`** icon in the top-right corner.
 2. Tap the title at the top (*"New Shortcut"*) and rename it to **`Save to Slip`**.
-3. *(Optional)* Tap the icon to choose an orange background and a **Bookmark** symbol.
+3. Tap the icon to choose an orange background and a **Bookmark** symbol.
 
 ---
 
 ### 2️⃣ Step 2: Enable the iOS Share Sheet
-1. Tap the **ⓘ (Info / Details)** icon at the bottom of the screen (or the slider icon on iPad).
+1. Tap the **ⓘ (Info / Details)** icon at the bottom of the screen.
 2. Toggle **ON** **"Show in Share Sheet"**.
-3. Under **"Receive"**, tap and ensure **URLs** and **Safari web pages** are selected.
+3. Under **"Receive"**, tap and ensure all of these are enabled:
+   * **URLs**
+   * **Safari web pages**
+   * **Images**
+   * **Media**
 4. Tap **Done** in the top right to return to the shortcut editor.
 
 ---
 
-### 3️⃣ Step 3: Add Action 1 — "Get URLs from Input"
-> [!TIP]
-> This step ensures that rich Safari webpage objects and Twitter/YouTube share items are cleanly converted into plain URL text strings.
+### 3️⃣ Step 3: Add the Smart Routing Logic
 
-1. Tap **Add Action** (or search in the bottom search bar).
-2. Search for: **`Get URLs from Input`** and select it.
-3. It will automatically connect to receive `Shortcut Input`.
+Follow this action sequence in the Shortcuts editor:
+
+#### A. Check if the input is an Image
+1. Tap **Add Action**, search for **`If`**, and select it.
+2. Set the condition: If `Shortcut Input` `has any value` (or tap `Shortcut Input` → choose **Type: Image**).
+
+#### B. Handle Image / Photo Sharing
+3. Inside the top half of the *If* block:
+   * Search for **`Base64 Encode`** and add it (Encodes `Shortcut Input`).
+   * Search for **`Get Contents of URL`** and add it:
+     * **URL:** `http://<YOUR_SERVER_IP>:3080/api/bookmarks/upload`
+     * **Method:** `POST`
+     * **Headers:**
+       * `Authorization`: `Bearer slip_YOUR_API_KEY_HERE`
+       * `Content-Type`: `application/json`
+     * **Request Body:** `JSON`
+       * `image_data`: Select the `Base64 Encoded` variable from the previous step.
+       * `filename`: `iOS_Photo.jpg` (or `Shortcut Input` Name)
+
+#### C. Handle Web Link Sharing (Otherwise)
+4. Inside the **Otherwise** block:
+   * Search for **`Get URLs from Input`** and add it (Input: `Shortcut Input`).
+   * Search for **`Get Contents of URL`** and add it:
+     * **URL:** `http://<YOUR_SERVER_IP>:3080/api/bookmarks`
+     * **Method:** `POST`
+     * **Headers:**
+       * `Authorization`: `Bearer slip_YOUR_API_KEY_HERE`
+       * `Content-Type`: `application/json`
+     * **Request Body:** `JSON`
+       * `url`: Select the `URLs` variable from *Get URLs from Input*.
+
+#### D. Show Success Banner
+5. Below the **End If** block:
+   * Search for **`Show Notification`** and set text to: **`✓ Saved to Slip Archive`**.
+6. Tap **Done** in the top-right corner.
 
 ---
 
-### 4️⃣ Step 4: Add Action 2 — "Get Contents of URL" (Send to Slip)
-1. Tap the bottom search bar, search for **`Get Contents of URL`**, and select it.
-2. Configure the action with the following parameters:
-
-| Field | Value / Setting | Notes |
-| :--- | :--- | :--- |
-| **URL** | `http://<YOUR_SERVER_IP>:3080/api/bookmarks` | Use `http://` for local IPs; use `https://` only if you have an SSL domain. |
-| **Method** | **`POST`** | Tap *Show More* / arrow `>` to reveal. |
-| **Headers** | Tap *Add new field*: | |
-| ↳ *Header 1* | Key: `Authorization` <br> Text: `Bearer slip_YOUR_API_KEY_HERE` | Include the word `Bearer` followed by a space and your key. |
-| ↳ *Header 2* | Key: `Content-Type` <br> Text: `application/json` | |
-| **Request Body** | Select **`JSON`** | |
-| ↳ *JSON Field* | Type: **`Text`** <br> Key: `url` <br> Value: Select **`URLs`** variable | Tap the value box, select the **`URLs`** variable from Step 3 in the keyboard toolbar. |
-
----
-
-### 5️⃣ Step 5: Add Action 3 — "Show Notification"
-1. Tap the bottom search bar, search for **`Show Notification`**, and select it.
-2. Set the text to: **`✓ Saved to Slip Archive`**.
-3. Tap **Done** in the top-right corner to save your shortcut.
-
----
-
-## ⚡ Visual Action Flow Summary
-
-Your completed shortcut actions should look like this:
+## ⚡ Visual Shortcut Flow
 
 ```text
-┌────────────────────────────────────────────────────────┐
-│ Receive [URLs and Safari web pages] from Share Sheet   │
-├────────────────────────────────────────────────────────┤
-│ 1. Get URLs from [Shortcut Input]                      │
-├────────────────────────────────────────────────────────┤
-│ 2. Get Contents of [http://192.168.10.30:3080/api/...] │
-│    • Method: POST                                      │
-│    • Headers:                                          │
-│        Authorization: Bearer slip_xxxxxxxx...          │
-│        Content-Type: application/json                  │
-│    • Request Body: JSON                                │
-│        url : [URLs]                                    │
-├────────────────────────────────────────────────────────┤
-│ 3. Show Notification: "✓ Saved to Slip Archive"        │
-└────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────┐
+│ Receive [URLs, Safari web pages, Images] from Share Sheet    │
+├──────────────────────────────────────────────────────────────┤
+│ 1. If [Shortcut Input] has Images / Photos                   │
+│    ├─ 2. Base64 Encode [Shortcut Input]                      │
+│    └─ 3. Get Contents of [http://...:3080/api/bookmarks/upload]│
+│          • Method: POST                                      │
+│          • Headers: Authorization: Bearer slip_...           │
+│                     Content-Type: application/json           │
+│          • Body: { "image_data": [Base64], "filename": "..." }│
+│ 4. Otherwise (Web Link)                                      │
+│    ├─ 5. Get URLs from [Shortcut Input]                      │
+│    └─ 6. Get Contents of [http://...:3080/api/bookmarks]     │
+│          • Method: POST                                      │
+│          • Headers: Authorization: Bearer slip_...           │
+│                     Content-Type: application/json           │
+│          • Body: { "url": [URLs] }                           │
+│ 7. End If                                                    │
+├──────────────────────────────────────────────────────────────┤
+│ 8. Show Notification: "✓ Saved to Slip Archive"              │
+└──────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 💻 Developer & Command-Line API Examples
+
+### 1. Upload Local Image File via cURL (Direct Binary Body)
+```bash
+curl -X POST http://<YOUR_SERVER_IP>:3080/api/bookmarks/upload \
+  -H "Authorization: Bearer slip_YOUR_API_KEY" \
+  -H "Content-Type: image/png" \
+  -H "X-Filename: architecture-diagram.png" \
+  -H "X-Title: System Architecture 2026" \
+  -H "X-Tags: design, architecture, system" \
+  --data-binary @/path/to/my_image.png
+```
+
+### 2. Upload Local Image File via Base64 JSON Payload
+```bash
+BASE64_IMG=$(base64 -i /path/to/my_image.jpg)
+curl -X POST http://<YOUR_SERVER_IP>:3080/api/bookmarks/upload \
+  -H "Authorization: Bearer slip_YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d "{
+    \"image_data\": \"$BASE64_IMG\",
+    \"filename\": \"design-moodboard.jpg\",
+    \"title\": \"Design Moodboard\",
+    \"tags\": [\"inspiration\", \"visual\"]
+  }"
 ```
 
 ---
 
 ## 🎉 How to Use It on iPhone / iPad
 
-1. Open any article in **Safari**, tweet on **Twitter/X**, post on **Reddit**, or video on **YouTube**.
-2. Tap the iOS **Share (⎋)** button (square with upward arrow).
-3. Scroll down the share sheet and tap **`Save to Slip`**.
-4. An iOS banner will notify you: `✓ Saved to Slip Archive`.
-5. Open your Slip dashboard — your new bookmark is parsed, tagged, screenshotted, and ready!
-
----
-
-## 🔍 Troubleshooting & Common Pitfalls
-
-### ❌ "A TLS error caused the secure connection to fail"
-* **Cause:** The URL starts with `https://` instead of `http://` on an unencrypted local IP.
-* **Fix:** Change the URL in Step 4 from `https://192.168.x.x...` to `http://192.168.x.x...`.
-
----
-
-### ❌ "Unauthorized: No token provided"
-* **Cause:** The `Authorization` header is missing or improperly formatted.
-* **Fix:** Verify the header key is exactly `Authorization` and the value starts with `Bearer slip_...` (ensure there is a space after `Bearer`).
-
----
-
-### ❌ Notification shows "Saved" but bookmark does not appear in Slip
-* **Cause 1:** You tested the shortcut by tapping it inside the Shortcuts app instead of via the Share Sheet. (Inside the app, `Shortcut Input` has no URL).
-* **Fix 1:** Test it by tapping the **Share** button inside Safari on an actual webpage.
-* **Cause 2:** Safari passed a webpage object that was not converted to a string.
-* **Fix 2:** Ensure Step 3 (**Get URLs from Input**) is present, and the JSON `url` field uses the **`URLs`** variable.
-
----
-
-### ❌ Server not reachable when away from home Wi-Fi
-* **Cause:** Local IPs (`192.168.x.x`) only work when connected to your home Wi-Fi network.
-* **Fix:** To save bookmarks when away on 5G/cellular data:
-  * Connect to your home VPN (e.g. **WireGuard** or **Tailscale** on iOS), OR
-  * Expose Slip via a secure HTTPS domain using **Cloudflare Tunnel** or a reverse proxy.
+1. **For Web Links:** In Safari, Twitter, Reddit, or YouTube, tap **Share (⎋)** → tap **`Save to Slip`**.
+2. **For Images & Photos:** In Apple **Photos**, open any picture or screenshot, tap **Share (⎋)** → tap **`Save to Slip`**.
+3. An iOS notification will immediately confirm: `✓ Saved to Slip Archive`.
+4. Open your Slip dashboard — your photo or bookmark will appear in your gallery with full-resolution caching, tag filtering, and instant search!

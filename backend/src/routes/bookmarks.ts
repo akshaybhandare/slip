@@ -3,11 +3,146 @@ import { getDb } from '../db';
 import { authenticate, AuthenticatedRequest } from '../middleware/auth';
 import { scrapeUrl, ScrapedMetadata, extractPlatformTag } from '../services/scraper';
 import { scrapeQueue } from '../services/queue';
-import { cacheThumbnail } from '../services/thumbnail';
+import { cacheThumbnail, saveUploadedImage } from '../services/thumbnail';
 
 const router = Router();
 
 router.use(authenticate);
+
+async function handleImageUpload(req: AuthenticatedRequest, res: Response) {
+  const userId = req.user!.id;
+
+  try {
+    let imageBuffer: Buffer | null = null;
+    let filename: string | undefined;
+    let title: string | undefined;
+    let description: string = '';
+    let personalNote: string | undefined;
+    let tagsInput: any = [];
+
+    // Case 1: Raw binary buffer (Content-Type: image/* or application/octet-stream)
+    if (Buffer.isBuffer(req.body) && req.body.length > 0) {
+      imageBuffer = req.body;
+      const rawHeaderName = (req.headers['x-filename'] as string) || (req.headers['content-disposition'] || '');
+      const match = /filename="?([^";]+)"?/i.exec(rawHeaderName);
+      filename = (req.headers['x-filename'] as string) || (match ? match[1] : undefined);
+      title = (req.headers['x-title'] as string) || undefined;
+      description = (req.headers['x-description'] as string) || '';
+      const rawTags = req.headers['x-tags'] as string;
+      if (rawTags) {
+        tagsInput = rawTags.split(',').map((t) => t.trim()).filter(Boolean);
+      }
+    }
+    // Case 2: JSON payload with Base64 data
+    else if (req.body && (req.body.image_data || req.body.imageData || req.body.image || req.body.file)) {
+      const rawData = req.body.image_data || req.body.imageData || req.body.image || req.body.file;
+      filename = req.body.filename || req.body.fileName;
+      title = req.body.title;
+      description = req.body.description || '';
+      personalNote = req.body.personal_note || req.body.personalNote;
+      tagsInput = req.body.tags || [];
+
+      if (typeof rawData === 'string') {
+        const base64Data = rawData.replace(/^data:image\/[a-zA-Z+]+;base64,/, '');
+        imageBuffer = Buffer.from(base64Data, 'base64');
+      }
+    }
+
+    if (!imageBuffer || imageBuffer.length === 0) {
+      return res.status(400).json({ message: 'No valid image data provided. Provide base64 image_data in JSON or raw binary image body.' });
+    }
+
+    const { imagePath, mimeType, size } = saveUploadedImage(imageBuffer, filename);
+
+    // Compute clean title
+    let finalTitle = title ? title.trim() : '';
+    if (!finalTitle && filename) {
+      finalTitle = filename.replace(/\.[^/.]+$/, '').replace(/[-_]+/g, ' ').trim();
+    }
+    if (!finalTitle) {
+      finalTitle = `Image ${new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
+    }
+
+    const finalUrl = imagePath;
+    const finalDesc = description || `Uploaded image (${(size / (1024 * 1024)).toFixed(2)} MB, ${mimeType})`;
+    const finalRawText = `${finalTitle} ${finalDesc} ${filename || ''}`;
+
+    const db = getDb();
+    const insertTransaction = db.transaction(() => {
+      const insertBookmark = db.prepare(`
+        INSERT INTO bookmarks (
+          user_id, url, title, description, personal_note, content_type, 
+          reader_html, raw_text, image_path, favicon_path
+        ) VALUES (?, ?, ?, ?, ?, 'image', NULL, ?, ?, NULL)
+      `);
+
+      const result = insertBookmark.run(
+        userId,
+        finalUrl,
+        finalTitle,
+        finalDesc,
+        personalNote || null,
+        finalRawText,
+        imagePath
+      );
+
+      const bookmarkId = result.lastInsertRowid;
+
+      const tagSet = new Set<string>();
+      if (Array.isArray(tagsInput)) {
+        for (const t of tagsInput) {
+          const clean = String(t).trim().toLowerCase().replace(/^#/, '');
+          if (clean) tagSet.add(clean);
+        }
+      } else if (typeof tagsInput === 'string') {
+        for (const t of tagsInput.split(',')) {
+          const clean = t.trim().toLowerCase().replace(/^#/, '');
+          if (clean) tagSet.add(clean);
+        }
+      }
+
+      tagSet.add('image');
+
+      if (tagSet.size > 0) {
+        const findOrCreateTag = db.prepare(`
+          INSERT INTO tags (name) VALUES (?)
+          ON CONFLICT(name) DO UPDATE SET name=excluded.name
+          RETURNING id
+        `);
+
+        const linkTag = db.prepare(`
+          INSERT OR IGNORE INTO bookmark_tags (bookmark_id, tag_id) VALUES (?, ?)
+        `);
+
+        for (const cleanName of tagSet) {
+          const tagRecord = findOrCreateTag.get(cleanName) as { id: number };
+          linkTag.run(bookmarkId, tagRecord.id);
+        }
+      }
+
+      return { bookmarkId, tagSet: Array.from(tagSet) };
+    });
+
+    const { bookmarkId, tagSet } = insertTransaction();
+
+    const createdBookmark = db.prepare(`
+      SELECT id, user_id, url, title, description, personal_note, content_type, 
+             image_path, favicon_path, created_at, updated_at
+      FROM bookmarks WHERE id = ?
+    `).get(bookmarkId) as any;
+
+    createdBookmark.tags = tagSet;
+
+    return res.status(201).json(createdBookmark);
+  } catch (err: any) {
+    console.error('Image upload error:', err);
+    return res.status(400).json({ message: err.message || 'Failed to upload image' });
+  }
+}
+
+// 3.5 Upload Local Image Bookmark
+router.post('/upload', handleImageUpload);
+
 
 // 1. Get All Bookmarks (Filtered by user, optional contentType or tag)
 router.get('/', (req: AuthenticatedRequest, res: Response) => {
@@ -197,6 +332,10 @@ router.get('/:id', (req: AuthenticatedRequest, res: Response) => {
 
 // 4. Create Bookmark
 router.post('/', async (req: AuthenticatedRequest, res: Response) => {
+  if (!req.body?.url && (req.body?.image_data || req.body?.imageData || req.body?.image || req.body?.file || Buffer.isBuffer(req.body))) {
+    return handleImageUpload(req, res);
+  }
+
   const userId = req.user!.id;
   const { url, title, description, tags, contentType, imageUrl, faviconUrl, readerHtml } = req.body;
 

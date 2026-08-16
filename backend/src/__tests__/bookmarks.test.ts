@@ -185,4 +185,110 @@ describe('Bookmark CRUD & Local Thumbnail Cache Integrations', () => {
 
     expect(verifyGet.status).toBe(404);
   });
+
+  describe('Local Image Bookmark Uploads & Shortcut API', () => {
+    const validPngBase64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+    const validPngBuffer = Buffer.from(validPngBase64, 'base64');
+    let apiKey: string;
+
+    test('generate API key for user1', async () => {
+      const res = await request(app)
+        .post('/api/auth/apikey')
+        .set('Cookie', user1Cookie)
+        .send({ name: 'iOS Shortcut Test Key' });
+
+      expect(res.status).toBe(201);
+      expect(res.body.apiKey).toMatch(/^slip_/);
+      apiKey = res.body.apiKey;
+    });
+
+    test('POST /api/bookmarks/upload should create bookmark from Base64 JSON payload', async () => {
+      const response = await request(app)
+        .post('/api/bookmarks/upload')
+        .set('Cookie', user1Cookie)
+        .send({
+          image_data: `data:image/png;base64,${validPngBase64}`,
+          filename: 'inspiration-shot.png',
+          title: 'UI Inspiration Shot',
+          description: 'A great minimal UI reference',
+          tags: ['design', 'inspiration']
+        });
+
+      expect(response.status).toBe(201);
+      expect(response.body).toHaveProperty('id');
+      expect(response.body.content_type).toBe('image');
+      expect(response.body.title).toBe('UI Inspiration Shot');
+      expect(response.body.image_path).toMatch(/^\/api\/cache\/[a-f0-9]{64}\.png$/);
+      expect(response.body.tags).toEqual(expect.arrayContaining(['design', 'inspiration', 'image']));
+
+      // Verify image file exists and can be retrieved via /api/cache/:filename
+      const cacheFilename = response.body.image_path.replace('/api/cache/', '');
+      const cacheRes = await request(app).get(`/api/cache/${cacheFilename}`);
+      expect(cacheRes.status).toBe(200);
+      expect(cacheRes.headers['content-type']).toMatch(/image\/png/);
+    });
+
+    test('POST /api/bookmarks/upload should create bookmark from raw binary buffer using Bearer API Key (iOS Shortcut flow)', async () => {
+      const response = await request(app)
+        .post('/api/bookmarks/upload')
+        .set('Authorization', `Bearer ${apiKey}`)
+        .set('Content-Type', 'image/png')
+        .set('X-Filename', 'shortcut-camera-upload.png')
+        .set('X-Title', 'Shortcut Camera Photo')
+        .set('X-Tags', 'mobile, photos')
+        .send(validPngBuffer);
+
+      expect(response.status).toBe(201);
+      expect(response.body).toHaveProperty('id');
+      expect(response.body.content_type).toBe('image');
+      expect(response.body.title).toBe('Shortcut Camera Photo');
+      expect(response.body.image_path).toMatch(/^\/api\/cache\/[a-f0-9]{64}\.png$/);
+      expect(response.body.tags).toEqual(expect.arrayContaining(['mobile', 'photos', 'image']));
+    });
+
+    test('POST /api/bookmarks should forward base64 image_data seamlessly when url is omitted', async () => {
+      const response = await request(app)
+        .post('/api/bookmarks')
+        .set('Authorization', `Bearer ${apiKey}`)
+        .send({
+          imageData: validPngBase64,
+          filename: 'forwarded-image.png',
+          title: 'Forwarded Image Test'
+        });
+
+      expect(response.status).toBe(201);
+      expect(response.body.content_type).toBe('image');
+      expect(response.body.title).toBe('Forwarded Image Test');
+      expect(response.body.image_path).toMatch(/^\/api\/cache\/[a-f0-9]{64}\.png$/);
+    });
+
+    test('POST /api/bookmarks should accept raw binary image directly to unified endpoint', async () => {
+      const response = await request(app)
+        .post('/api/bookmarks')
+        .set('Authorization', `Bearer ${apiKey}`)
+        .set('Content-Type', 'image/png')
+        .set('X-Filename', 'unified-endpoint-photo.png')
+        .set('X-Title', 'Unified Photo')
+        .send(validPngBuffer);
+
+      expect(response.status).toBe(201);
+      expect(response.body.content_type).toBe('image');
+      expect(response.body.title).toBe('Unified Photo');
+      expect(response.body.image_path).toMatch(/^\/api\/cache\/[a-f0-9]{64}\.png$/);
+    });
+
+
+    test('POST /api/bookmarks/upload should reject invalid non-image file buffer', async () => {
+      const invalidBuffer = Buffer.from('THIS_IS_NOT_AN_IMAGE_FILE');
+      const response = await request(app)
+        .post('/api/bookmarks/upload')
+        .set('Authorization', `Bearer ${apiKey}`)
+        .set('Content-Type', 'application/octet-stream')
+        .send(invalidBuffer);
+
+      expect(response.status).toBe(400);
+      expect(response.body.message).toMatch(/Unsupported image format/);
+    });
+  });
 });
+

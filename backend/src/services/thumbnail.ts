@@ -66,3 +66,87 @@ export async function cacheThumbnail(imageUrl: string): Promise<string | null> {
     return null;
   }
 }
+
+export function detectImageType(buffer: Buffer, originalFilename?: string): { ext: string; mime: string } | null {
+  if (!buffer || buffer.length < 4) return null;
+
+  // JPEG
+  if (buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff) {
+    return { ext: 'jpg', mime: 'image/jpeg' };
+  }
+  // PNG
+  if (
+    buffer[0] === 0x89 &&
+    buffer[1] === 0x50 &&
+    buffer[2] === 0x4e &&
+    buffer[3] === 0x47
+  ) {
+    return { ext: 'png', mime: 'image/png' };
+  }
+  // GIF
+  if (
+    buffer[0] === 0x47 &&
+    buffer[1] === 0x49 &&
+    buffer[2] === 0x46 &&
+    buffer[3] === 0x38
+  ) {
+    return { ext: 'gif', mime: 'image/gif' };
+  }
+  // WEBP
+  if (
+    buffer.length >= 12 &&
+    buffer[0] === 0x52 &&
+    buffer[1] === 0x49 &&
+    buffer[2] === 0x46 &&
+    buffer[3] === 0x46 &&
+    buffer[8] === 0x57 &&
+    buffer[9] === 0x45 &&
+    buffer[10] === 0x42 &&
+    buffer[11] === 0x50
+  ) {
+    return { ext: 'webp', mime: 'image/webp' };
+  }
+  // SVG
+  if (originalFilename && /\.svg$/i.test(originalFilename)) {
+    const head = buffer.subarray(0, 512).toString('utf8').trim();
+    if (head.includes('<svg') || head.includes('<?xml')) {
+      return { ext: 'svg', mime: 'image/svg+xml' };
+    }
+  }
+
+  return null;
+}
+
+export function saveUploadedImage(buffer: Buffer, originalFilename?: string): {
+  imagePath: string;
+  filename: string;
+  mimeType: string;
+  size: number;
+} {
+  const detected = detectImageType(buffer, originalFilename);
+  if (!detected) {
+    throw new Error('Unsupported image format. Allowed formats: JPG, PNG, WEBP, GIF, SVG.');
+  }
+
+  // Enforce max 25MB file size
+  const MAX_SIZE = 25 * 1024 * 1024;
+  if (buffer.length > MAX_SIZE) {
+    throw new Error('Image exceeds maximum file size of 25MB.');
+  }
+
+  const hash = crypto.createHash('sha256').update(buffer).digest('hex');
+  const filename = `${hash}.${detected.ext}`;
+  const filePath = path.join(CACHE_DIR, filename);
+
+  if (!fs.existsSync(filePath)) {
+    fs.writeFileSync(filePath, buffer);
+  }
+
+  return {
+    imagePath: `/api/cache/${filename}`,
+    filename,
+    mimeType: detected.mime,
+    size: buffer.length
+  };
+}
+
