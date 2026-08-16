@@ -55,6 +55,11 @@ export async function cacheThumbnail(imageUrl: string): Promise<string | null> {
       return null;
     }
 
+    // Ignore placeholder / tiny error buffers (< 1000 bytes)
+    if (response.data && response.data.length < 1000) {
+      return null;
+    }
+
     fs.writeFileSync(filePath, Buffer.from(response.data));
     return `/api/cache/${filename}`;
   } catch (err) {

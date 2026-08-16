@@ -2,7 +2,7 @@ import { Router, Response } from 'express';
 import { getDb } from '../db';
 import { authenticate, AuthenticatedRequest } from '../middleware/auth';
 import { parseNetscapeHtml, generateNetscapeHtml, BookmarkExportItem } from '../services/netscape';
-import { scrapeUrl } from '../services/scraper';
+import { scrapeUrl, extractPlatformTag } from '../services/scraper';
 import { scrapeQueue } from '../services/queue';
 import { cacheThumbnail } from '../services/thumbnail';
 
@@ -63,12 +63,17 @@ router.post('/import', (req: AuthenticatedRequest, res: Response) => {
         const bookmarkId = result.lastInsertRowid as number;
         importedIds.push(bookmarkId);
 
+        const tagSet = new Set<string>();
         for (const tagName of item.tags) {
-          const cleanName = tagName.trim();
-          if (cleanName) {
-            const tagRecord = findOrCreateTag.get(cleanName) as { id: number };
-            linkTag.run(bookmarkId, tagRecord.id);
-          }
+          const cleanName = tagName.trim().toLowerCase().replace(/^#/, '');
+          if (cleanName) tagSet.add(cleanName);
+        }
+        const platformTag = extractPlatformTag(item.url);
+        if (platformTag) tagSet.add(platformTag);
+
+        for (const cleanName of tagSet) {
+          const tagRecord = findOrCreateTag.get(cleanName) as { id: number };
+          linkTag.run(bookmarkId, tagRecord.id);
         }
       }
     });

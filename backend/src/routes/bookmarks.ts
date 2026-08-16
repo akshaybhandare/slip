@@ -1,7 +1,7 @@
 import { Router, Response } from 'express';
 import { getDb } from '../db';
 import { authenticate, AuthenticatedRequest } from '../middleware/auth';
-import { scrapeUrl, ScrapedMetadata } from '../services/scraper';
+import { scrapeUrl, ScrapedMetadata, extractPlatformTag } from '../services/scraper';
 import { scrapeQueue } from '../services/queue';
 import { cacheThumbnail } from '../services/thumbnail';
 
@@ -252,7 +252,19 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
 
       const bookmarkId = result.lastInsertRowid;
 
-      if (Array.isArray(tags) && tags.length > 0) {
+      const tagSet = new Set<string>();
+      if (Array.isArray(tags)) {
+        for (const t of tags) {
+          const clean = t.trim().toLowerCase().replace(/^#/, '');
+          if (clean) tagSet.add(clean);
+        }
+      }
+      const platformTag = extractPlatformTag(url);
+      if (platformTag) {
+        tagSet.add(platformTag);
+      }
+
+      if (tagSet.size > 0) {
         const findOrCreateTag = db.prepare(`
           INSERT INTO tags (name) VALUES (?)
           ON CONFLICT(name) DO UPDATE SET name=excluded.name
@@ -263,12 +275,9 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
           INSERT OR IGNORE INTO bookmark_tags (bookmark_id, tag_id) VALUES (?, ?)
         `);
 
-        for (const tagName of tags) {
-          const cleanName = tagName.trim();
-          if (cleanName) {
-            const tagRecord = findOrCreateTag.get(cleanName) as { id: number };
-            linkTag.run(bookmarkId, tagRecord.id);
-          }
+        for (const cleanName of tagSet) {
+          const tagRecord = findOrCreateTag.get(cleanName) as { id: number };
+          linkTag.run(bookmarkId, tagRecord.id);
         }
       }
 
@@ -434,6 +443,19 @@ router.post('/:id/rescrape', async (req: AuthenticatedRequest, res: Response) =>
       id
     );
 
+    const platformTag = extractPlatformTag(existing.url);
+    if (platformTag) {
+      const tagRecord = db.prepare(`
+        INSERT INTO tags (name) VALUES (?)
+        ON CONFLICT(name) DO UPDATE SET name=excluded.name
+        RETURNING id
+      `).get(platformTag) as { id: number };
+
+      db.prepare(`
+        INSERT OR IGNORE INTO bookmark_tags (bookmark_id, tag_id) VALUES (?, ?)
+      `).run(id, tagRecord.id);
+    }
+
     const updated = db.prepare(`SELECT * FROM bookmarks WHERE id = ?`).get(id) as any;
     const attachedTags = db.prepare(`
       SELECT t.id, t.name FROM tags t
@@ -495,6 +517,19 @@ router.post('/rescrape-all', async (req: AuthenticatedRequest, res: Response) =>
             scraped.faviconUrl || b.favicon_path,
             b.id
           );
+
+          const platformTag = extractPlatformTag(b.url);
+          if (platformTag) {
+            const tagRecord = db.prepare(`
+              INSERT INTO tags (name) VALUES (?)
+              ON CONFLICT(name) DO UPDATE SET name=excluded.name
+              RETURNING id
+            `).get(platformTag) as { id: number };
+
+            db.prepare(`
+              INSERT OR IGNORE INTO bookmark_tags (bookmark_id, tag_id) VALUES (?, ?)
+            `).run(b.id, tagRecord.id);
+          }
         } catch (queueErr) {
           console.error(`Failed to rescrape bookmark ID ${b.id}:`, queueErr);
         }

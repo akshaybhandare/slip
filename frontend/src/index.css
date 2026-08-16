@@ -97,6 +97,10 @@ body {
   background: var(--color-background);
 }
 
+.nav-header-row {
+  display: contents;
+}
+
 .brand-section {
   display: flex;
   align-items: center;
@@ -127,6 +131,7 @@ body {
   flex: 1;
   max-width: 540px;
   position: relative;
+  min-width: 0;
 }
 
 .search-icon {
@@ -141,7 +146,7 @@ body {
 .search-input {
   width: 100%;
   height: 40px;
-  padding: 0 14px 0 38px;
+  padding: 0 34px 0 38px;
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
@@ -156,6 +161,28 @@ body {
   box-shadow: 0 0 0 2px rgba(228, 43, 12, 0.12);
 }
 
+.search-clear-btn {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: transparent;
+  border: none;
+  color: var(--color-muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+  border-radius: 50%;
+  transition: var(--transition);
+}
+
+.search-clear-btn:hover {
+  background: var(--color-tertiary);
+  color: var(--color-on-surface);
+}
+
 /* Nav Actions */
 .nav-actions {
   display: flex;
@@ -165,6 +192,26 @@ body {
 }
 
 @media (max-width: 640px) {
+  .top-nav {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+    padding: 8px 0;
+    margin-bottom: var(--space-md);
+  }
+
+  .nav-header-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+  }
+
+  .search-wrapper {
+    width: 100%;
+    max-width: 100%;
+  }
+
   .btn-text-hide-mobile {
     display: none;
   }
@@ -419,13 +466,17 @@ body {
 }
 
 .card-title {
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 600;
   line-height: 1.35;
-  letter-spacing: -0.3px;
+  letter-spacing: -0.2px;
   color: var(--color-on-surface);
   text-decoration: none;
   cursor: pointer;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 .card-title:hover {
@@ -436,9 +487,9 @@ body {
   font-size: 13px;
   font-weight: 400;
   color: var(--color-muted);
-  line-height: 1.5;
+  line-height: 1.45;
   display: -webkit-box;
-  -webkit-line-clamp: 3;
+  -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
@@ -448,6 +499,20 @@ body {
   flex-wrap: wrap;
   gap: 6px;
   margin-top: 2px;
+}
+
+.tag-pill-more {
+  height: 24px;
+  padding: 0 8px;
+  border-radius: var(--radius-full);
+  font-size: 11px;
+  font-weight: 500;
+  background: var(--color-tertiary);
+  color: var(--color-muted);
+  display: inline-flex;
+  align-items: center;
+  user-select: none;
+  cursor: default;
 }
 
 .card-actions {

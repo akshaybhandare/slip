@@ -127,7 +127,7 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
 
         {bookmark.tags && bookmark.tags.length > 0 && (
           <div className="card-tags">
-            {bookmark.tags.map((t) => (
+            {bookmark.tags.slice(0, 3).map((t) => (
               <span
                 key={t.id || t.name}
                 className="tag-pill"
@@ -136,6 +136,14 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
                 #{t.name}
               </span>
             ))}
+            {bookmark.tags.length > 3 && (
+              <span
+                className="tag-pill-more"
+                title={bookmark.tags.slice(3).map((t) => `#${t.name}`).join(', ')}
+              >
+                +{bookmark.tags.length - 3}
+              </span>
+            )}
           </div>
         )}
 

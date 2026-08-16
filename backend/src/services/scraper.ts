@@ -25,8 +25,67 @@ export function resolveUrl(baseUrl: string, relativePath?: string | null): strin
   }
 }
 
+export function cleanDescription(desc: string): string {
+  if (!desc) return '';
+  let cleaned = desc
+    .replace(/(\s*#[a-zA-Z0-9_\u0080-\uFFFF]+){3,}/g, '') // remove long hashtag chains
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  if (cleaned.length > 280) {
+    cleaned = cleaned.substring(0, 277).trim() + '...';
+  }
+  return cleaned;
+}
+
+export function cleanTitle(title: string): string {
+  if (!title) return '';
+  let cleaned = title.replace(/\s+/g, ' ').trim();
+  if (cleaned.length > 160) {
+    cleaned = cleaned.substring(0, 157).trim() + '...';
+  }
+  return cleaned;
+}
+
+export function extractPlatformTag(targetUrl: string): string | null {
+  try {
+    const parsed = new URL(targetUrl.startsWith('http') ? targetUrl : `https://${targetUrl}`);
+    const host = parsed.hostname.toLowerCase().replace(/^www\./, '');
+    if (host.includes('youtube.com') || host.includes('youtu.be')) return 'youtube';
+    if (host.includes('instagram.com')) return 'instagram';
+    if (host.includes('github.com')) return 'github';
+    if (host.includes('twitter.com') || host.includes('x.com')) return 'twitter';
+    if (host.includes('reddit.com')) return 'reddit';
+    if (host.includes('imdb.com')) return 'imdb';
+    if (host.includes('amazon.')) return 'amazon';
+    if (host.includes('medium.com')) return 'medium';
+    if (host.includes('substack.com')) return 'substack';
+    if (host.includes('wikipedia.org')) return 'wikipedia';
+    if (host.includes('filamint.in')) return 'filamint';
+    if (host.includes('1337x.')) return '1337x';
+    if (host.includes('twitch.tv')) return 'twitch';
+    if (host.includes('spotify.com')) return 'spotify';
+    if (host.includes('linkedin.com')) return 'linkedin';
+    if (host.includes('pinterest.com')) return 'pinterest';
+    if (host.includes('tiktok.com')) return 'tiktok';
+    if (host.includes('vimeo.com')) return 'vimeo';
+
+    const parts = host.split('.');
+    if (parts.length >= 2) {
+      const mainPart = parts[0] === 'm' || parts[0] === 'mobile' ? parts[1] : parts[0];
+      if (mainPart && mainPart.length >= 3 && !['com', 'org', 'net', 'io', 'app', 'dev', 'co'].includes(mainPart)) {
+        return mainPart.toLowerCase();
+      }
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 export function generateScreenshotUrl(targetUrl: string): string {
-  return `https://s0.wp.com/mshots/v1/${encodeURIComponent(targetUrl)}?w=720`;
+  // Microlink rendered screenshot API
+  return `https://api.microlink.io?url=${encodeURIComponent(targetUrl)}&screenshot=true&meta=false&embed=screenshot.url`;
 }
 
 export function extractSmartUrlFallback(targetUrl: string): {
@@ -78,7 +137,6 @@ export function extractSmartUrlFallback(targetUrl: string): {
       category = 'article';
     }
 
-    // Find the most descriptive path segment (longest non-generic segment)
     const descriptiveSegment = [...segments].reverse().find(
       (s) =>
         s.length > 2 &&
@@ -93,7 +151,6 @@ export function extractSmartUrlFallback(targetUrl: string): {
         .trim();
 
       if (cleanSlug.length > 0) {
-        // Capitalize words nicely
         derivedTitle = cleanSlug
           .split(' ')
           .map((w) => (w.length > 0 ? w.charAt(0).toUpperCase() + w.slice(1) : ''))
@@ -106,7 +163,7 @@ export function extractSmartUrlFallback(targetUrl: string): {
     }
 
     return {
-      title: derivedTitle,
+      title: cleanTitle(derivedTitle),
       description: `Saved link from ${hostname}`,
       contentType: category
     };
@@ -180,11 +237,9 @@ export function parseHtmlMetadata(html: string, targetUrl: string): ScrapedMetad
     parsedHostname = targetUrl;
   }
 
-  // If title is a generic challenge or identical to hostname, use smart slug extractor
   if (isCloudflareOrGenericTitle(title, parsedHostname)) {
     title = fallback.title;
   } else if (fallback.title && fallback.title !== parsedHostname && fallback.title.split(' ').length >= 3) {
-    // Check if the static HTML title is a generic homepage template for an SPA deep link
     const slugWords = fallback.title.toLowerCase().split(/\s+/).filter((w) => w.length > 3);
     const titleWords = title.toLowerCase().split(/\s+/);
     const hasSlugOverlap = slugWords.some((w) => titleWords.includes(w));
@@ -203,11 +258,13 @@ export function parseHtmlMetadata(html: string, targetUrl: string): ScrapedMetad
     }
   }
 
+  title = cleanTitle(title);
+
   // 2. Description Extraction
   const ogDesc = $('meta[property="og:description"]').attr('content');
   const twitterDesc = $('meta[name="twitter:description"]').attr('content');
   const metaDesc = $('meta[name="description"]').attr('content');
-  const description = (ogDesc || twitterDesc || jsonLdDesc || metaDesc || fallback.description || '').trim();
+  let description = cleanDescription(ogDesc || twitterDesc || jsonLdDesc || metaDesc || fallback.description || '');
 
   // 3. Image Extraction
   const ogImage = $('meta[property="og:image"]').attr('content');
@@ -329,7 +386,6 @@ export async function scrapeUrl(url: string): Promise<ScrapedMetadata> {
 
     result = parseHtmlMetadata(response.data, targetUrl);
   } catch {
-    // Fallback to secondary browser User-Agent if primary fails
     try {
       const fallbackRes = await axios.get(targetUrl, {
         headers: {
@@ -343,12 +399,11 @@ export async function scrapeUrl(url: string): Promise<ScrapedMetadata> {
       });
       result = parseHtmlMetadata(fallbackRes.data, targetUrl);
     } catch {
-      // If network unreachable or blocked by Cloudflare (403/503), use smart URL parsing + screenshot fallback
       const fallback = extractSmartUrlFallback(targetUrl);
       return {
         url: targetUrl,
-        title: fallback.title,
-        description: fallback.description,
+        title: cleanTitle(fallback.title),
+        description: cleanDescription(fallback.description),
         contentType: fallback.contentType,
         readerHtml: null,
         rawText: fallback.title,
@@ -358,7 +413,6 @@ export async function scrapeUrl(url: string): Promise<ScrapedMetadata> {
     }
   }
 
-  // If HTML was a client-side SPA (no article HTML body), but URL path is definitively an article/blog
   const lowerUrl = targetUrl.toLowerCase();
   if (
     result.contentType === 'website' &&
@@ -374,7 +428,6 @@ export async function scrapeUrl(url: string): Promise<ScrapedMetadata> {
     result.contentType = 'article';
   }
 
-  // If no preview image was extracted from HTML, fallback to automatic high-resolution screenshot
   if (!result.imageUrl) {
     result.imageUrl = generateScreenshotUrl(targetUrl);
   }

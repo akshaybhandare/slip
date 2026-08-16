@@ -1,5 +1,5 @@
 import React from 'react';
-import { Bookmark as BookmarkIcon, Search, Plus, Upload, Download, LogOut, RefreshCw } from 'lucide-react';
+import { Bookmark as BookmarkIcon, Search, Plus, Upload, Download, LogOut, RefreshCw, X } from 'lucide-react';
 import { User } from '../types';
 
 interface NavbarProps {
@@ -25,11 +25,44 @@ export const Navbar: React.FC<NavbarProps> = ({
 }) => {
   return (
     <header className="top-nav">
-      <div className="brand-section">
-        <div className="brand-logo">
-          <BookmarkIcon size={20} />
+      <div className="nav-header-row">
+        <div className="brand-section">
+          <div className="brand-logo">
+            <BookmarkIcon size={20} />
+          </div>
+          <span className="brand-name">Slip</span>
         </div>
-        <span className="brand-name">Slip</span>
+
+        <div className="nav-actions">
+          <button className="btn btn-primary" onClick={onAddClick} title="Save Link">
+            <Plus size={16} />
+            <span className="btn-text-hide-mobile">Save</span>
+          </button>
+
+          <button
+            className="btn btn-secondary"
+            onClick={onRescrapeAllClick}
+            disabled={isRescrapingAll}
+            title="Global Re-scrape: Refresh all previews & metadata"
+          >
+            <RefreshCw size={15} className={isRescrapingAll ? 'spin-animation' : ''} />
+            <span className="btn-text-hide-mobile">{isRescrapingAll ? 'Syncing...' : 'Sync All'}</span>
+          </button>
+
+          <button className="btn btn-secondary" onClick={onImportClick} title="Import HTML Bookmarks">
+            <Upload size={15} />
+          </button>
+
+          <a href="/api/io/export" className="btn btn-secondary" title="Export HTML Bookmarks" download>
+            <Download size={15} />
+          </a>
+
+          {user && (
+            <button className="btn btn-secondary" onClick={onLogoutClick} title={`Log out (${user.username})`}>
+              <LogOut size={15} />
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="search-wrapper">
@@ -41,35 +74,14 @@ export const Navbar: React.FC<NavbarProps> = ({
           value={searchQuery}
           onChange={(e) => onSearchChange(e.target.value)}
         />
-      </div>
-
-      <div className="nav-actions">
-        <button className="btn btn-primary" onClick={onAddClick} title="Save Link">
-          <Plus size={16} />
-          <span className="btn-text-hide-mobile">Save</span>
-        </button>
-
-        <button
-          className="btn btn-secondary"
-          onClick={onRescrapeAllClick}
-          disabled={isRescrapingAll}
-          title="Global Re-scrape: Refresh all previews & metadata"
-        >
-          <RefreshCw size={15} className={isRescrapingAll ? 'spin-animation' : ''} />
-          <span className="btn-text-hide-mobile">{isRescrapingAll ? 'Syncing...' : 'Sync All'}</span>
-        </button>
-
-        <button className="btn btn-secondary" onClick={onImportClick} title="Import HTML Bookmarks">
-          <Upload size={15} />
-        </button>
-
-        <a href="/api/io/export" className="btn btn-secondary" title="Export HTML Bookmarks" download>
-          <Download size={15} />
-        </a>
-
-        {user && (
-          <button className="btn btn-secondary" onClick={onLogoutClick} title={`Log out (${user.username})`}>
-            <LogOut size={15} />
+        {searchQuery && (
+          <button
+            type="button"
+            className="search-clear-btn"
+            onClick={() => onSearchChange('')}
+            title="Clear search"
+          >
+            <X size={14} />
           </button>
         )}
       </div>
