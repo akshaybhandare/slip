@@ -1,0 +1,33 @@
+version: '3.8'
+
+services:
+  slip:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: slip:latest
+    container_name: slip
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./config:/config
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - HOST=0.0.0.0
+      - DB_PATH=/config/bookmarks.db
+      - CACHE_DIR=/config/cache
+      - PUID=99
+      - PGID=100
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
