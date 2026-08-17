@@ -22,6 +22,7 @@ import { ReaderModal } from './components/ReaderModal';
 import { ShareModal } from './components/ShareModal';
 import { ImportModal } from './components/ImportModal';
 import { AuthModal } from './components/AuthModal';
+import { AddUserModal } from './components/AddUserModal';
 import { BookmarkPlus, Plus } from 'lucide-react';
 import { useTheme } from './hooks/useTheme';
 
@@ -39,6 +40,7 @@ export const App: React.FC = () => {
 
   // Modals
   const [isAddOpen, setIsAddOpen] = useState(false);
+  const [isAddUserOpen, setIsAddUserOpen] = useState(false);
   const [droppedFile, setDroppedFile] = useState<File | null>(null);
   const [isImportOpen, setIsImportOpen] = useState(false);
   const [readerBookmark, setReaderBookmark] = useState<Bookmark | null>(null);
@@ -208,6 +210,7 @@ export const App: React.FC = () => {
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
         onAddClick={() => setIsAddOpen(true)}
+        onAddUserClick={() => setIsAddUserOpen(true)}
         onImportClick={() => setIsImportOpen(true)}
         onRescrapeAllClick={handleRescrapeAll}
         isRescrapingAll={isRescrapingAll}
@@ -301,6 +304,11 @@ export const App: React.FC = () => {
         isOpen={isImportOpen}
         onClose={() => setIsImportOpen(false)}
         onImportSuccess={loadData}
+      />
+
+      <AddUserModal
+        isOpen={isAddUserOpen}
+        onClose={() => setIsAddUserOpen(false)}
       />
     </div>
   );

@@ -4,7 +4,7 @@ import crypto from 'crypto';
 import axios from 'axios';
 
 // Resolve cache directory relative to project root
-const projectRoot = path.resolve(__dirname, '../..');
+const projectRoot = path.resolve(__dirname, '../../..');
 const rawCacheDir = process.env.CACHE_DIR || 'backend/data/cache';
 export const CACHE_DIR = path.isAbsolute(rawCacheDir) ? rawCacheDir : path.resolve(projectRoot, rawCacheDir);
 

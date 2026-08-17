@@ -1,4 +1,4 @@
-import { Bookmark, ContentType, Tag, User } from './types';
+import { Bookmark, ContentType, Tag, User, UserListItem } from './types';
 
 const API_BASE = '/api';
 
@@ -71,6 +71,35 @@ export async function registerUser(username: string, password: string): Promise<
     localStorage.setItem('slip_token', res.token);
   }
   return res;
+}
+
+export async function createAdminUser(username: string, password: string): Promise<{ message: string; user: User }> {
+  return apiFetch<{ message: string; user: User }>('/auth/users', {
+    method: 'POST',
+    body: JSON.stringify({ username, password })
+  });
+}
+
+export async function fetchAdminUsers(): Promise<UserListItem[]> {
+  return apiFetch<UserListItem[]>('/auth/users');
+}
+
+export async function deleteAdminUser(userId: number): Promise<{
+  message: string;
+  deletedUser: User;
+  exportHtml: string;
+  exportJson: any;
+  bookmarkCount: number;
+}> {
+  return apiFetch<{
+    message: string;
+    deletedUser: User;
+    exportHtml: string;
+    exportJson: any;
+    bookmarkCount: number;
+  }>(`/auth/users/${userId}`, {
+    method: 'DELETE'
+  });
 }
 
 export async function logoutUser(): Promise<{ message: string }> {

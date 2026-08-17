@@ -14,6 +14,9 @@ vi.mock('../api', () => ({
   logoutUser: vi.fn(),
   loginUser: vi.fn(),
   registerUser: vi.fn(),
+  createAdminUser: vi.fn(),
+  fetchAdminUsers: vi.fn(),
+  deleteAdminUser: vi.fn(),
   shareBookmark: vi.fn(),
   revokeShareBookmark: vi.fn(),
   importBookmarksHtml: vi.fn(),
@@ -52,12 +55,15 @@ describe('Frontend SPA Component Architecture & Mobile UI Interactions', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(api.getMe).mockResolvedValue({ user: { id: 1, username: 'testuser' } });
+    vi.mocked(api.getMe).mockResolvedValue({ user: { id: 1, username: 'testuser', isAdmin: true } });
     vi.mocked(api.getAuthStatus).mockResolvedValue({ initialized: true });
     vi.mocked(api.fetchBookmarks).mockResolvedValue(mockBookmarks);
     vi.mocked(api.fetchTags).mockResolvedValue([
       { id: 1, name: 'database', count: 1 },
       { id: 2, name: 'react', count: 1 }
+    ]);
+    vi.mocked(api.fetchAdminUsers).mockResolvedValue([
+      { id: 1, username: 'testuser', created_at: new Date().toISOString(), bookmark_count: 2 }
     ]);
     vi.mocked(api.rescrapeAllBookmarks).mockResolvedValue({ message: 'Global re-scrape initiated for 2 bookmarks', count: 2 });
   });
@@ -167,6 +173,25 @@ describe('Frontend SPA Component Architecture & Mobile UI Interactions', () => {
       expect(screen.getByText(/Import HTML Bookmarks/i)).toBeInTheDocument();
       expect(screen.getByText(/Export HTML Bookmarks/i)).toBeInTheDocument();
       expect(screen.getByText(/Log out \(@testuser\)/i)).toBeInTheDocument();
+    });
+  });
+
+  it('opens and closes Add User modal when admin clicks Add User', async () => {
+    render(<App />);
+
+    const addUserBtn = await screen.findByTitle('Add User');
+    expect(addUserBtn).toBeInTheDocument();
+
+    fireEvent.click(addUserBtn);
+
+    expect(screen.getByText('Manage Users')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText(/e.g. alex/i)).toBeInTheDocument();
+
+    const closeBtn = screen.getByLabelText('Close modal');
+    fireEvent.click(closeBtn);
+
+    await waitFor(() => {
+      expect(screen.queryByText('Manage Users')).not.toBeInTheDocument();
     });
   });
 });

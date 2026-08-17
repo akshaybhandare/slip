@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Bookmark as BookmarkIcon, Search, Plus, Upload, Download, LogOut, RefreshCw, X, Sun, Moon, Monitor, MoreVertical } from 'lucide-react';
+import { Bookmark as BookmarkIcon, Search, Plus, Upload, Download, LogOut, RefreshCw, X, Sun, Moon, Monitor, MoreVertical, UserPlus } from 'lucide-react';
 import { User } from '../types';
 import { ThemeMode } from '../hooks/useTheme';
 
@@ -7,6 +7,7 @@ interface NavbarProps {
   searchQuery: string;
   onSearchChange: (q: string) => void;
   onAddClick: () => void;
+  onAddUserClick?: () => void;
   onImportClick: () => void;
   onRescrapeAllClick: () => void;
   isRescrapingAll: boolean;
@@ -20,6 +21,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   searchQuery,
   onSearchChange,
   onAddClick,
+  onAddUserClick,
   onImportClick,
   onRescrapeAllClick,
   isRescrapingAll,
@@ -106,6 +108,12 @@ export const Navbar: React.FC<NavbarProps> = ({
               <Download size={15} />
             </a>
 
+            {(user?.isAdmin || user?.id === 1) && onAddUserClick && (
+              <button className="btn btn-secondary" onClick={onAddUserClick} title="Add User">
+                <UserPlus size={15} />
+              </button>
+            )}
+
             {user && (
               <button className="btn btn-secondary" onClick={onLogoutClick} title={`Log out (${user.username})`}>
                 <LogOut size={15} />
@@ -158,6 +166,19 @@ export const Navbar: React.FC<NavbarProps> = ({
                   <Download size={15} />
                   <span>Export HTML Bookmarks</span>
                 </a>
+
+                {(user?.isAdmin || user?.id === 1) && onAddUserClick && (
+                  <button
+                    className="nav-dropdown-item"
+                    onClick={() => {
+                      setIsMenuOpen(false);
+                      onAddUserClick();
+                    }}
+                  >
+                    <UserPlus size={15} />
+                    <span>Add User</span>
+                  </button>
+                )}
 
                 {user && (
                   <>

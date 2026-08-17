@@ -82,6 +82,65 @@ describe('User Authentication & API Key Integrations', () => {
     expect(response.body.message).toBe('User registered successfully');
   });
 
+  test('should allow admin to provision a new user via POST /api/auth/users without altering session', async () => {
+    const response = await request(app)
+      .post('/api/auth/users')
+      .set('Cookie', authCookie)
+      .send({
+        username: 'thirduser',
+        password: 'yetanothersecurepassword'
+      });
+
+    expect(response.status).toBe(201);
+    expect(response.body.message).toBe('User created successfully');
+    expect(response.body.user.username).toBe('thirduser');
+    expect(response.headers['set-cookie']).toBeUndefined();
+  });
+
+  test('should allow admin to list all users via GET /api/auth/users', async () => {
+    const response = await request(app)
+      .get('/api/auth/users')
+      .set('Cookie', authCookie);
+
+    expect(response.status).toBe(200);
+    expect(Array.isArray(response.body)).toBe(true);
+    expect(response.body.length).toBeGreaterThanOrEqual(3);
+    const adminEntry = response.body.find((u: any) => u.id === 1);
+    expect(adminEntry.username).toBe('adminuser');
+  });
+
+  test('should prevent deleting the primary administrator', async () => {
+    const response = await request(app)
+      .delete('/api/auth/users/1')
+      .set('Cookie', authCookie);
+
+    expect(response.status).toBe(400);
+    expect(response.body.message).toMatch(/Cannot delete primary administrator/);
+  });
+
+  test('should allow admin to delete a user and export their data', async () => {
+    // 1. Get thirduser ID
+    const listRes = await request(app).get('/api/auth/users').set('Cookie', authCookie);
+    const thirdUser = listRes.body.find((u: any) => u.username === 'thirduser');
+    expect(thirdUser).toBeDefined();
+
+    // 2. Delete thirduser
+    const delRes = await request(app)
+      .delete(`/api/auth/users/${thirdUser.id}`)
+      .set('Cookie', authCookie);
+
+    expect(delRes.status).toBe(200);
+    expect(delRes.body.message).toMatch(/deleted and data exported successfully/);
+    expect(delRes.body).toHaveProperty('exportHtml');
+    expect(delRes.body).toHaveProperty('exportJson');
+    expect(delRes.body.deletedUser.username).toBe('thirduser');
+
+    // 3. Verify user is removed from database
+    const db = getDb();
+    const checkUser = db.prepare('SELECT id FROM users WHERE id = ?').get(thirdUser.id);
+    expect(checkUser).toBeUndefined();
+  });
+
   test('should generate an API Key when authenticated via session cookie', async () => {
     const response = await request(app)
       .post('/api/auth/apikey')

@@ -125,37 +125,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onSuccess }) => {
             style={{ width: '100%', marginTop: '12px' }}
             disabled={loading}
           >
-            {loading ? 'Authenticating...' : (isLogin ? 'Sign In' : 'Create Account')}
+            {loading ? 'Authenticating...' : (isFirstUser ? 'Create Admin Account' : 'Sign In')}
           </button>
         </form>
-
-        {!isFirstUser && (
-          <div style={{ textAlign: 'center', marginTop: '20px', fontSize: '13px', color: 'var(--color-muted)' }}>
-            {isLogin ? (
-              <span>
-                Don't have an account?{' '}
-                <button
-                  type="button"
-                  style={{ background: 'none', border: 'none', color: 'var(--color-on-surface)', fontWeight: 600, cursor: 'pointer', textDecoration: 'underline' }}
-                  onClick={() => { setIsLogin(false); setError(''); }}
-                >
-                  Sign up
-                </button>
-              </span>
-            ) : (
-              <span>
-                Already have an account?{' '}
-                <button
-                  type="button"
-                  style={{ background: 'none', border: 'none', color: 'var(--color-on-surface)', fontWeight: 600, cursor: 'pointer', textDecoration: 'underline' }}
-                  onClick={() => { setIsLogin(true); setError(''); }}
-                >
-                  Sign in
-                </button>
-              </span>
-            )}
-          </div>
-        )}
       </div>
     </div>
   );

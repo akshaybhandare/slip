@@ -36,4 +36,12 @@ export interface Bookmark {
 export interface User {
   id: number;
   username: string;
+  isAdmin?: boolean;
+}
+
+export interface UserListItem {
+  id: number;
+  username: string;
+  created_at: string;
+  bookmark_count: number;
 }
