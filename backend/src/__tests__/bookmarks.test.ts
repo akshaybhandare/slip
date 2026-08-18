@@ -278,8 +278,8 @@ describe('Bookmark CRUD & Local Thumbnail Cache Integrations', () => {
     });
 
 
-    test('POST /api/bookmarks/upload should reject invalid non-image file buffer', async () => {
-      const invalidBuffer = Buffer.from('THIS_IS_NOT_AN_IMAGE_FILE');
+    test('POST /api/bookmarks/upload should reject invalid non-image non-pdf file buffer', async () => {
+      const invalidBuffer = Buffer.from('THIS_IS_NOT_AN_IMAGE_OR_PDF_FILE');
       const response = await request(app)
         .post('/api/bookmarks/upload')
         .set('Authorization', `Bearer ${apiKey}`)
@@ -287,7 +287,74 @@ describe('Bookmark CRUD & Local Thumbnail Cache Integrations', () => {
         .send(invalidBuffer);
 
       expect(response.status).toBe(400);
-      expect(response.body.message).toMatch(/Unsupported image format/);
+      expect(response.body.message).toMatch(/Unsupported file format/);
+    });
+
+    test('POST /api/bookmarks/upload should create document bookmark for PDF files (magic bytes validated)', async () => {
+      // Valid minimal PDF buffer starting with %PDF-1.4
+      const validPdfBuffer = Buffer.from('%PDF-1.4\n%âãÏÓ\n1 0 obj\n<<>>\nendobj\ntrailer\n<<>>\n%%EOF');
+      const validPdfBase64 = validPdfBuffer.toString('base64');
+
+      const response = await request(app)
+        .post('/api/bookmarks/upload')
+        .set('Cookie', user1Cookie)
+        .send({
+          file_data: `data:application/pdf;base64,${validPdfBase64}`,
+          filename: 'system-architecture-spec.pdf',
+          title: 'System Architecture Specification',
+          description: 'Full Unraid & Docker topology specification doc',
+          tags: ['architecture', 'docs']
+        });
+
+      expect(response.status).toBe(201);
+      expect(response.body).toHaveProperty('id');
+      expect(response.body.content_type).toBe('document');
+      expect(response.body.title).toBe('System Architecture Specification');
+      expect(response.body.image_path).toMatch(/^\/api\/cache\/[a-f0-9]{64}\.pdf$/);
+      expect(response.body.url).toMatch(/^\/api\/cache\/[a-f0-9]{64}\.pdf$/);
+      expect(response.body.tags).toEqual(expect.arrayContaining(['architecture', 'docs', 'document', 'pdf']));
+
+      // Verify PDF file exists and can be retrieved via /api/cache/:filename
+      const cacheFilename = response.body.image_path.replace('/api/cache/', '');
+      const cacheRes = await request(app).get(`/api/cache/${cacheFilename}`);
+      expect(cacheRes.status).toBe(200);
+      expect(cacheRes.headers['content-type']).toMatch(/application\/pdf/);
+    });
+
+    test('POST /api/bookmarks/note should create a standalone markdown memo', async () => {
+      const response = await request(app)
+        .post('/api/bookmarks/note')
+        .set('Cookie', user1Cookie)
+        .send({
+          title: 'Weekly Standup Notes',
+          content: '## Goals for Sprint\n- Complete PDF upload support\n- Add standalone note cards\n- Review test coverage',
+          tags: ['work', 'sprint']
+        });
+
+      expect(response.status).toBe(201);
+      expect(response.body).toHaveProperty('id');
+      expect(response.body.content_type).toBe('note');
+      expect(response.body.title).toBe('Weekly Standup Notes');
+      expect(response.body.personal_note).toContain('## Goals for Sprint');
+      expect(response.body.url).toMatch(/^slip:\/\/note\//);
+      expect(response.body.tags).toEqual(expect.arrayContaining(['work', 'sprint', 'note']));
+    });
+
+    test('POST /api/bookmarks should create note when contentType is note', async () => {
+      const response = await request(app)
+        .post('/api/bookmarks')
+        .set('Cookie', user1Cookie)
+        .send({
+          contentType: 'note',
+          title: 'Quick Idea Memo',
+          content: 'Remember to check SQLite WAL checkpoint settings on high load.'
+        });
+
+      expect(response.status).toBe(201);
+      expect(response.body.content_type).toBe('note');
+      expect(response.body.title).toBe('Quick Idea Memo');
+      expect(response.body.personal_note).toBe('Remember to check SQLite WAL checkpoint settings on high load.');
+      expect(response.body.url).toMatch(/^slip:\/\/note\//);
     });
   });
 });

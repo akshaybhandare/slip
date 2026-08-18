@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { X, ExternalLink, Highlighter, Trash2, Copy, Check } from 'lucide-react';
 import { Bookmark, Highlight } from '../types';
 import { fetchHighlights, createHighlight, deleteHighlight } from '../api';
+import { renderFormattedNote, renderInlineMarkdown } from '../utils/markdown';
 
 interface ReaderModalProps {
   bookmark: Bookmark | null;
@@ -15,6 +16,8 @@ export const ReaderModal: React.FC<ReaderModalProps> = ({ bookmark, onClose }) =
   const [copiedId, setCopiedId] = useState<number | null>(null);
   const [activeTab, setActiveTab] = useState<'article' | 'highlights'>('article');
   const articleRef = useRef<HTMLDivElement>(null);
+
+  const isNote = bookmark ? (bookmark.content_type === 'note' || bookmark.url.startsWith('slip://note/')) : false;
 
   useEffect(() => {
     if (bookmark) {
@@ -121,23 +124,25 @@ export const ReaderModal: React.FC<ReaderModalProps> = ({ bookmark, onClose }) =
         <div className="modal-header">
           <div>
             <span className="reader-badge">
-              Reader Mode
+              {isNote ? '📝 Markdown Note' : 'Reader Mode'}
             </span>
             <h1 className="reader-title">
-              {bookmark.title}
+              {renderInlineMarkdown(bookmark.title)}
             </h1>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <a
-              href={bookmark.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="btn btn-secondary"
-              style={{ height: '34px', padding: '0 12px', fontSize: '13px' }}
-            >
-              <ExternalLink size={14} />
-              <span className="btn-text-hide-mobile">Original</span>
-            </a>
+            {!isNote && (
+              <a
+                href={bookmark.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="btn btn-secondary"
+                style={{ height: '34px', padding: '0 12px', fontSize: '13px' }}
+              >
+                <ExternalLink size={14} />
+                <span className="btn-text-hide-mobile">Original</span>
+              </a>
+            )}
             <button className="modal-close" onClick={onClose} title="Close Reader">
               <X size={20} />
             </button>
@@ -150,7 +155,7 @@ export const ReaderModal: React.FC<ReaderModalProps> = ({ bookmark, onClose }) =
             className={`reader-tab-btn ${activeTab === 'article' ? 'active' : ''}`}
             onClick={() => setActiveTab('article')}
           >
-            Article Text
+            {isNote ? 'Note Content' : 'Article Text'}
           </button>
           <button
             className={`reader-tab-btn ${activeTab === 'highlights' ? 'active' : ''}`}
@@ -168,7 +173,11 @@ export const ReaderModal: React.FC<ReaderModalProps> = ({ bookmark, onClose }) =
             onMouseUp={handleTextSelection}
             onTouchEnd={handleTextSelection}
           >
-            {bookmark.reader_html ? (
+            {isNote ? (
+              <div style={{ fontSize: '16px', lineHeight: 1.7, color: 'var(--color-on-surface)' }}>
+                {renderFormattedNote(bookmark.personal_note || bookmark.description || '')}
+              </div>
+            ) : bookmark.reader_html ? (
               <div dangerouslySetInnerHTML={{ __html: bookmark.reader_html }} />
             ) : (
               <div style={{ padding: '2rem 0', color: 'var(--color-muted)' }}>

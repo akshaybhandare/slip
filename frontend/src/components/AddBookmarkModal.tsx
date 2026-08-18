@@ -1,12 +1,32 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Link2, Image as ImageIcon, UploadCloud, CheckCircle2, FileImage } from 'lucide-react';
+import {
+  X,
+  Link2,
+  UploadCloud,
+  FileText
+} from 'lucide-react';
 import { Tag } from '../types';
 import { TagInput } from './TagInput';
+import { NoteEditor } from './NoteEditor';
+import { renderFormattedNote, renderInlineMarkdown } from '../utils/markdown';
+
+// Re-export for backward compatibility with other components importing from here
+export { renderFormattedNote, renderInlineMarkdown };
 
 interface AddBookmarkModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSave: (data: { url: string; tags: string[] }) => Promise<void>;
+  onSaveFile?: (data: {
+    file?: File;
+    fileData?: string;
+    imageData?: string;
+    filename?: string;
+    title?: string;
+    description?: string;
+    personalNote?: string;
+    tags?: string[];
+  }) => Promise<void>;
   onSaveImage?: (data: {
     file?: File;
     imageData?: string;
@@ -14,6 +34,11 @@ interface AddBookmarkModalProps {
     title?: string;
     description?: string;
     personalNote?: string;
+    tags?: string[];
+  }) => Promise<void>;
+  onSaveNote?: (data: {
+    title?: string;
+    content: string;
     tags?: string[];
   }) => Promise<void>;
   initialFile?: File | null;
@@ -24,40 +49,48 @@ export const AddBookmarkModal: React.FC<AddBookmarkModalProps> = ({
   isOpen,
   onClose,
   onSave,
+  onSaveFile,
   onSaveImage,
-  initialFile = null,
+  onSaveNote,
+  initialFile,
   availableTags = []
 }) => {
-  const [mode, setMode] = useState<'url' | 'image'>('url');
+  const [mode, setMode] = useState<'url' | 'file' | 'note'>('url');
   const [url, setUrl] = useState('');
   const [tags, setTags] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  // Image Upload State
+  // File upload state (Image or PDF)
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [imagePreview, setImagePreview] = useState<string | null>(null);
-  const [imageTitle, setImageTitle] = useState('');
-  const [imageDescription, setImageDescription] = useState('');
+  const [filePreview, setFilePreview] = useState<string | null>(null);
+  const [fileTitle, setFileTitle] = useState('');
+  const [fileDescription, setFileDescription] = useState('');
   const [isDragOver, setIsDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // If initialFile passed from drag-and-drop
+  // Standalone Note state
+  const [noteTitle, setNoteTitle] = useState('');
+  const [noteContent, setNoteContent] = useState('');
+
   useEffect(() => {
-    if (initialFile && isOpen) {
-      setMode('image');
+    if (isOpen && initialFile) {
+      setMode('file');
       handleFileSelected(initialFile);
     }
   }, [initialFile, isOpen]);
 
   const handleFileSelected = (file: File) => {
-    if (!file.type.startsWith('image/')) {
-      setError('Please select a valid image file (JPG, PNG, WEBP, GIF, SVG).');
+    const isImage = file.type.startsWith('image/');
+    const isPdf = file.type === 'application/pdf' || /\.pdf$/i.test(file.name);
+
+    if (!isImage && !isPdf) {
+      setError('Please select a valid image (JPG, PNG, WEBP, GIF, SVG) or PDF document.');
       return;
     }
 
-    if (file.size > 25 * 1024 * 1024) {
-      setError('Image file exceeds the 25MB limit.');
+    if (file.size > 50 * 1024 * 1024) {
+      setError('File exceeds the 50MB size limit.');
       return;
     }
 
@@ -69,14 +102,17 @@ export const AddBookmarkModal: React.FC<AddBookmarkModalProps> = ({
       .replace(/\.[^/.]+$/, '')
       .replace(/[-_]+/g, ' ')
       .trim();
-    setImageTitle(cleanTitle);
+    setFileTitle(cleanTitle);
 
-    // Create thumbnail preview URL
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      setImagePreview(e.target?.result as string);
-    };
-    reader.readAsDataURL(file);
+    if (isImage) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        setFilePreview(e.target?.result as string);
+      };
+      reader.readAsDataURL(file);
+    } else {
+      setFilePreview(null);
+    }
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -93,11 +129,11 @@ export const AddBookmarkModal: React.FC<AddBookmarkModalProps> = ({
     }
   };
 
-  const handleClearImage = () => {
+  const handleClearFile = () => {
     setSelectedFile(null);
-    setImagePreview(null);
-    setImageTitle('');
-    setImageDescription('');
+    setFilePreview(null);
+    setFileTitle('');
+    setFileDescription('');
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
@@ -107,7 +143,9 @@ export const AddBookmarkModal: React.FC<AddBookmarkModalProps> = ({
     setUrl('');
     setTags([]);
     setError('');
-    handleClearImage();
+    handleClearFile();
+    setNoteTitle('');
+    setNoteContent('');
     setMode('url');
   };
 
@@ -131,29 +169,54 @@ export const AddBookmarkModal: React.FC<AddBookmarkModalProps> = ({
       } finally {
         setLoading(false);
       }
-    } else {
+    } else if (mode === 'file') {
       if (!selectedFile) {
-        setError('Please choose or drop an image file first.');
+        setError('Please choose or drop an image or PDF file first.');
         return;
       }
-      if (!onSaveImage) {
-        setError('Image upload handler is not configured.');
+      const saveHandler = onSaveFile || onSaveImage;
+      if (!saveHandler) {
+        setError('File upload handler is not configured.');
         return;
       }
 
       setLoading(true);
       try {
-        await onSaveImage({
+        await saveHandler({
           file: selectedFile,
-          imageData: imagePreview || undefined,
+          imageData: filePreview || undefined,
+          fileData: filePreview || undefined,
           filename: selectedFile.name,
-          title: imageTitle.trim() || undefined,
-          description: imageDescription.trim() || undefined,
+          title: fileTitle.trim() || undefined,
+          description: fileDescription.trim() || undefined,
           tags
         });
         handleClose();
       } catch (err: any) {
-        setError(err.message || 'Failed to upload image bookmark');
+        setError(err.message || 'Failed to upload file');
+      } finally {
+        setLoading(false);
+      }
+    } else if (mode === 'note') {
+      if (!noteContent.trim() && !noteTitle.trim()) {
+        setError('Please enter note content or a title.');
+        return;
+      }
+      if (!onSaveNote) {
+        setError('Note creation handler is not configured.');
+        return;
+      }
+
+      setLoading(true);
+      try {
+        await onSaveNote({
+          title: noteTitle.trim() || undefined,
+          content: noteContent.trim(),
+          tags
+        });
+        handleClose();
+      } catch (err: any) {
+        setError(err.message || 'Failed to save note');
       } finally {
         setLoading(false);
       }
@@ -168,9 +231,11 @@ export const AddBookmarkModal: React.FC<AddBookmarkModalProps> = ({
     return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
   };
 
+  const isPdfFile = selectedFile && (selectedFile.type === 'application/pdf' || /\.pdf$/i.test(selectedFile.name));
+
   return (
     <div className="modal-overlay" onClick={handleClose}>
-      <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+      <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: mode === 'note' ? '560px' : '480px' }}>
         <div className="modal-header">
           <h2 className="modal-title">Save to Slip</h2>
           <button className="modal-close" onClick={handleClose} aria-label="Close modal">
@@ -193,29 +258,58 @@ export const AddBookmarkModal: React.FC<AddBookmarkModalProps> = ({
           </button>
           <button
             type="button"
-            className={`modal-tab-btn ${mode === 'image' ? 'active' : ''}`}
+            className={`modal-tab-btn ${mode === 'file' ? 'active' : ''}`}
             onClick={() => {
-              setMode('image');
+              setMode('file');
               setError('');
             }}
           >
-            <ImageIcon size={15} />
-            <span>Upload Image</span>
+            <UploadCloud size={15} />
+            <span>Upload File</span>
+          </button>
+          <button
+            type="button"
+            className={`modal-tab-btn ${mode === 'note' ? 'active' : ''}`}
+            onClick={() => {
+              setMode('note');
+              setError('');
+            }}
+          >
+            <FileText size={15} />
+            <span>New Note</span>
           </button>
         </div>
 
         {error && (
-          <div style={{ color: 'var(--color-error)', fontSize: '13px', marginBottom: '16px', background: 'rgba(228, 43, 12, 0.08)', padding: '10px 14px', borderRadius: 'var(--radius-md)' }}>
+          <div
+            style={{
+              color: 'var(--color-error)',
+              fontSize: '13px',
+              marginBottom: '16px',
+              background: 'rgba(228, 43, 12, 0.08)',
+              padding: '10px 14px',
+              borderRadius: 'var(--radius-md)'
+            }}
+          >
             {error}
           </div>
         )}
 
         <form onSubmit={handleSubmit}>
-          {mode === 'url' ? (
+          {mode === 'url' && (
             <div className="form-group">
               <label className="form-label">URL</label>
               <div style={{ position: 'relative' }}>
-                <Link2 size={16} style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: 'var(--color-muted)' }} />
+                <Link2
+                  size={16}
+                  style={{
+                    position: 'absolute',
+                    left: '14px',
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    color: 'var(--color-muted)'
+                  }}
+                />
                 <input
                   type="url"
                   required
@@ -228,7 +322,9 @@ export const AddBookmarkModal: React.FC<AddBookmarkModalProps> = ({
                 />
               </div>
             </div>
-          ) : (
+          )}
+
+          {mode === 'file' && (
             <div className="image-upload-section">
               {!selectedFile ? (
                 <div
@@ -244,7 +340,7 @@ export const AddBookmarkModal: React.FC<AddBookmarkModalProps> = ({
                   <input
                     ref={fileInputRef}
                     type="file"
-                    accept="image/jpeg,image/png,image/webp,image/gif,image/svg+xml"
+                    accept="image/jpeg,image/png,image/webp,image/gif,image/svg+xml,application/pdf"
                     style={{ display: 'none' }}
                     onChange={handleFileChange}
                   />
@@ -252,15 +348,15 @@ export const AddBookmarkModal: React.FC<AddBookmarkModalProps> = ({
                     <UploadCloud size={28} />
                   </div>
                   <p className="dropzone-title">Click to upload or drag & drop</p>
-                  <p className="dropzone-subtitle">JPG, PNG, WEBP, GIF, SVG up to 25MB</p>
+                  <p className="dropzone-subtitle">JPG, PNG, WEBP, GIF, SVG, PDF up to 50MB</p>
                 </div>
               ) : (
                 <div className="image-selected-preview">
-                  <div className="image-preview-thumbnail-wrapper">
-                    {imagePreview ? (
-                      <img src={imagePreview} alt="Upload preview" className="image-preview-thumbnail" />
+                  <div className="image-preview-thumbnail-wrapper" style={{ background: isPdfFile ? 'rgba(228, 43, 12, 0.08)' : undefined }}>
+                    {filePreview ? (
+                      <img src={filePreview} alt="Upload preview" className="image-preview-thumbnail" />
                     ) : (
-                      <FileImage size={32} />
+                      <FileText size={32} style={{ color: isPdfFile ? 'var(--color-primary)' : 'var(--color-muted)' }} />
                     )}
                   </div>
                   <div className="image-preview-info">
@@ -269,14 +365,16 @@ export const AddBookmarkModal: React.FC<AddBookmarkModalProps> = ({
                     </div>
                     <div className="image-preview-meta">
                       <span className="file-size-badge">{formatFileSize(selectedFile.size)}</span>
-                      <span className="file-type-badge">{selectedFile.type.split('/')[1]?.toUpperCase()}</span>
+                      <span className="file-type-badge">
+                        {isPdfFile ? 'PDF' : selectedFile.type.split('/')[1]?.toUpperCase()}
+                      </span>
                     </div>
                   </div>
                   <button
                     type="button"
                     className="btn btn-ghost btn-sm"
-                    onClick={handleClearImage}
-                    title="Change image"
+                    onClick={handleClearFile}
+                    title="Change file"
                     style={{ color: 'var(--color-muted)' }}
                   >
                     <X size={16} />
@@ -292,9 +390,9 @@ export const AddBookmarkModal: React.FC<AddBookmarkModalProps> = ({
                       type="text"
                       className="form-input"
                       style={{ width: '100%' }}
-                      placeholder="Image title"
-                      value={imageTitle}
-                      onChange={(e) => setImageTitle(e.target.value)}
+                      placeholder="File title"
+                      value={fileTitle}
+                      onChange={(e) => setFileTitle(e.target.value)}
                     />
                   </div>
 
@@ -304,13 +402,26 @@ export const AddBookmarkModal: React.FC<AddBookmarkModalProps> = ({
                       className="form-input"
                       style={{ width: '100%', minHeight: '60px', resize: 'vertical' }}
                       placeholder="Add an optional note or context..."
-                      value={imageDescription}
-                      onChange={(e) => setImageDescription(e.target.value)}
+                      value={fileDescription}
+                      onChange={(e) => setFileDescription(e.target.value)}
                     />
                   </div>
                 </>
               )}
             </div>
+          )}
+
+          {mode === 'note' && (
+            <NoteEditor
+              title={noteTitle}
+              onTitleChange={setNoteTitle}
+              content={noteContent}
+              onContentChange={setNoteContent}
+              titlePlaceholder="Note title or leave blank for auto-title"
+              contentPlaceholder="Start typing your note... Use bullet points, **bold**, *italic*, ~~strikethrough~~, or markdown shortcuts."
+              minHeight="150px"
+              autoFocus
+            />
           )}
 
           <div className="form-group" style={{ marginTop: '16px' }}>
@@ -325,9 +436,25 @@ export const AddBookmarkModal: React.FC<AddBookmarkModalProps> = ({
             <button
               type="submit"
               className="btn btn-primary"
-              disabled={loading || (mode === 'image' && !selectedFile)}
+              disabled={
+                loading ||
+                (mode === 'file' && !selectedFile) ||
+                (mode === 'note' && !noteContent.trim() && !noteTitle.trim())
+              }
             >
-              {loading ? (mode === 'image' ? 'Uploading...' : 'Archiving...') : (mode === 'image' ? 'Save Image' : 'Save Bookmark')}
+              {loading
+                ? mode === 'file'
+                  ? 'Uploading...'
+                  : mode === 'note'
+                  ? 'Saving Note...'
+                  : 'Archiving...'
+                : mode === 'file'
+                ? isPdfFile
+                  ? 'Save PDF Document'
+                  : 'Save Image'
+                : mode === 'note'
+                ? 'Save Note'
+                : 'Save Bookmark'}
             </button>
           </div>
         </form>

@@ -27,7 +27,7 @@ app.use(cors({
 }));
 
 app.use(express.json({ limit: '50mb' }));
-app.use(express.raw({ type: ['image/*', 'application/octet-stream'], limit: '50mb' }));
+app.use(express.raw({ type: ['image/*', 'application/pdf', 'application/octet-stream'], limit: '50mb' }));
 
 // Set secure headers
 app.use((req, res, next) => {
@@ -35,7 +35,7 @@ app.use((req, res, next) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader(
     'Content-Security-Policy',
-    "default-src 'self'; img-src 'self' data: https:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com;"
+    "default-src 'self'; img-src 'self' data: https:; object-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com;"
   );
   next();
 });
@@ -46,7 +46,7 @@ app.use('/api/bookmarks', bookmarksRouter);
 app.use('/api/share', shareRouter);
 app.use('/api/io', ioRouter);
 
-// Cached Thumbnail Serving
+// Cached Thumbnail & File Serving
 app.get('/api/cache/:filename', (req, res) => {
   const { filename } = req.params;
   if (!isSafeFilename(filename)) {
@@ -55,7 +55,7 @@ app.get('/api/cache/:filename', (req, res) => {
 
   const filePath = path.join(CACHE_DIR, filename);
   if (!fs.existsSync(filePath)) {
-    return res.status(404).json({ message: 'Image not found' });
+    return res.status(404).json({ message: 'File not found' });
   }
 
   res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');

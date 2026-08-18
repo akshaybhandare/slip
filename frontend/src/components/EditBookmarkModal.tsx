@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { X, Edit3, FileText } from 'lucide-react';
 import { Bookmark, ContentType, Tag } from '../types';
 import { TagInput } from './TagInput';
+import { NoteEditor } from './NoteEditor';
 
 interface EditBookmarkModalProps {
   bookmark: Bookmark | null;
@@ -37,9 +38,12 @@ export const EditBookmarkModal: React.FC<EditBookmarkModalProps> = ({
 
   if (!bookmark) return null;
 
+  const isNote = contentType === 'note';
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title.trim()) return;
+    if (!title.trim() && !isNote) return;
+    if (isNote && !title.trim() && !personalNote.trim()) return;
 
     setError('');
     setLoading(true);
@@ -47,7 +51,7 @@ export const EditBookmarkModal: React.FC<EditBookmarkModalProps> = ({
     try {
       await onUpdate(bookmark.id, {
         title: title.trim(),
-        description: description.trim(),
+        description: isNote ? personalNote.trim().slice(0, 300) : description.trim(),
         personalNote: personalNote.trim(),
         contentType,
         tags
@@ -62,11 +66,11 @@ export const EditBookmarkModal: React.FC<EditBookmarkModalProps> = ({
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+      <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: isNote ? '560px' : '480px' }}>
         <div className="modal-header">
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <Edit3 size={18} style={{ color: 'var(--color-primary)' }} />
-            <h2 className="modal-title">Edit Bookmark</h2>
+            <h2 className="modal-title">{isNote ? 'Edit Note' : 'Edit Bookmark'}</h2>
           </div>
           <button className="modal-close" onClick={onClose}>
             <X size={18} />
@@ -80,45 +84,62 @@ export const EditBookmarkModal: React.FC<EditBookmarkModalProps> = ({
         )}
 
         <form onSubmit={handleSubmit}>
-          <div className="form-group">
-            <label className="form-label">Title</label>
-            <input
-              type="text"
-              required
-              className="form-input"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
+          {isNote ? (
+            /* Note Editor for Note Cards (No Description field!) */
+            <NoteEditor
+              title={title}
+              onTitleChange={setTitle}
+              content={personalNote}
+              onContentChange={setPersonalNote}
+              titlePlaceholder="Note title"
+              contentPlaceholder="Write note content with bullet points, **bold**, *italic*, ~~strikethrough~~..."
+              minHeight="160px"
               autoFocus
             />
-          </div>
+          ) : (
+            /* Standard Fields for Web / Image / Doc / Product / Video Bookmarks */
+            <>
+              <div className="form-group">
+                <label className="form-label">Title</label>
+                <input
+                  type="text"
+                  required
+                  className="form-input"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  autoFocus
+                />
+              </div>
 
-          <div className="form-group">
-            <label className="form-label">Description</label>
-            <textarea
-              className="form-input"
-              rows={2}
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              style={{ resize: 'vertical' }}
-            />
-          </div>
+              <div className="form-group">
+                <label className="form-label">Description</label>
+                <textarea
+                  className="form-input"
+                  rows={2}
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  style={{ resize: 'vertical' }}
+                />
+              </div>
 
-          <div className="form-group">
-            <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <FileText size={14} style={{ color: 'var(--color-primary)' }} />
-              <span>Personal Sticky Note</span>
-            </label>
-            <textarea
-              className="form-input"
-              rows={3}
-              placeholder="Add your private reflections, highlights, or reminders..."
-              value={personalNote}
-              onChange={(e) => setPersonalNote(e.target.value)}
-              style={{ resize: 'vertical' }}
-            />
-          </div>
+              <div className="form-group">
+                <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <FileText size={14} style={{ color: 'var(--color-primary)' }} />
+                  <span>Personal Sticky Note</span>
+                </label>
+                <textarea
+                  className="form-input"
+                  rows={3}
+                  placeholder="Add your private reflections, highlights, or reminders..."
+                  value={personalNote}
+                  onChange={(e) => setPersonalNote(e.target.value)}
+                  style={{ resize: 'vertical' }}
+                />
+              </div>
+            </>
+          )}
 
-          <div className="form-group">
+          <div className="form-group" style={{ marginTop: '14px' }}>
             <label className="form-label">Category</label>
             <select
               className="form-input"
@@ -127,13 +148,15 @@ export const EditBookmarkModal: React.FC<EditBookmarkModalProps> = ({
             >
               <option value="website">Website</option>
               <option value="article">Article</option>
+              <option value="note">Note / Memo</option>
+              <option value="document">Document (PDF)</option>
               <option value="video">Video</option>
               <option value="product">Product</option>
               <option value="image">Image</option>
             </select>
           </div>
 
-          <div className="form-group">
+          <div className="form-group" style={{ marginTop: '14px' }}>
             <label className="form-label">Tags</label>
             <TagInput
               tags={tags}
@@ -155,7 +178,7 @@ export const EditBookmarkModal: React.FC<EditBookmarkModalProps> = ({
             <button
               type="submit"
               className="btn btn-primary"
-              disabled={loading}
+              disabled={loading || (!title.trim() && !personalNote.trim())}
             >
               {loading ? 'Saving...' : 'Save Changes'}
             </button>

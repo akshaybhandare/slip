@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { ExternalLink, Eye, Share2, Trash2, Globe, Edit3, RefreshCw, FileText, Image as ImageIcon } from 'lucide-react';
+import { ExternalLink, Eye, Share2, Trash2, Globe, Edit3, RefreshCw, FileText, Image as ImageIcon, FileCode2 } from 'lucide-react';
 import { Bookmark } from '../types';
+import { renderFormattedNote, renderInlineMarkdown } from '../utils/markdown';
 
 interface BookmarkCardProps {
   bookmark: Bookmark;
@@ -24,10 +25,16 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
   const [rescaping, setRescraping] = useState(false);
   const [showNote, setShowNote] = useState(false);
 
+  const isNote = bookmark.content_type === 'note' || bookmark.url.startsWith('slip://note/');
+  const isDocument = bookmark.content_type === 'document' || bookmark.url.endsWith('.pdf') || (bookmark.image_path && bookmark.image_path.endsWith('.pdf'));
   const isLocalImage = bookmark.content_type === 'image' && (bookmark.url.startsWith('/api/cache') || bookmark.url.startsWith('local://'));
 
   let hostname = '';
-  if (isLocalImage) {
+  if (isNote) {
+    hostname = 'Markdown Note';
+  } else if (isDocument) {
+    hostname = 'PDF Document';
+  } else if (isLocalImage) {
     hostname = 'Local Image';
   } else {
     try {
@@ -37,7 +44,7 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
     }
   }
 
-  const isArticle = bookmark.content_type === 'article' || (bookmark.reader_html && bookmark.reader_html.length > 0);
+  const isArticle = !isNote && (bookmark.content_type === 'article' || (bookmark.reader_html && bookmark.reader_html.length > 0));
 
   const handleRescrapeClick = async () => {
     setRescraping(true);
@@ -48,46 +55,106 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
     }
   };
 
-  const handleShareClick = async () => {
-    // 1. Try standard Web Share API (available on HTTPS or localhost)
-    if (typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
-      try {
-        await navigator.share({
-          title: bookmark.title,
-          text: bookmark.description || bookmark.title,
-          url: bookmark.url
-        });
-        return;
-      } catch (err: any) {
-        if (err.name === 'AbortError') {
-          return;
-        }
-      }
-    }
-
-    // 2. Android Intent fallback (launches native system share sheet directly even on HTTP/LAN)
-    const userAgent = typeof navigator !== 'undefined' ? navigator.userAgent || '' : '';
-    const isAndroid = /android/i.test(userAgent);
-    if (isAndroid) {
-      const shareText = bookmark.description
-        ? `${bookmark.title}\n${bookmark.description}\n${bookmark.url}`
-        : `${bookmark.title}\n${bookmark.url}`;
-
-      const intentUri = `intent:#Intent;action=android.intent.action.SEND;type=text/plain;S.android.intent.extra.TEXT=${encodeURIComponent(shareText)};S.android.intent.extra.SUBJECT=${encodeURIComponent(bookmark.title)};end`;
-      window.location.href = intentUri;
-      return;
-    }
-
-    // 3. Desktop fallback to Slip public share link modal
+  const handleShareClick = () => {
     onShare(bookmark);
   };
 
+  const handleCardMediaClick = () => {
+    if (isNote) {
+      onOpenReader(bookmark);
+    } else if (isArticle) {
+      onOpenReader(bookmark);
+    } else {
+      window.open(bookmark.url, '_blank');
+    }
+  };
+
   return (
-    <article className="bookmark-card">
-      {bookmark.image_path ? (
+    <article className={`bookmark-card ${isNote ? 'note-bookmark-card' : ''} ${isDocument ? 'doc-bookmark-card' : ''}`}>
+      {/* 1. Note Card Header Banner */}
+      {isNote ? (
+        <div
+          className="note-card-banner"
+          onClick={() => onOpenReader(bookmark)}
+          style={{
+            background: 'linear-gradient(135deg, rgba(228, 43, 12, 0.07) 0%, rgba(228, 43, 12, 0.02) 100%)',
+            padding: '16px 18px 12px',
+            borderBottom: '1px solid var(--color-border)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            cursor: 'pointer'
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <div
+              style={{
+                width: '28px',
+                height: '28px',
+                borderRadius: 'var(--radius-md)',
+                background: 'var(--color-surface)',
+                border: '1px solid var(--color-border)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: 'var(--color-primary)'
+              }}
+            >
+              <FileText size={15} />
+            </div>
+            <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--color-secondary)', letterSpacing: '0.02em' }}>
+              Note
+            </span>
+          </div>
+          <span style={{ fontSize: '11px', color: 'var(--color-muted)' }}>
+            {new Date(bookmark.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+          </span>
+        </div>
+      ) : isDocument ? (
+        /* 2. PDF Document Card Header Banner */
+        <div
+          className="doc-card-banner"
+          onClick={handleCardMediaClick}
+          style={{
+            background: 'linear-gradient(135deg, rgba(228, 43, 12, 0.08) 0%, rgba(0, 0, 0, 0.02) 100%)',
+            padding: '24px 20px',
+            borderBottom: '1px solid var(--color-border)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '14px',
+            cursor: 'pointer'
+          }}
+        >
+          <div
+            style={{
+              width: '42px',
+              height: '42px',
+              borderRadius: 'var(--radius-md)',
+              background: 'var(--color-surface)',
+              border: '1px solid var(--color-border)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: 'var(--color-primary)',
+              flexShrink: 0
+            }}
+          >
+            <FileCode2 size={22} />
+          </div>
+          <div style={{ overflow: 'hidden' }}>
+            <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--color-secondary)', display: 'block', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+              {renderInlineMarkdown(bookmark.title)}
+            </span>
+            <span style={{ fontSize: '11px', color: 'var(--color-primary)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+              PDF Document
+            </span>
+          </div>
+        </div>
+      ) : bookmark.image_path ? (
+        /* 3. Image / Article Media Banner */
         <div
           className="card-media"
-          onClick={() => (isArticle ? onOpenReader(bookmark) : window.open(bookmark.url, '_blank'))}
+          onClick={handleCardMediaClick}
         >
           <img
             src={bookmark.image_path}
@@ -100,6 +167,7 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
           />
         </div>
       ) : (
+        /* 4. Standard Link Fallback Banner */
         <div
           style={{
             background: 'linear-gradient(135deg, var(--color-tertiary) 0%, #ebebeb 100%)',
@@ -141,7 +209,7 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
       )}
 
       <div className="card-content">
-        {bookmark.image_path && (
+        {!isNote && !isDocument && bookmark.image_path && (
           <div className="card-header-info">
             {bookmark.favicon_path ? (
               <img src={bookmark.favicon_path} alt="" className="favicon-icon" />
@@ -155,34 +223,61 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
           </div>
         )}
 
-        <a
-          href={bookmark.url}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="card-title"
-        >
-          {bookmark.title}
-        </a>
-
-        {bookmark.description && (
-          <p className="card-description">{bookmark.description}</p>
-        )}
-
-        {/* Personal Sticky Note Preview */}
-        {bookmark.personal_note && !showNote && (
+        {/* Title */}
+        {isNote ? (
           <div
-            className="card-note-preview-badge"
-            onClick={() => setShowNote(true)}
-            title="View personal note"
+            className="card-title"
+            style={{ cursor: 'pointer', marginBottom: '8px' }}
+            onClick={() => onOpenReader(bookmark)}
           >
-            <FileText size={12} className="note-badge-icon" />
-            <span className="note-badge-text">{bookmark.personal_note}</span>
+            {renderInlineMarkdown(bookmark.title)}
           </div>
+        ) : isDocument ? (
+          <a
+            href={bookmark.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="card-title"
+          >
+            {renderInlineMarkdown(bookmark.title)}
+          </a>
+        ) : (
+          <a
+            href={bookmark.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="card-title"
+          >
+            {renderInlineMarkdown(bookmark.title)}
+          </a>
         )}
 
-        {/* Expanded Note Drawer */}
-        {showNote && (
-          <div className="card-note-drawer">
+        {/* Note Body or Description */}
+        {isNote ? (
+          <div
+            className="note-card-snippet"
+            onClick={() => onOpenReader(bookmark)}
+            style={{
+              fontSize: '13px',
+              color: 'var(--color-secondary)',
+              lineHeight: 1.5,
+              cursor: 'pointer',
+              maxHeight: '180px',
+              overflow: 'hidden',
+              position: 'relative'
+            }}
+          >
+            {renderFormattedNote(bookmark.personal_note || bookmark.description || '')}
+          </div>
+        ) : (
+          bookmark.description && (
+            <p className="card-description">{bookmark.description}</p>
+          )
+        )}
+
+        {/* Personal Sticky Note Drawer (renders only when toggled on) */}
+        {!isNote && showNote && (
+          <div className="card-note-drawer" style={{ margin: '8px 0' }}>
             <div className="card-note-header">
               <span className="card-note-label">📝 Personal Note</span>
               <button
@@ -190,13 +285,35 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
                 className="card-note-close"
                 onClick={() => setShowNote(false)}
                 title="Close note"
+                aria-label="Close note"
               >
                 ×
               </button>
             </div>
-            <p className="card-note-text">
-              {bookmark.personal_note || <em>No note written yet. Click Edit to add thoughts.</em>}
-            </p>
+            {bookmark.personal_note ? (
+              <div className="card-note-text" style={{ marginTop: '2px' }}>
+                {renderFormattedNote(bookmark.personal_note)}
+              </div>
+            ) : (
+              <p className="card-note-text" style={{ color: 'var(--color-muted)', fontStyle: 'italic' }}>
+                No note written yet.{' '}
+                <button
+                  type="button"
+                  onClick={() => onEdit(bookmark)}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: 'var(--color-primary)',
+                    cursor: 'pointer',
+                    textDecoration: 'underline',
+                    padding: 0,
+                    font: 'inherit'
+                  }}
+                >
+                  Click to add
+                </button>
+              </p>
+            )}
           </div>
         )}
 
@@ -223,32 +340,48 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
         )}
 
         <div className="card-actions">
-          {isArticle && (
+          {(isArticle || isNote) && (
             <button
               className="icon-btn"
-              title="Reader Mode"
+              title={isNote ? 'Open Full Note' : 'Reader Mode'}
               onClick={() => onOpenReader(bookmark)}
             >
               <Eye size={15} />
             </button>
           )}
 
-          <button
-            className={`icon-btn ${bookmark.personal_note ? 'has-note-btn' : ''}`}
-            title={bookmark.personal_note ? 'View / Toggle Personal Note' : 'Add Personal Note'}
-            onClick={() => setShowNote(!showNote)}
-          >
-            <FileText size={14} />
-          </button>
+          {!isNote && (
+            <button
+              className={`icon-btn ${bookmark.personal_note ? 'has-note-btn' : ''} ${showNote ? 'active-note-btn' : ''}`}
+              title={
+                bookmark.personal_note
+                  ? showNote
+                    ? 'Hide Personal Note'
+                    : 'View Personal Note'
+                  : 'Add Personal Note'
+              }
+              onClick={() => {
+                if (!bookmark.personal_note) {
+                  onEdit(bookmark);
+                } else {
+                  setShowNote(!showNote);
+                }
+              }}
+            >
+              <FileText size={14} />
+            </button>
+          )}
 
-          <button
-            className="icon-btn"
-            title="Re-scrape Metadata"
-            onClick={handleRescrapeClick}
-            disabled={rescaping}
-          >
-            <RefreshCw size={14} className={rescaping ? 'spin-animation' : ''} />
-          </button>
+          {!isNote && !isDocument && !isLocalImage && (
+            <button
+              className="icon-btn"
+              title="Re-scrape Metadata"
+              onClick={handleRescrapeClick}
+              disabled={rescaping}
+            >
+              <RefreshCw size={14} className={rescaping ? 'spin-animation' : ''} />
+            </button>
+          )}
 
           <button
             className="icon-btn"
@@ -258,15 +391,17 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
             <Edit3 size={14} />
           </button>
 
-          <a
-            href={bookmark.url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="icon-btn"
-            title="Open in new tab"
-          >
-            <ExternalLink size={15} />
-          </a>
+          {!isNote && (
+            <a
+              href={bookmark.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="icon-btn"
+              title={isDocument ? 'Open PDF in new tab' : 'Open in new tab'}
+            >
+              <ExternalLink size={15} />
+            </a>
+          )}
 
           <button
             className="icon-btn"

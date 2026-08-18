@@ -6,6 +6,8 @@ import {
   fetchTags,
   createBookmark,
   uploadImageBookmark,
+  uploadFileBookmark,
+  createNoteBookmark,
   updateBookmark,
   deleteBookmark,
   rescrapeBookmark,
@@ -47,7 +49,7 @@ export const App: React.FC = () => {
   const [shareTargetBookmark, setShareTargetBookmark] = useState<Bookmark | null>(null);
   const [editingBookmark, setEditingBookmark] = useState<Bookmark | null>(null);
 
-  // Window-level drag-and-drop support for quick image bookmarking
+  // Window-level drag-and-drop support for quick image & PDF bookmarking
   useEffect(() => {
     const handleDragOver = (e: DragEvent) => {
       e.preventDefault();
@@ -56,7 +58,9 @@ export const App: React.FC = () => {
       e.preventDefault();
       if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length > 0) {
         const file = e.dataTransfer.files[0];
-        if (file.type.startsWith('image/')) {
+        const isImage = file.type.startsWith('image/');
+        const isPdf = file.type === 'application/pdf' || /\.pdf$/i.test(file.name);
+        if (isImage || isPdf) {
           setDroppedFile(file);
           setIsAddOpen(true);
         }
@@ -141,16 +145,28 @@ export const App: React.FC = () => {
     loadData();
   };
 
-  const handleSaveImageBookmark = async (data: {
+  const handleSaveFileBookmark = async (data: {
     file?: File;
     imageData?: string;
+    fileData?: string;
     filename?: string;
     title?: string;
     description?: string;
     personalNote?: string;
     tags?: string[];
   }) => {
-    await uploadImageBookmark(data);
+    await uploadFileBookmark(data);
+    loadData();
+  };
+
+  const handleSaveImageBookmark = handleSaveFileBookmark;
+
+  const handleSaveNote = async (data: {
+    title?: string;
+    content: string;
+    tags?: string[];
+  }) => {
+    await createNoteBookmark(data);
     loadData();
   };
 
@@ -277,7 +293,9 @@ export const App: React.FC = () => {
           setDroppedFile(null);
         }}
         onSave={handleSaveBookmark}
+        onSaveFile={handleSaveFileBookmark}
         onSaveImage={handleSaveImageBookmark}
+        onSaveNote={handleSaveNote}
         initialFile={droppedFile}
         availableTags={tags}
       />

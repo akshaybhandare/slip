@@ -10,6 +10,9 @@ vi.mock('../api', () => ({
   searchBookmarks: vi.fn(),
   fetchTags: vi.fn(),
   createBookmark: vi.fn(),
+  uploadImageBookmark: vi.fn(),
+  uploadFileBookmark: vi.fn(),
+  createNoteBookmark: vi.fn(),
   deleteBookmark: vi.fn(),
   logoutUser: vi.fn(),
   loginUser: vi.fn(),
@@ -192,6 +195,75 @@ describe('Frontend SPA Component Architecture & Mobile UI Interactions', () => {
 
     await waitFor(() => {
       expect(screen.queryByText('Manage Users')).not.toBeInTheDocument();
+    });
+  });
+
+  it('renders Notes and Documents categories in filter tabs and switches to them', async () => {
+    render(<App />);
+
+    const notesTab = screen.getByRole('button', { name: /Notes/i });
+    expect(notesTab).toBeInTheDocument();
+    fireEvent.click(notesTab);
+
+    await waitFor(() => {
+      expect(api.fetchBookmarks).toHaveBeenCalledWith('note', undefined);
+    });
+
+    const docsTab = screen.getByRole('button', { name: /Documents/i });
+    expect(docsTab).toBeInTheDocument();
+    fireEvent.click(docsTab);
+
+    await waitFor(() => {
+      expect(api.fetchBookmarks).toHaveBeenCalledWith('document', undefined);
+    });
+  });
+
+  it('supports creating a Standalone Note with formatting toolbar in Add modal', async () => {
+    vi.mocked(api.createNoteBookmark).mockResolvedValue({
+      id: 3,
+      user_id: 1,
+      url: 'slip://note/12345',
+      title: 'Weekly Standup Notes',
+      description: 'Review PDF and Note features',
+      personal_note: '## Weekly Plan\n- **Item 1**\n- *Item 2*',
+      content_type: 'note',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      tags: [{ id: 3, name: 'notes' }]
+    });
+
+    render(<App />);
+
+    const saveBtn = screen.getByTitle('Save Link');
+    fireEvent.click(saveBtn);
+
+    const noteTab = screen.getByRole('button', { name: /New Note/i });
+    fireEvent.click(noteTab);
+
+    expect(screen.getByPlaceholderText(/Note title or leave blank/i)).toBeInTheDocument();
+    expect(screen.getByPlaceholderText(/Start typing your note/i)).toBeInTheDocument();
+
+    // Check formatting toolbar buttons exist
+    expect(screen.getByTitle(/Bold/i)).toBeInTheDocument();
+    expect(screen.getByTitle(/Italic/i)).toBeInTheDocument();
+    expect(screen.getByTitle(/Strikethrough/i)).toBeInTheDocument();
+    expect(screen.getByTitle(/Bullet List/i)).toBeInTheDocument();
+
+    const titleInput = screen.getByPlaceholderText(/Note title or leave blank/i);
+    fireEvent.change(titleInput, { target: { value: 'Weekly Standup Notes' } });
+
+    const contentTextarea = screen.getByPlaceholderText(/Start typing your note/i);
+    fireEvent.change(contentTextarea, { target: { value: '## Weekly Plan\n- **Item 1**' } });
+
+    const submitBtn = screen.getByRole('button', { name: /Save Note/i });
+    fireEvent.click(submitBtn);
+
+    await waitFor(() => {
+      expect(api.createNoteBookmark).toHaveBeenCalledWith({
+        title: 'Weekly Standup Notes',
+        content: '## Weekly Plan\n- **Item 1**',
+        tags: []
+      });
     });
   });
 });

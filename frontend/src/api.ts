@@ -149,16 +149,17 @@ export async function createBookmark(data: {
   });
 }
 
-export async function uploadImageBookmark(data: {
+export async function uploadFileBookmark(data: {
   file?: File;
   imageData?: string;
+  fileData?: string;
   filename?: string;
   title?: string;
   description?: string;
   personalNote?: string;
   tags?: string[];
 }): Promise<Bookmark> {
-  let base64 = data.imageData;
+  let base64 = data.fileData || data.imageData;
   let filename = data.filename || data.file?.name;
 
   if (data.file && !base64) {
@@ -171,12 +172,13 @@ export async function uploadImageBookmark(data: {
   }
 
   if (!base64) {
-    throw new Error('Please select an image file to upload.');
+    throw new Error('Please select a file to upload.');
   }
 
   return apiFetch<Bookmark>('/bookmarks/upload', {
     method: 'POST',
     body: JSON.stringify({
+      file_data: base64,
       image_data: base64,
       filename,
       title: data.title,
@@ -184,6 +186,19 @@ export async function uploadImageBookmark(data: {
       personal_note: data.personalNote,
       tags: data.tags
     })
+  });
+}
+
+export const uploadImageBookmark = uploadFileBookmark;
+
+export async function createNoteBookmark(data: {
+  title?: string;
+  content: string;
+  tags?: string[];
+}): Promise<Bookmark> {
+  return apiFetch<Bookmark>('/bookmarks/note', {
+    method: 'POST',
+    body: JSON.stringify(data)
   });
 }
 

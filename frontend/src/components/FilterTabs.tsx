@@ -1,5 +1,5 @@
 import React from 'react';
-import { Layers, FileText, Image as ImageIcon, ShoppingBag, Video, Globe, Tag as TagIcon, X } from 'lucide-react';
+import { Layers, FileText, Image as ImageIcon, ShoppingBag, Video, Globe, Tag as TagIcon, X, StickyNote, FileCode2 } from 'lucide-react';
 import { ContentType, Tag } from '../types';
 
 interface FilterTabsProps {
@@ -13,6 +13,8 @@ interface FilterTabsProps {
 const CATEGORIES: { type: ContentType; label: string; icon: React.ReactNode }[] = [
   { type: 'all', label: 'All', icon: <Layers size={14} /> },
   { type: 'article', label: 'Articles', icon: <FileText size={14} /> },
+  { type: 'note', label: 'Notes', icon: <StickyNote size={14} /> },
+  { type: 'document', label: 'Documents', icon: <FileCode2 size={14} /> },
   { type: 'image', label: 'Images', icon: <ImageIcon size={14} /> },
   { type: 'product', label: 'Products', icon: <ShoppingBag size={14} /> },
   { type: 'video', label: 'Videos', icon: <Video size={14} /> },

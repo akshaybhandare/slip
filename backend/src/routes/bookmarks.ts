@@ -1,41 +1,42 @@
 import { Router, Response } from 'express';
+import crypto from 'crypto';
 import { getDb } from '../db';
 import { authenticate, AuthenticatedRequest } from '../middleware/auth';
 import { scrapeUrl, ScrapedMetadata, extractPlatformTag } from '../services/scraper';
 import { scrapeQueue } from '../services/queue';
-import { cacheThumbnail, saveUploadedImage } from '../services/thumbnail';
+import { cacheThumbnail, saveUploadedFile, saveUploadedImage } from '../services/thumbnail';
 
 const router = Router();
 
 router.use(authenticate);
 
-async function handleImageUpload(req: AuthenticatedRequest, res: Response) {
+async function handleFileUpload(req: AuthenticatedRequest, res: Response) {
   const userId = req.user!.id;
 
   try {
-    let imageBuffer: Buffer | null = null;
+    let fileBuffer: Buffer | null = null;
     let filename: string | undefined;
     let title: string | undefined;
     let description: string = '';
     let personalNote: string | undefined;
     let tagsInput: any = [];
 
-    // Case 1: Raw binary buffer (Content-Type: image/* or application/octet-stream)
+    // Case 1: Raw binary buffer (Content-Type: image/*, application/pdf, application/octet-stream)
     if (Buffer.isBuffer(req.body) && req.body.length > 0) {
-      imageBuffer = req.body;
-      const rawHeaderName = (req.headers['x-filename'] as string) || (req.headers['content-disposition'] || '');
+      fileBuffer = req.body;
+      const rawHeaderName = (req.headers['x-file-name'] as string) || (req.headers['x-filename'] as string) || (req.headers['content-disposition'] || '');
       const match = /filename="?([^";]+)"?/i.exec(rawHeaderName);
-      filename = (req.headers['x-filename'] as string) || (match ? match[1] : undefined);
-      title = (req.headers['x-title'] as string) || undefined;
-      description = (req.headers['x-description'] as string) || '';
-      const rawTags = req.headers['x-tags'] as string;
+      filename = (req.headers['x-file-name'] as string) || (req.headers['x-filename'] as string) || (match ? match[1] : undefined);
+      title = (req.headers['x-file-title'] as string) || (req.headers['x-title'] as string) || undefined;
+      description = (req.headers['x-file-description'] as string) || (req.headers['x-description'] as string) || '';
+      const rawTags = (req.headers['x-file-tags'] as string) || (req.headers['x-tags'] as string);
       if (rawTags) {
         tagsInput = rawTags.split(',').map((t) => t.trim()).filter(Boolean);
       }
     }
     // Case 2: JSON payload with Base64 data
-    else if (req.body && (req.body.image_data || req.body.imageData || req.body.image || req.body.file)) {
-      const rawData = req.body.image_data || req.body.imageData || req.body.image || req.body.file;
+    else if (req.body && (req.body.image_data || req.body.imageData || req.body.file_data || req.body.fileData || req.body.image || req.body.file)) {
+      const rawData = req.body.file_data || req.body.fileData || req.body.image_data || req.body.imageData || req.body.image || req.body.file;
       filename = req.body.filename || req.body.fileName;
       title = req.body.title;
       description = req.body.description || '';
@@ -43,16 +44,16 @@ async function handleImageUpload(req: AuthenticatedRequest, res: Response) {
       tagsInput = req.body.tags || [];
 
       if (typeof rawData === 'string') {
-        const base64Data = rawData.replace(/^data:image\/[a-zA-Z+]+;base64,/, '');
-        imageBuffer = Buffer.from(base64Data, 'base64');
+        const base64Data = rawData.replace(/^data:[a-zA-Z0-9/+-]+;base64,/, '');
+        fileBuffer = Buffer.from(base64Data, 'base64');
       }
     }
 
-    if (!imageBuffer || imageBuffer.length === 0) {
-      return res.status(400).json({ message: 'No valid image data provided. Provide base64 image_data in JSON or raw binary image body.' });
+    if (!fileBuffer || fileBuffer.length === 0) {
+      return res.status(400).json({ message: 'No valid file data provided. Provide base64 file data in JSON or raw binary body.' });
     }
 
-    const { imagePath, mimeType, size } = saveUploadedImage(imageBuffer, filename);
+    const { filePath, imagePath, mimeType, contentType, size } = saveUploadedFile(fileBuffer, filename);
 
     // Compute clean title
     let finalTitle = title ? title.trim() : '';
@@ -60,11 +61,12 @@ async function handleImageUpload(req: AuthenticatedRequest, res: Response) {
       finalTitle = filename.replace(/\.[^/.]+$/, '').replace(/[-_]+/g, ' ').trim();
     }
     if (!finalTitle) {
-      finalTitle = `Image ${new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
+      const label = contentType === 'document' ? 'Document' : 'Image';
+      finalTitle = `${label} ${new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
     }
 
-    const finalUrl = imagePath;
-    const finalDesc = description || `Uploaded image (${(size / (1024 * 1024)).toFixed(2)} MB, ${mimeType})`;
+    const finalUrl = filePath;
+    const finalDesc = description || `Uploaded ${contentType === 'document' ? 'document' : 'image'} (${(size / (1024 * 1024)).toFixed(2)} MB, ${mimeType})`;
     const finalRawText = `${finalTitle} ${finalDesc} ${filename || ''}`;
 
     const db = getDb();
@@ -73,7 +75,7 @@ async function handleImageUpload(req: AuthenticatedRequest, res: Response) {
         INSERT INTO bookmarks (
           user_id, url, title, description, personal_note, content_type, 
           reader_html, raw_text, image_path, favicon_path
-        ) VALUES (?, ?, ?, ?, ?, 'image', NULL, ?, ?, NULL)
+        ) VALUES (?, ?, ?, ?, ?, ?, NULL, ?, ?, NULL)
       `);
 
       const result = insertBookmark.run(
@@ -82,6 +84,7 @@ async function handleImageUpload(req: AuthenticatedRequest, res: Response) {
         finalTitle,
         finalDesc,
         personalNote || null,
+        contentType,
         finalRawText,
         imagePath
       );
@@ -101,7 +104,12 @@ async function handleImageUpload(req: AuthenticatedRequest, res: Response) {
         }
       }
 
-      tagSet.add('image');
+      if (contentType === 'document') {
+        tagSet.add('document');
+        tagSet.add('pdf');
+      } else {
+        tagSet.add('image');
+      }
 
       if (tagSet.size > 0) {
         const findOrCreateTag = db.prepare(`
@@ -135,13 +143,107 @@ async function handleImageUpload(req: AuthenticatedRequest, res: Response) {
 
     return res.status(201).json(createdBookmark);
   } catch (err: any) {
-    console.error('Image upload error:', err);
-    return res.status(400).json({ message: err.message || 'Failed to upload image' });
+    console.error('File upload error:', err);
+    return res.status(400).json({ message: err.message || 'Failed to upload file' });
   }
 }
 
-// 3.5 Upload Local Image Bookmark
-router.post('/upload', handleImageUpload);
+async function handleNoteCreation(req: AuthenticatedRequest, res: Response) {
+  const userId = req.user!.id;
+  const { title, content, note, personalNote, description, tags } = req.body;
+
+  const noteContent = (content || note || personalNote || '').trim();
+  let noteTitle = (title || '').trim();
+
+  if (!noteTitle && noteContent) {
+    // Extract first line as title
+    noteTitle = noteContent.split('\n')[0].replace(/^[#*`\s-]+/, '').trim().slice(0, 80);
+  }
+  if (!noteTitle) {
+    noteTitle = `Note ${new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
+  }
+
+  const finalDesc = description !== undefined ? description : (noteContent ? noteContent.replace(/\n+/g, ' ').slice(0, 200) : '');
+  const noteId = `slip://note/${Date.now()}-${crypto.randomBytes(4).toString('hex')}`;
+  const rawText = `${noteTitle}\n${noteContent}`;
+
+  try {
+    const db = getDb();
+    const insertTransaction = db.transaction(() => {
+      const insertBookmark = db.prepare(`
+        INSERT INTO bookmarks (
+          user_id, url, title, description, personal_note, content_type, 
+          reader_html, raw_text, image_path, favicon_path
+        ) VALUES (?, ?, ?, ?, ?, 'note', NULL, ?, NULL, NULL)
+      `);
+
+      const result = insertBookmark.run(
+        userId,
+        noteId,
+        noteTitle,
+        finalDesc,
+        noteContent,
+        rawText
+      );
+
+      const bookmarkId = result.lastInsertRowid;
+
+      const tagSet = new Set<string>();
+      if (Array.isArray(tags)) {
+        for (const t of tags) {
+          const clean = String(t).trim().toLowerCase().replace(/^#/, '');
+          if (clean) tagSet.add(clean);
+        }
+      } else if (typeof tags === 'string') {
+        for (const t of tags.split(',')) {
+          const clean = t.trim().toLowerCase().replace(/^#/, '');
+          if (clean) tagSet.add(clean);
+        }
+      }
+
+      tagSet.add('note');
+
+      if (tagSet.size > 0) {
+        const findOrCreateTag = db.prepare(`
+          INSERT INTO tags (name) VALUES (?)
+          ON CONFLICT(name) DO UPDATE SET name=excluded.name
+          RETURNING id
+        `);
+
+        const linkTag = db.prepare(`
+          INSERT OR IGNORE INTO bookmark_tags (bookmark_id, tag_id) VALUES (?, ?)
+        `);
+
+        for (const cleanName of tagSet) {
+          const tagRecord = findOrCreateTag.get(cleanName) as { id: number };
+          linkTag.run(bookmarkId, tagRecord.id);
+        }
+      }
+
+      return { bookmarkId, tagSet: Array.from(tagSet) };
+    });
+
+    const { bookmarkId, tagSet } = insertTransaction();
+
+    const createdBookmark = db.prepare(`
+      SELECT id, user_id, url, title, description, personal_note, content_type, 
+             image_path, favicon_path, created_at, updated_at
+      FROM bookmarks WHERE id = ?
+    `).get(bookmarkId) as any;
+
+    createdBookmark.tags = tagSet;
+
+    return res.status(201).json(createdBookmark);
+  } catch (err: any) {
+    console.error('Create note error:', err);
+    return res.status(400).json({ message: err.message || 'Failed to create note' });
+  }
+}
+
+// 3.5 Upload File (Image or PDF) Bookmark & Note Endpoints
+const handleImageUpload = handleFileUpload;
+router.post('/upload', handleFileUpload);
+router.post('/note', handleNoteCreation);
 
 
 // 1. Get All Bookmarks (Filtered by user, optional contentType or tag)
@@ -332,8 +434,12 @@ router.get('/:id', (req: AuthenticatedRequest, res: Response) => {
 
 // 4. Create Bookmark
 router.post('/', async (req: AuthenticatedRequest, res: Response) => {
-  if (!req.body?.url && (req.body?.image_data || req.body?.imageData || req.body?.image || req.body?.file || Buffer.isBuffer(req.body))) {
-    return handleImageUpload(req, res);
+  if (!req.body?.url && (req.body?.image_data || req.body?.imageData || req.body?.file_data || req.body?.fileData || req.body?.image || req.body?.file || Buffer.isBuffer(req.body))) {
+    return handleFileUpload(req, res);
+  }
+
+  if (req.body?.contentType === 'note' || req.body?.content_type === 'note' || (!req.body?.url && (req.body?.content || req.body?.note))) {
+    return handleNoteCreation(req, res);
   }
 
   const userId = req.user!.id;

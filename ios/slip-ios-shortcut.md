@@ -65,9 +65,9 @@ curl -s -X POST http://<YOUR_SERVER_IP>:3080/api/auth/apikey \
 
 ---
 
-## 🛠️ Universal iOS Shortcut (URLs + Images)
+## 🛠️ Universal iOS Shortcut (URLs + Images + PDFs)
 
-This smart shortcut automatically detects whether you are sharing a **web link** (Safari, Twitter, YouTube) or a **photo/image** (Apple Photos, Screenshots, Files) and routes it to your Slip archive.
+This smart shortcut automatically detects whether you are sharing a **web link** (Safari, Twitter, YouTube), a **photo/image** (Apple Photos, Screenshots), or a **PDF document** (Files app, Safari PDF downloads) and routes it seamlessly to your Slip archive with zero configuration changes.
 
 ### 1️⃣ Step 1: Create a New Shortcut
 1. In the **Shortcuts** app, tap the **`+`** icon in the top-right corner.
@@ -79,11 +79,12 @@ This smart shortcut automatically detects whether you are sharing a **web link**
 ### 2️⃣ Step 2: Enable the iOS Share Sheet
 1. Tap the **ⓘ (Info / Details)** icon at the bottom of the screen.
 2. Toggle **ON** **"Show in Share Sheet"**.
-3. Under **"Receive"**, tap and ensure all of these are enabled:
+3. Under **"Receive"**, tap and ensure these are enabled:
    * **URLs**
    * **Safari web pages**
    * **Images**
    * **Media**
+   * **PDFs** / **Files** (from Apple Files app)
 4. Tap **Done** in the top right to return to the shortcut editor.
 
 ---
@@ -92,11 +93,11 @@ This smart shortcut automatically detects whether you are sharing a **web link**
 
 Follow this action sequence in the Shortcuts editor:
 
-#### A. Check if the input is an Image
+#### A. Check if the input is an Image, File, or PDF
 1. Tap **Add Action**, search for **`If`**, and select it.
-2. Set the condition: If `Shortcut Input` `has any value` (or tap `Shortcut Input` → choose **Type: Image**).
+2. Set the condition: If `Shortcut Input` `has any value` (or tap `Shortcut Input` → choose **Type: Image** or **Type: File**).
 
-#### B. Handle Image / Photo Sharing
+#### B. Handle Image & PDF Uploads (Zero Changes Needed!)
 3. Inside the top half of the *If* block:
    * Search for **`Base64 Encode`** and add it (Encodes `Shortcut Input`).
    * Search for **`Get Contents of URL`** and add it:

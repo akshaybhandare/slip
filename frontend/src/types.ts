@@ -1,4 +1,4 @@
-export type ContentType = 'all' | 'article' | 'image' | 'product' | 'video' | 'website';
+export type ContentType = 'all' | 'article' | 'image' | 'document' | 'note' | 'product' | 'video' | 'website';
 
 export interface Tag {
   id: number;
