@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { Bookmark } from '../types';
 import { renderInlineMarkdown, renderFormattedNote } from '../utils/markdown';
+import { copyToClipboard } from '../utils/clipboard';
 
 interface ShareModalProps {
   bookmark: Bookmark | null;
@@ -34,10 +35,12 @@ export const ShareModal: React.FC<ShareModalProps> = ({ bookmark, onClose }) => 
     bookmark.content_type === 'image' &&
     (bookmark.url.startsWith('/api/cache') || bookmark.url.startsWith('local://') || !bookmark.url.startsWith('http'));
 
-  const handleCopyLink = () => {
-    navigator.clipboard.writeText(bookmark.url);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+  const handleCopyLink = async () => {
+    const success = await copyToClipboard(bookmark.url);
+    if (success) {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
   };
 
   const handleDownloadImage = async () => {
@@ -86,27 +89,42 @@ export const ShareModal: React.FC<ShareModalProps> = ({ bookmark, onClose }) => 
 
   const handleCopyImage = async () => {
     const imageUrl = bookmark.image_path || bookmark.url;
-    try {
-      const res = await fetch(imageUrl);
-      const blob = await res.blob();
-      const item = new ClipboardItem({ [blob.type || 'image/png']: blob });
-      await navigator.clipboard.write([item]);
-      setImageCopied(true);
-      setTimeout(() => setImageCopied(false), 2000);
-    } catch {
+    let copied = false;
+
+    if (typeof navigator !== 'undefined' && navigator.clipboard && typeof ClipboardItem !== 'undefined') {
+      try {
+        const res = await fetch(imageUrl);
+        const blob = await res.blob();
+        const item = new ClipboardItem({ [blob.type || 'image/png']: blob });
+        await navigator.clipboard.write([item]);
+        copied = true;
+      } catch (err) {
+        console.warn('Direct image blob copy failed, falling back to image URL copy:', err);
+      }
+    }
+
+    if (!copied) {
       // Fallback: copy link
-      navigator.clipboard.writeText(window.location.origin + imageUrl);
+      const fullUrl = imageUrl.startsWith('http://') || imageUrl.startsWith('https://')
+        ? imageUrl
+        : window.location.origin + imageUrl;
+      copied = await copyToClipboard(fullUrl);
+    }
+
+    if (copied) {
       setImageCopied(true);
       setTimeout(() => setImageCopied(false), 2000);
     }
   };
 
-  const handleCopyNoteText = () => {
+  const handleCopyNoteText = async () => {
     const noteText = bookmark.personal_note || bookmark.description || '';
     const fullText = bookmark.title ? `# ${bookmark.title}\n\n${noteText}` : noteText;
-    navigator.clipboard.writeText(fullText);
-    setNoteCopied(true);
-    setTimeout(() => setNoteCopied(false), 2000);
+    const success = await copyToClipboard(fullText);
+    if (success) {
+      setNoteCopied(true);
+      setTimeout(() => setNoteCopied(false), 2000);
+    }
   };
 
   const handleDownloadNoteMd = () => {

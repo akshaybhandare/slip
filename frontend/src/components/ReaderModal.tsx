@@ -3,6 +3,7 @@ import { X, ExternalLink, Highlighter, Trash2, Copy, Check } from 'lucide-react'
 import { Bookmark, Highlight } from '../types';
 import { fetchHighlights, createHighlight, deleteHighlight } from '../api';
 import { renderFormattedNote, renderInlineMarkdown } from '../utils/markdown';
+import { copyToClipboard } from '../utils/clipboard';
 
 interface ReaderModalProps {
   bookmark: Bookmark | null;
@@ -82,10 +83,12 @@ export const ReaderModal: React.FC<ReaderModalProps> = ({ bookmark, onClose }) =
     }
   };
 
-  const handleCopyQuote = (text: string, id: number) => {
-    navigator.clipboard.writeText(text);
-    setCopiedId(id);
-    setTimeout(() => setCopiedId(null), 1500);
+  const handleCopyQuote = async (text: string, id: number) => {
+    const success = await copyToClipboard(text);
+    if (success) {
+      setCopiedId(id);
+      setTimeout(() => setCopiedId(null), 1500);
+    }
   };
 
   return (
