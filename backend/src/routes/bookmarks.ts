@@ -438,7 +438,11 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
     return handleFileUpload(req, res);
   }
 
-  if (req.body?.contentType === 'note' || req.body?.content_type === 'note' || (!req.body?.url && (req.body?.content || req.body?.note))) {
+  if (
+    req.body?.contentType === 'note' ||
+    req.body?.content_type === 'note' ||
+    (!req.body?.url && (req.body?.content || req.body?.note))
+  ) {
     return handleNoteCreation(req, res);
   }
 
@@ -449,10 +453,12 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
     return res.status(400).json({ message: 'URL is required' });
   }
 
+  const isInternalUrl = /^(slip|local|file|data):\/\//i.test(url) || url.startsWith('/api/cache');
+
   try {
     let scraped: Partial<ScrapedMetadata> = {};
 
-    if (!title) {
+    if (!title && !isInternalUrl) {
       try {
         scraped = await scrapeQueue.add(() => scrapeUrl(url));
       } catch (err) {
@@ -460,7 +466,14 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
       }
     }
 
-    const finalTitle = title || scraped.title || new URL(url).hostname;
+    let defaultHostname = '';
+    try {
+      defaultHostname = new URL(url).hostname;
+    } catch {
+      defaultHostname = url;
+    }
+
+    const finalTitle = title || scraped.title || defaultHostname;
     const finalDesc = description !== undefined ? description : (scraped.description || '');
     const finalContentType = contentType || scraped.contentType || 'website';
     const finalReaderHtml = readerHtml !== undefined ? readerHtml : (scraped.readerHtml || null);
@@ -761,6 +774,14 @@ router.post('/:id/rescrape', async (req: AuthenticatedRequest, res: Response) =>
       return res.status(404).json({ message: 'Bookmark not found or unauthorized' });
     }
 
+    if (
+      !existing.url ||
+      !/^https?:\/\//i.test(existing.url) ||
+      ['note', 'document', 'image'].includes(existing.content_type)
+    ) {
+      return res.status(400).json({ message: 'Cannot re-scrape notes or uploaded files' });
+    }
+
     const scraped = await scrapeUrl(existing.url);
     let cachedImagePath = existing.image_path;
 
@@ -827,13 +848,20 @@ router.post('/rescrape-all', async (req: AuthenticatedRequest, res: Response) =>
   const userId = req.user!.id;
   try {
     const db = getDb();
-    const userBookmarks = db.prepare(`SELECT id, url, title, description, content_type, image_path, favicon_path FROM bookmarks WHERE user_id = ?`).all(userId) as any[];
+    const userBookmarks = db.prepare(`
+      SELECT id, url, title, description, content_type, image_path, favicon_path 
+      FROM bookmarks 
+      WHERE user_id = ?
+        AND url IS NOT NULL
+        AND (url LIKE 'http://%' OR url LIKE 'https://%')
+        AND content_type NOT IN ('note', 'document', 'image')
+    `).all(userId) as any[];
 
     if (userBookmarks.length === 0) {
-      return res.status(200).json({ message: 'No bookmarks to rescrape', count: 0 });
+      return res.status(200).json({ message: 'No web bookmarks to rescrape', count: 0 });
     }
 
-    // Queue all bookmarks into background scrapeQueue
+    // Queue only web bookmarks into background scrapeQueue
     for (const b of userBookmarks) {
       scrapeQueue.add(async () => {
         try {

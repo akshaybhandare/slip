@@ -356,6 +356,56 @@ describe('Bookmark CRUD & Local Thumbnail Cache Integrations', () => {
       expect(response.body.personal_note).toBe('Remember to check SQLite WAL checkpoint settings on high load.');
       expect(response.body.url).toMatch(/^slip:\/\/note\//);
     });
+
+    test('POST /api/bookmarks/:id/rescrape should reject rescraping notes and protect titles', async () => {
+      const noteRes = await request(app)
+        .post('/api/bookmarks/note')
+        .set('Cookie', user1Cookie)
+        .send({
+          title: 'gst',
+          content: 'GST calculations and return filing details'
+        });
+      expect(noteRes.status).toBe(201);
+      const noteId = noteRes.body.id;
+
+      // Single rescrape attempt on note should fail
+      const rescrapeRes = await request(app)
+        .post(`/api/bookmarks/${noteId}/rescrape`)
+        .set('Cookie', user1Cookie);
+      expect(rescrapeRes.status).toBe(400);
+
+      // Verify title is still 'gst' and not replaced by numbers/hashes
+      const getRes = await request(app)
+        .get(`/api/bookmarks/${noteId}`)
+        .set('Cookie', user1Cookie);
+      expect(getRes.body.title).toBe('gst');
+      expect(getRes.body.content_type).toBe('note');
+    });
+
+    test('POST /api/bookmarks/rescrape-all should NOT overwrite note and document titles', async () => {
+      // 1. Create note with title 'gst'
+      const noteRes = await request(app)
+        .post('/api/bookmarks/note')
+        .set('Cookie', user1Cookie)
+        .send({
+          title: 'gst',
+          content: 'Important tax notes'
+        });
+      const noteId = noteRes.body.id;
+
+      // 2. Trigger global rescrape
+      const rescrapeAllRes = await request(app)
+        .post('/api/bookmarks/rescrape-all')
+        .set('Cookie', user1Cookie);
+      expect([200, 202]).toContain(rescrapeAllRes.status);
+
+      // 3. Verify note title remains untouched
+      const verifyRes = await request(app)
+        .get(`/api/bookmarks/${noteId}`)
+        .set('Cookie', user1Cookie);
+      expect(verifyRes.body.title).toBe('gst');
+      expect(verifyRes.body.content_type).toBe('note');
+    });
   });
 });
 

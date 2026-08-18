@@ -94,10 +94,27 @@ export function extractSmartUrlFallback(targetUrl: string): {
   contentType: 'article' | 'product' | 'video' | 'image' | 'website';
 } {
   try {
+    if (!targetUrl || !/^https?:\/\//i.test(targetUrl.trim())) {
+      return {
+        title: '',
+        description: '',
+        contentType: 'website'
+      };
+    }
+
     const parsed = new URL(targetUrl);
     const hostname = parsed.hostname.replace(/^www\./, '');
     const pathname = parsed.pathname.replace(/\/$/, '');
-    const segments = pathname.split('/').filter((s) => s.length > 0 && !/^\d+$/.test(s));
+    const segments = pathname
+      .split('/')
+      .filter((s) => {
+        if (!s || s.length === 0) return false;
+        if (/^\d+$/.test(s)) return false; // Pure numbers
+        if (/^\d{10,}(?:-[a-f0-9]+)?$/i.test(s)) return false; // Timestamp or timestamp-hex IDs (e.g. 1787073408990-2ca6d75d)
+        if (/^[a-f0-9]{16,}$/i.test(s)) return false; // Hex hashes (SHA256, MD5)
+        if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s)) return false; // UUID
+        return true;
+      });
 
     let derivedTitle = '';
     let category: 'article' | 'product' | 'video' | 'image' | 'website' = 'website';
@@ -145,12 +162,12 @@ export function extractSmartUrlFallback(targetUrl: string): {
 
     if (descriptiveSegment) {
       const cleanSlug = decodeURIComponent(descriptiveSegment)
-        .replace(/\.(html?|php|asp|jsp)$/i, '')
+        .replace(/\.(html?|php|asp|jsp|pdf|png|jpe?g|webp|gif|svg)$/i, '')
         .replace(/[-_.]+/g, ' ')
         .replace(/\s+/g, ' ')
         .trim();
 
-      if (cleanSlug.length > 0) {
+      if (cleanSlug.length > 0 && !/^\d+[\s\d]*$/.test(cleanSlug)) {
         derivedTitle = cleanSlug
           .split(' ')
           .map((w) => (w.length > 0 ? w.charAt(0).toUpperCase() + w.slice(1) : ''))
@@ -164,12 +181,12 @@ export function extractSmartUrlFallback(targetUrl: string): {
 
     return {
       title: cleanTitle(derivedTitle),
-      description: `Saved link from ${hostname}`,
+      description: hostname ? `Saved link from ${hostname}` : '',
       contentType: category
     };
   } catch {
     return {
-      title: targetUrl,
+      title: '',
       description: '',
       contentType: 'website'
     };
@@ -351,10 +368,12 @@ export function parseHtmlMetadata(html: string, targetUrl: string): ScrapedMetad
 }
 
 export async function scrapeUrl(url: string): Promise<ScrapedMetadata> {
-  let targetUrl = url.trim();
-  if (!/^https?:\/\//i.test(targetUrl)) {
-    targetUrl = 'https://' + targetUrl;
+  const rawUrl = (url || '').trim();
+  if (!rawUrl || !/^https?:\/\//i.test(rawUrl)) {
+    throw new Error(`Cannot scrape non-HTTP URL: ${rawUrl}`);
   }
+
+  const targetUrl = rawUrl;
 
   if (targetUrl.match(/\.(jpg|jpeg|png|webp|gif|svg)(\?.*)?$/i)) {
     const filename = targetUrl.split('/').pop()?.split('?')[0] || 'Image';

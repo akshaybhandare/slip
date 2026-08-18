@@ -1,4 +1,4 @@
-import { parseHtmlMetadata, resolveUrl } from '../services/scraper';
+import { parseHtmlMetadata, resolveUrl, extractSmartUrlFallback, scrapeUrl } from '../services/scraper';
 import { JobQueue } from '../services/queue';
 
 describe('Scraping Engine & Readability Service', () => {
@@ -147,6 +147,30 @@ describe('Scraping Engine & Readability Service', () => {
       expect(results).toEqual([1, 2, 3, 4, 5]);
       expect(maxObservedActive).toBeLessThanOrEqual(2);
       expect(completed.length).toBe(5);
+    });
+  });
+
+  describe('Smart URL Fallback and Internal Scheme Safety', () => {
+    test('extractSmartUrlFallback should ignore internal schemes, timestamps, and hex hashes', () => {
+      // Slip note URI with timestamp and hex chunk
+      const noteFallback = extractSmartUrlFallback('slip://note/1787073408990-2ca6d75d');
+      expect(noteFallback.title).not.toContain('1787073408990');
+      expect(noteFallback.title).not.toContain('2ca6d75d');
+      expect(noteFallback.title).toBe('');
+
+      // Uploaded PDF with sha256 hash
+      const pdfFallback = extractSmartUrlFallback('/api/cache/62e730b1b469c20af1817001b3fd6bd5ccdac0079245b32ca039218f9d2b70e4.pdf');
+      expect(pdfFallback.title).not.toContain('62e730b1');
+      expect(pdfFallback.title).toBe('');
+
+      // Real human web slug should still be formatted properly
+      const webFallback = extractSmartUrlFallback('https://techcrunch.com/2026/08/18/open-source-ai-coding-agents-breakthrough');
+      expect(webFallback.title).toBe('Open Source Ai Coding Agents Breakthrough');
+    });
+
+    test('scrapeUrl should reject non-HTTP URLs', async () => {
+      await expect(scrapeUrl('slip://note/1787073408990-2ca6d75d')).rejects.toThrow('Cannot scrape non-HTTP URL');
+      await expect(scrapeUrl('/api/cache/62e730b1.pdf')).rejects.toThrow('Cannot scrape non-HTTP URL');
     });
   });
 });
