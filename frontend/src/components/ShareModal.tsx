@@ -359,6 +359,7 @@ export const ShareModal: React.FC<ShareModalProps> = ({ bookmark, onClose }) => 
                 className="form-input"
                 style={{ flex: 1, fontSize: '13px' }}
                 value={bookmark.url}
+                onClick={(e) => (e.target as HTMLInputElement).select()}
               />
               <button className="btn btn-primary" onClick={handleCopyLink}>
                 {copied ? <Check size={16} /> : <Copy size={16} />}

@@ -1,5 +1,17 @@
-import React, { useState } from 'react';
-import { ExternalLink, Eye, Share2, Trash2, Globe, Edit3, RefreshCw, FileText, Image as ImageIcon, FileCode2 } from 'lucide-react';
+import React, { useState, useRef, useEffect } from 'react';
+import {
+  ExternalLink,
+  Eye,
+  Share2,
+  Trash2,
+  Globe,
+  Edit3,
+  RefreshCw,
+  FileText,
+  Image as ImageIcon,
+  FileCode2,
+  MoreHorizontal
+} from 'lucide-react';
 import { Bookmark } from '../types';
 import { renderFormattedNote, renderInlineMarkdown } from '../utils/markdown';
 
@@ -24,6 +36,24 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
 }) => {
   const [rescaping, setRescraping] = useState(false);
   const [showNote, setShowNote] = useState(false);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  // Close card menu when clicking/tapping outside
+  useEffect(() => {
+    if (!isMenuOpen) return;
+    const handleClickOutside = (e: MouseEvent | TouchEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setIsMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('touchstart', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('touchstart', handleClickOutside);
+    };
+  }, [isMenuOpen]);
 
   const isNote = bookmark.content_type === 'note' || bookmark.url.startsWith('slip://note/');
   const isDocument = bookmark.content_type === 'document' || bookmark.url.endsWith('.pdf') || (bookmark.image_path && bookmark.image_path.endsWith('.pdf'));
@@ -70,7 +100,7 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
   };
 
   return (
-    <article className={`bookmark-card ${isNote ? 'note-bookmark-card' : ''} ${isDocument ? 'doc-bookmark-card' : ''}`}>
+    <article className={`bookmark-card ${isNote ? 'note-bookmark-card' : ''} ${isDocument ? 'doc-bookmark-card' : ''} ${isMenuOpen ? 'menu-active' : ''}`}>
       {/* 1. Note Card Header Banner */}
       {isNote ? (
         <div
@@ -340,84 +370,106 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
         )}
 
         <div className="card-actions">
-          {(isArticle || isNote) && (
+          <div className="card-actions-left">
+            {(isArticle || isNote) && (
+              <button
+                className="icon-btn"
+                title={isNote ? 'Open Full Note' : 'Reader Mode'}
+                aria-label={isNote ? 'Open Full Note' : 'Reader Mode'}
+                onClick={() => onOpenReader(bookmark)}
+              >
+                <Eye size={16} />
+              </button>
+            )}
+
+            {!isNote && (
+              <button
+                className={`icon-btn ${bookmark.personal_note ? 'has-note-btn' : ''} ${showNote ? 'active-note-btn' : ''}`}
+                title={showNote ? 'Hide Personal Note' : 'View Personal Note'}
+                aria-label={showNote ? 'Hide Personal Note' : 'View Personal Note'}
+                onClick={() => setShowNote(!showNote)}
+              >
+                <FileText size={15} />
+              </button>
+            )}
+          </div>
+
+          <div className="card-actions-right">
             <button
               className="icon-btn"
-              title={isNote ? 'Open Full Note' : 'Reader Mode'}
-              onClick={() => onOpenReader(bookmark)}
+              title="Share Bookmark"
+              aria-label="Share Bookmark"
+              onClick={handleShareClick}
             >
-              <Eye size={15} />
+              <Share2 size={16} />
             </button>
-          )}
 
-          {!isNote && (
-            <button
-              className={`icon-btn ${bookmark.personal_note ? 'has-note-btn' : ''} ${showNote ? 'active-note-btn' : ''}`}
-              title={
-                bookmark.personal_note
-                  ? showNote
-                    ? 'Hide Personal Note'
-                    : 'View Personal Note'
-                  : 'Add Personal Note'
-              }
-              onClick={() => {
-                if (!bookmark.personal_note) {
-                  onEdit(bookmark);
-                } else {
-                  setShowNote(!showNote);
-                }
-              }}
-            >
-              <FileText size={14} />
-            </button>
-          )}
+            <div className="card-menu-container" ref={menuRef}>
+              <button
+                className={`icon-btn card-more-btn ${isMenuOpen ? 'active' : ''}`}
+                title="More actions"
+                aria-label="More actions"
+                onClick={() => setIsMenuOpen(!isMenuOpen)}
+              >
+                <MoreHorizontal size={17} />
+              </button>
 
-          {!isNote && !isDocument && !isLocalImage && (
-            <button
-              className="icon-btn"
-              title="Re-scrape Metadata"
-              onClick={handleRescrapeClick}
-              disabled={rescaping}
-            >
-              <RefreshCw size={14} className={rescaping ? 'spin-animation' : ''} />
-            </button>
-          )}
+              {isMenuOpen && (
+                <div className="card-dropdown-menu">
+                  <button
+                    className="card-dropdown-item"
+                    onClick={() => {
+                      setIsMenuOpen(false);
+                      onEdit(bookmark);
+                    }}
+                  >
+                    <Edit3 size={15} />
+                    <span>Edit Bookmark</span>
+                  </button>
 
-          <button
-            className="icon-btn"
-            title="Edit Bookmark"
-            onClick={() => onEdit(bookmark)}
-          >
-            <Edit3 size={14} />
-          </button>
+                  {!isNote && (
+                    <a
+                      href={bookmark.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="card-dropdown-item"
+                      onClick={() => setIsMenuOpen(false)}
+                    >
+                      <ExternalLink size={15} />
+                      <span>{isDocument ? 'Open PDF in new tab' : 'Open in new tab'}</span>
+                    </a>
+                  )}
 
-          {!isNote && (
-            <a
-              href={bookmark.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="icon-btn"
-              title={isDocument ? 'Open PDF in new tab' : 'Open in new tab'}
-            >
-              <ExternalLink size={15} />
-            </a>
-          )}
+                  {!isNote && !isDocument && !isLocalImage && (
+                    <button
+                      className="card-dropdown-item"
+                      onClick={() => {
+                        setIsMenuOpen(false);
+                        handleRescrapeClick();
+                      }}
+                      disabled={rescaping}
+                    >
+                      <RefreshCw size={15} className={rescaping ? 'spin-animation' : ''} />
+                      <span>{rescaping ? 'Re-scraping...' : 'Re-scrape Metadata'}</span>
+                    </button>
+                  )}
 
-          <button
-            className="icon-btn"
-            title="Share Bookmark"
-            onClick={handleShareClick}
-          >
-            <Share2 size={15} />
-          </button>
+                  <div className="card-dropdown-divider" />
 
-          <button
-            className="icon-btn"
-            title="Delete Bookmark"
-            onClick={() => onDelete(bookmark.id)}
-          >
-            <Trash2 size={15} />
-          </button>
+                  <button
+                    className="card-dropdown-item card-dropdown-danger"
+                    onClick={() => {
+                      setIsMenuOpen(false);
+                      onDelete(bookmark.id);
+                    }}
+                  >
+                    <Trash2 size={15} />
+                    <span>Delete Bookmark</span>
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       </div>
     </article>

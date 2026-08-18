@@ -248,4 +248,60 @@ describe('EditBookmarkModal Note vs Non-Note fields', () => {
     // Note drawer is collapsed again
     expect(screen.queryByText('Secret Note Content')).not.toBeInTheDocument();
   });
+
+  it('renders streamlined action buttons and toggles More actions dropdown on BookmarkCard', () => {
+    const onEditMock = vi.fn();
+    const onDeleteMock = vi.fn();
+    const onShareMock = vi.fn();
+
+    const bookmark: Bookmark = {
+      id: 25,
+      user_id: 1,
+      url: 'https://example.com/streamlined',
+      title: 'Streamlined UX Card',
+      description: 'Cramped buttons fix',
+      content_type: 'website',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      tags: []
+    };
+
+    render(
+      <BookmarkCard
+        bookmark={bookmark}
+        onOpenReader={vi.fn()}
+        onShare={onShareMock}
+        onEdit={onEditMock}
+        onRescrape={vi.fn()}
+        onDelete={onDeleteMock}
+        onTagClick={vi.fn()}
+      />
+    );
+
+    // Share button is directly accessible with ample touch area
+    const shareBtn = screen.getByTitle('Share Bookmark');
+    expect(shareBtn).toBeInTheDocument();
+    fireEvent.click(shareBtn);
+    expect(onShareMock).toHaveBeenCalledWith(bookmark);
+
+    // More options menu button exists
+    const moreBtn = screen.getByTitle('More actions');
+    expect(moreBtn).toBeInTheDocument();
+
+    // Dropdown is initially closed
+    expect(screen.queryByText('Edit Bookmark')).not.toBeInTheDocument();
+    expect(screen.queryByText('Delete Bookmark')).not.toBeInTheDocument();
+
+    // Click More actions button
+    fireEvent.click(moreBtn);
+
+    // Dropdown items now appear
+    expect(screen.getByText('Edit Bookmark')).toBeInTheDocument();
+    expect(screen.getByText('Open in new tab')).toBeInTheDocument();
+    expect(screen.getByText('Delete Bookmark')).toBeInTheDocument();
+
+    // Click Edit Bookmark from menu
+    fireEvent.click(screen.getByText('Edit Bookmark'));
+    expect(onEditMock).toHaveBeenCalledWith(bookmark);
+  });
 });

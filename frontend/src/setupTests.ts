@@ -14,3 +14,8 @@ Object.defineProperty(window, 'matchMedia', {
     dispatchEvent: () => false
   })
 });
+
+// Polyfill document.execCommand for JSDOM in tests
+if (typeof document !== 'undefined' && !document.execCommand) {
+  document.execCommand = () => true;
+}

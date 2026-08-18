@@ -488,7 +488,6 @@ body {
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
-  overflow: hidden;
   box-shadow: var(--shadow-card);
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
   position: relative;
@@ -497,9 +496,22 @@ body {
   width: 100%;
 }
 
+.bookmark-card.menu-active {
+  z-index: 50;
+}
+
 .bookmark-card:hover {
   border-color: #c2c2c2;
   box-shadow: var(--shadow-card-hover);
+}
+
+.note-card-banner,
+.doc-card-banner,
+.card-media,
+.card-fallback-banner {
+  border-top-left-radius: calc(var(--radius-lg) - 1px);
+  border-top-right-radius: calc(var(--radius-lg) - 1px);
+  overflow: hidden;
 }
 
 .card-media {
@@ -617,19 +629,26 @@ body {
 .card-actions {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
-  gap: 4px;
+  justify-content: space-between;
   padding-top: 10px;
   border-top: 1px solid var(--color-border);
-  margin-top: 6px;
+  margin-top: 8px;
+  position: relative;
+}
+
+.card-actions-left,
+.card-actions-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .icon-btn {
   background: transparent;
   border: 1px solid transparent;
   color: var(--color-muted);
-  width: 32px;
-  height: 32px;
+  width: 34px;
+  height: 34px;
   border-radius: var(--radius-sm);
   display: flex;
   align-items: center;
@@ -637,12 +656,101 @@ body {
   cursor: pointer;
   transition: var(--transition);
   touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .icon-btn:hover {
   background: var(--color-tertiary);
   color: var(--color-secondary);
   border-color: var(--color-border);
+}
+
+.icon-btn:active {
+  transform: scale(0.94);
+}
+
+.icon-btn.has-note-btn {
+  color: var(--color-primary);
+  background: rgba(228, 43, 12, 0.08);
+  border-color: rgba(228, 43, 12, 0.15);
+}
+
+.icon-btn.has-note-btn:hover,
+.icon-btn.active-note-btn {
+  background: var(--color-primary);
+  color: #fff;
+  border-color: var(--color-primary);
+}
+
+.icon-btn.card-more-btn.active {
+  background: var(--color-tertiary);
+  color: var(--color-secondary);
+  border-color: var(--color-border);
+}
+
+/* Card Contextual Dropdown Menu */
+.card-menu-container {
+  position: relative;
+}
+
+.card-dropdown-menu {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  right: 0;
+  min-width: 185px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.16), 0 2px 6px rgba(0, 0, 0, 0.08);
+  padding: 5px;
+  z-index: 100;
+  animation: fadeIn 0.12s ease-out;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.card-dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 8px 10px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-on-surface);
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+  box-sizing: border-box;
+  transition: var(--transition);
+  touch-action: manipulation;
+  white-space: nowrap;
+}
+
+.card-dropdown-item:hover,
+.card-dropdown-item:focus {
+  background: var(--color-tertiary);
+  color: var(--color-secondary);
+}
+
+.card-dropdown-divider {
+  height: 1px;
+  background: var(--color-border);
+  margin: 3px 4px;
+}
+
+.card-dropdown-danger {
+  color: var(--color-error);
+}
+
+.card-dropdown-danger:hover,
+.card-dropdown-danger:focus {
+  background: rgba(228, 43, 12, 0.08);
+  color: var(--color-error);
 }
 
 @media (max-width: 640px) {
@@ -660,6 +768,14 @@ body {
 
   .bookmark-card {
     border-radius: var(--radius-md);
+  }
+
+  .note-card-banner,
+  .doc-card-banner,
+  .card-media,
+  .card-fallback-banner {
+    border-top-left-radius: calc(var(--radius-md) - 1px);
+    border-top-right-radius: calc(var(--radius-md) - 1px);
   }
 
   .card-content {
@@ -699,14 +815,29 @@ body {
   }
 
   .card-actions {
-    padding-top: 6px;
-    margin-top: 4px;
-    gap: 2px;
+    padding-top: 8px;
+    margin-top: 6px;
+  }
+
+  .card-actions-left,
+  .card-actions-right {
+    gap: 6px;
   }
 
   .icon-btn {
-    width: 28px;
-    height: 28px;
+    width: 38px;
+    height: 38px;
+    border-radius: var(--radius-md);
+  }
+
+  .card-dropdown-menu {
+    min-width: 175px;
+    bottom: calc(100% + 6px);
+  }
+
+  .card-dropdown-item {
+    padding: 10px 12px;
+    font-size: 13px;
   }
 }
 
