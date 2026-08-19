@@ -635,3 +635,69 @@ The categorization bar at the top provides frictionless filtering with smooth tr
 *   The active button displays a small dot underneath or a solid backdrop matching `var(--accent-color)` with white text.
 *   Fades out inactive categories slightly to focus attention.
 *   Fully responsive: horizontal scrolling on small mobile screens.
+
+---
+
+## 8. AI Integration, Semantic Search & Gating Architecture
+
+```mermaid
+flowchart TD
+    subgraph Client UI
+        Search[Search Bar / Smart Search Toggle]
+        Card[Bookmark Card / Auto-Tag Action]
+        AIModal[AI Connect Modal / Settings]
+    end
+
+    subgraph BFF API Server
+        AuthCheck[Authenticate & Gating Guard]
+        AISvc[AI Service: Multi-Provider LLM Engine]
+        Crypto[AES-256-CBC Encryption Layer]
+        FTSFilter[FTS5 Pre-Filter & Candidate Matcher]
+    end
+
+    subgraph Database
+        DBSettings[(Settings Table: Encrypted Config)]
+        DBBookmarks[(Bookmarks & Tags Tables)]
+    end
+
+    subgraph External AI Providers
+        OpenAI[OpenAI / GPT-4o-mini]
+        Claude[Anthropic Claude / Haiku]
+        Gemini[Google Gemini / Flash]
+        Custom[Custom / Ollama / OpenRouter]
+    end
+
+    AIModal -->|Save Key & Provider| AuthCheck
+    AuthCheck -->|Verify Live Connection| AISvc
+    AISvc -->|Encrypt Secret| Crypto
+    Crypto -->|Store Encrypted Key| DBSettings
+
+    Search -->|Smart Search Query| AuthCheck
+    AuthCheck -->|Candidate Retrieval| FTSFilter
+    FTSFilter -->|Top 35 Candidates| DBBookmarks
+    DBBookmarks -->|Candidate Metadata| AISvc
+    AISvc -->|Semantic Prompt + Candidates| OpenAI & Claude & Gemini & Custom
+    AISvc -->|Ranked Matches & Explanations| Search
+
+    Card -->|Trigger Auto-Tag| AISvc
+    AISvc -->|Analyze Content & Existing Tags| OpenAI & Claude & Gemini & Custom
+    AISvc -->|Reuse & Deduplicate Tags| DBBookmarks
+```
+
+### 8.1. Secret Storage & Cryptographic Security
+*   **AES-256-CBC Encryption**: All API keys provided by administrators are encrypted at rest using `AES-256-CBC` with an HMAC-SHA256 derived initialization vector and a unique per-instance machine seed (`aiCrypto.ts`).
+*   **Zero Client Exposure**: Raw plaintext API keys are strictly decrypted in-memory on the backend only during active LLM dispatch. Clients receive only securely masked strings (e.g., `••••••••••••••••••••••a82f`).
+*   **Enforced Pre-Flight Testing**: Before any API key or custom endpoint is committed to SQLite, the backend executes an active connection test. If the provider rejects authentication, the configuration is refused.
+
+### 8.2. Semantic Smart Search Subsystem
+*   **Two-Stage Candidate Pipeline**:
+    1.  *Candidate Pre-filtering*: When libraries exceed 120 bookmarks, an FTS5 token index query combined with tag matching extracts the top candidate bookmark subset (constant minimal memory footprint).
+    2.  *LLM Semantic Reasoning*: The system prompt instructs the model to identify conceptual associations, parent franchises (e.g., *Clone Wars* -> *Star Wars*), technical problem-solution mappings, and synonyms.
+    3.  *Output Scoring*: Matches receive a `0-100` relevance percentage and a concise, single-sentence justification rendered as interactive badges on the frontend.
+
+### 8.3. Tag Deduplication & Vocabulary Reuse
+*   `processTags` enforces semantic normalization (kebab-casing, symbol stripping) while strictly prioritizing and reusing the user's existing tag vocabulary to avoid fragmenting collections with synonyms (e.g. reusing `#bambulab` instead of creating `#bambu-lab`).
+
+### 8.4. Zero-AI Disconnected Fallback & UI Gating
+*   **Strict Capability Gating**: When no AI provider is configured (`is_connected = false`), all AI-related user interface components (Smart Search toggle button, Enter-to-search action button, "Auto-tag with AI" menu items, match percentage badges, and spinning sparkle animations) are cleanly unmounted.
+*   **Classic Slip Experience**: The application seamlessly runs as pure classic Slip with zero visual or operational hints of AI, using standard fast FTS5 SQLite queries.

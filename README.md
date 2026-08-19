@@ -1,6 +1,8 @@
 <div align="center">
 
-# 🔖 Slip
+<img src="frontend/public/icon.svg" alt="Slip Logo" width="80" height="80" />
+
+# Slip
 
 **A lightning-fast, self-hosted visual bookmark archive and reading space.**  
 *Inspired by mymind. Built for self-hosters, creators, and researchers.*
@@ -22,6 +24,10 @@
 * **📱 Mobile-First Architecture**: 2-column mobile streams, thumb-friendly slide-up bottom sheets, touch-scrolling filter chips, and a quick-save floating action button (FAB).
 * **🧠 Smart Scraping Engine**: Automatically extracts OpenGraph tags, JSON-LD structured schemas, article text, and falls back to full-page screenshots when anti-bot firewalls block metadata.
 * **⚡ Instant FTS5 Search**: Full-text indexing across bookmark titles, descriptions, reader text, domain names, and tags.
+* **✨ Semantic Smart Search**: Natural language conceptual search that understands conversational queries, synonyms, parent franchises, and troubleshooting intents with relevance scores and explanations.
+* **🏷️ AI Auto-Tagging**: Intelligently assigns tags on save, re-scrape, or card menus while strictly reusing and prioritizing your existing tag vocabulary.
+* **🤖 Bring Your Own AI (BYO-AI)**: Seamlessly connect OpenAI, Anthropic Claude, Google Gemini, or local models (Ollama, Together, OpenRouter) with AES-256 encrypted database storage.
+* **🛡️ Zero-AI Disconnected Fallback**: All AI options, buttons, badges, and operations are strictly gated. When no AI provider is connected, Slip functions as classic, lightweight Slip without any AI clutter or hints.
 * **📖 Built-in Reader Mode**: Distraction-free article reader with sanitized HTML, custom typography, and zero ads or trackers.
 * **🏷️ Interactive Tag System**: Quick-tag saved links with keyboard autocompletion and one-tap saved tag reuse suggestions (`+ #tag`).
 * **📦 Netscape HTML Import & Export**: Import from Chrome, Safari, Firefox, Edge, and Raindrop, or export your entire archive anytime.
@@ -158,13 +164,13 @@ npm run dev
 
 ## 🧪 Testing
 
-Slip has complete test coverage across both frontend and backend suites:
+Slip has complete test coverage across both frontend and backend suites (138 tests total):
 
 ```bash
-# Run backend test suite (47 tests: SQLite, FTS5, Auth, Scraper, Queue, Netscape IO)
+# Run backend test suite (90 tests across 8 test suites: SQLite, FTS5, Auth, Scraper, Queue, Netscape IO, AI Service, Crypto)
 cd backend && npm test
 
-# Run frontend UI tests (6 tests: TagInput, Responsive Masonry, Mobile FAB, Sync)
+# Run frontend UI tests (48 tests in Vitest: TagInput, Responsive Masonry, Mobile FAB, Sync, AI Connection, Disconnected Fallback)
 cd frontend && npm test
 ```
 
