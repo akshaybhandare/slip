@@ -1,0 +1,515 @@
+import axios from 'axios';
+import { getDb } from '../db';
+import { decryptSecret } from './aiCrypto';
+
+export type AIProviderId = 'openai' | 'claude' | 'gemini' | 'custom';
+
+export const KNOWN_AI_PROVIDERS: Record<AIProviderId, { defaultUrl: string; name: string; defaultModel: string }> = {
+  openai: {
+    name: 'OpenAI',
+    defaultUrl: 'https://api.openai.com/v1',
+    defaultModel: 'gpt-4o-mini'
+  },
+  claude: {
+    name: 'Claude',
+    defaultUrl: 'https://api.anthropic.com/v1',
+    defaultModel: 'claude-3-5-haiku-20241022'
+  },
+  gemini: {
+    name: 'Gemini',
+    defaultUrl: 'https://generativelanguage.googleapis.com/v1beta',
+    defaultModel: 'gemini-2.5-flash'
+  },
+  custom: {
+    name: 'Custom',
+    defaultUrl: '',
+    defaultModel: 'default'
+  }
+};
+
+export const AUTO_TAG_SYSTEM_PROMPT = `You are an automatic content tagger.
+
+Your task is to assign the most appropriate tags to the provided content.
+
+Rules:
+
+1. Prefer existing tags whenever they accurately describe the content.
+
+2. NEVER create a new tag if an existing tag has the same or substantially similar meaning.
+   Treat synonyms, abbreviations, spelling variations, formatting variations, and equivalent terms as the same tag.
+   
+   Examples:
+   - Existing: "bambulab" → NEVER create "bambu-lab"
+   - Existing: "bambu-lab" → NEVER create "bambulab"
+   - Existing: "3d-printing" → NEVER create "3d-print"
+   - Existing: "javascript" → NEVER create "js"
+   
+   When in doubt, use the existing tag instead of creating a new one.
+
+3. Create a new tag only when no existing tag accurately represents the concept.
+
+4. Do not create tags that are merely more specific versions of an existing tag unless the distinction represents a genuinely different concept.
+
+5. Avoid duplicate, synonymous, redundant, or overlapping tags.
+
+6. Tags should describe meaningful concepts present in the content. Do not speculate or infer information that is not supported by the content.
+
+7. Use as few tags as necessary. Prefer precision over quantity. Assign AT MOST 3 tags in total across both existing and new tags.
+
+8. New tags must be short, clear, lowercase, and reusable across other content.
+
+9. Return only the final result. Do not explain your reasoning.
+
+Return JSON only:
+
+{
+  "tags": ["existing-tag-1", "existing-tag-2"],
+  "newTags": ["genuinely-new-tag"]
+}`;
+
+export function getActiveAIConfig(): { provider: AIProviderId; apiKey: string; apiUrl: string; model: string } | null {
+  try {
+    const db = getDb();
+    const row = db.prepare('SELECT value FROM settings WHERE key = ?').get('ai_config') as { value: string } | undefined;
+    if (!row || !row.value) return null;
+    const parsed = JSON.parse(row.value);
+    if (!parsed.is_connected || !parsed.encrypted_api_key) return null;
+    const apiKey = decryptSecret(parsed.encrypted_api_key);
+    const provider: AIProviderId = parsed.provider || 'openai';
+    const defaultModel = KNOWN_AI_PROVIDERS[provider]?.defaultModel || 'gpt-4o-mini';
+    return {
+      provider,
+      apiKey,
+      apiUrl: parsed.api_url || (KNOWN_AI_PROVIDERS[provider]?.defaultUrl || ''),
+      model: parsed.model || defaultModel
+    };
+  } catch (err) {
+    return null;
+  }
+}
+
+export function normalizeTag(tag: string): string {
+  if (!tag || typeof tag !== 'string') return '';
+  return tag
+    .trim()
+    .toLowerCase()
+    .replace(/^#+/, '')
+    .replace(/[_\s]+/g, '-')
+    .replace(/[^\w-]/g, '')
+    .replace(/-+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 50);
+}
+
+export function parseAndSanitizeTags(rawText: string): { tags: string[]; newTags: string[] } {
+  let parsed: any = {};
+  const cleaned = (rawText || '').replace(/```(?:json)?|```/g, '').trim();
+  try {
+    parsed = JSON.parse(cleaned);
+  } catch {
+    const match = cleaned.match(/\{[\s\S]*\}/);
+    if (match) {
+      try { parsed = JSON.parse(match[0]); } catch {}
+    }
+  }
+
+  const tags = Array.isArray(parsed.tags) ? parsed.tags.map(normalizeTag).filter(Boolean) : [];
+  const newTags = Array.isArray(parsed.newTags) ? parsed.newTags.map(normalizeTag).filter(Boolean) : [];
+  return { tags, newTags };
+}
+
+export function processTags(
+  result: { tags?: string[]; newTags?: string[] },
+  existingTags: string[],
+  maxTags: number = 3
+): string[] {
+  // Map normalized tag form -> canonical existing tag name
+  const existingMap = new Map<string, string>();
+  for (const tag of existingTags) {
+    const normalized = normalizeTag(tag);
+    if (normalized && !existingMap.has(normalized)) {
+      existingMap.set(normalized, tag);
+    }
+  }
+
+  const finalTags = new Set<string>();
+
+  // 1. Existing tags proposed by LLM:
+  // Must actually exist in existingTags (via normalized match)
+  if (Array.isArray(result.tags)) {
+    for (const tag of result.tags) {
+      if (finalTags.size >= maxTags) break;
+      const normalized = normalizeTag(tag);
+      const existing = existingMap.get(normalized);
+      if (existing) {
+        finalTags.add(existing);
+      }
+    }
+  }
+
+  // 2. New tags proposed by LLM:
+  // If it matches an existing tag, prefer and reuse the canonical existing tag.
+  // Otherwise, add the cleanly normalized new tag.
+  if (Array.isArray(result.newTags)) {
+    for (const tag of result.newTags) {
+      if (finalTags.size >= maxTags) break;
+      const normalized = normalizeTag(tag);
+      if (!normalized) continue;
+
+      const existing = existingMap.get(normalized);
+      if (existing) {
+        finalTags.add(existing);
+      } else {
+        finalTags.add(normalized);
+      }
+    }
+  }
+
+  return Array.from(finalTags).slice(0, maxTags);
+}
+
+export async function generateAutoTags(params: {
+  content: string;
+  existingTags: string[];
+  config?: { provider: AIProviderId; apiKey: string; apiUrl?: string; model?: string };
+}): Promise<{ tags: string[]; newTags: string[] }> {
+  const activeConfig = params.config || getActiveAIConfig();
+  if (!activeConfig || !activeConfig.apiKey) {
+    return { tags: [], newTags: [] };
+  }
+
+  const { provider, apiKey, apiUrl } = activeConfig;
+  const model = (activeConfig.model || '').trim() || KNOWN_AI_PROVIDERS[provider]?.defaultModel || 'default';
+  const existingTagsStr = params.existingTags && params.existingTags.length > 0
+    ? JSON.stringify(params.existingTags)
+    : '[]';
+
+  const userPrompt = `Existing tags:\n${existingTagsStr}\n\nContent:\n${params.content}`;
+
+  let rawOutput = '';
+
+  try {
+    if (provider === 'openai') {
+      const baseUrl = apiUrl || KNOWN_AI_PROVIDERS.openai.defaultUrl;
+      const res = await axios.post(
+        `${baseUrl}/chat/completions`,
+        {
+          model,
+          messages: [
+            { role: 'system', content: AUTO_TAG_SYSTEM_PROMPT },
+            { role: 'user', content: userPrompt }
+          ],
+          response_format: { type: 'json_object' },
+          temperature: 0.2
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${apiKey}`,
+            'Content-Type': 'application/json'
+          },
+          timeout: 15000
+        }
+      );
+      rawOutput = res.data?.choices?.[0]?.message?.content || '';
+    } else if (provider === 'claude') {
+      const baseUrl = apiUrl || KNOWN_AI_PROVIDERS.claude.defaultUrl;
+      const res = await axios.post(
+        `${baseUrl}/messages`,
+        {
+          model,
+          system: AUTO_TAG_SYSTEM_PROMPT,
+          messages: [
+            { role: 'user', content: userPrompt }
+          ],
+          max_tokens: 1024,
+          temperature: 0.2
+        },
+        {
+          headers: {
+            'x-api-key': apiKey,
+            'anthropic-version': '2023-06-01',
+            'content-type': 'application/json'
+          },
+          timeout: 15000
+        }
+      );
+      rawOutput = res.data?.content?.[0]?.text || '';
+    } else if (provider === 'gemini') {
+      const baseUrl = apiUrl || KNOWN_AI_PROVIDERS.gemini.defaultUrl;
+      const cleanModel = model.replace(/^models\//, '');
+      const res = await axios.post(
+        `${baseUrl}/models/${cleanModel}:generateContent?key=${encodeURIComponent(apiKey)}`,
+        {
+          systemInstruction: {
+            parts: [{ text: AUTO_TAG_SYSTEM_PROMPT }]
+          },
+          contents: [
+            {
+              parts: [{ text: userPrompt }]
+            }
+          ],
+          generationConfig: {
+            responseMimeType: 'application/json',
+            temperature: 0.2
+          }
+        },
+        {
+          headers: { 'Content-Type': 'application/json' },
+          timeout: 15000
+        }
+      );
+      rawOutput = res.data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    } else {
+      // Custom provider (OpenAI compatible)
+      const base = apiUrl?.includes('://') ? apiUrl : `https://${apiUrl || ''}`;
+      const targetUrl = base.endsWith('/chat/completions') || base.includes('/generate')
+        ? base
+        : `${base.replace(/\/+$/, '')}/chat/completions`;
+
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (apiKey) {
+        headers['Authorization'] = `Bearer ${apiKey}`;
+      }
+
+      const res = await axios.post(
+        targetUrl,
+        {
+          model,
+          messages: [
+            { role: 'system', content: AUTO_TAG_SYSTEM_PROMPT },
+            { role: 'user', content: userPrompt }
+          ],
+          temperature: 0.2
+        },
+        {
+          headers,
+          timeout: 15000
+        }
+      );
+      rawOutput = res.data?.choices?.[0]?.message?.content || res.data?.response || '';
+    }
+  } catch (err: any) {
+    const errorDetail = err.response?.data?.error?.message || err.response?.data?.message || err.message || 'AI request failed';
+    throw new Error(`AI Provider Error (${provider} / ${model}): ${errorDetail}`);
+  }
+
+  return parseAndSanitizeTags(rawOutput);
+}
+
+export async function autoTagBookmark(params: {
+  bookmarkId: number | bigint;
+  userId: number;
+  force?: boolean;
+}): Promise<{ tags: { id: number; name: string }[]; added: string[]; skipped?: boolean }> {
+  const { bookmarkId, userId, force = false } = params;
+  const numericId = Number(bookmarkId);
+  const db = getDb();
+
+  const bookmark = db.prepare(`
+    SELECT id, user_id, url, title, description, personal_note, content_type, raw_text
+    FROM bookmarks
+    WHERE id = ? AND user_id = ?
+  `).get(numericId, userId) as any;
+
+  if (!bookmark) {
+    throw new Error('Bookmark not found');
+  }
+
+  // Check allowed types (URLs / web bookmarks & notes)
+  const allowedTypes = ['website', 'article', 'video', 'product', 'note'];
+  if (!allowedTypes.includes(bookmark.content_type) && !bookmark.url?.startsWith('http') && !bookmark.url?.startsWith('slip://note/')) {
+    return { tags: [], added: [], skipped: true };
+  }
+
+  const currentTags = db.prepare(`
+    SELECT t.id, t.name FROM tags t
+    JOIN bookmark_tags bt ON t.id = bt.tag_id
+    WHERE bt.bookmark_id = ?
+  `).all(numericId) as { id: number; name: string }[];
+
+  // If not force, check if card already has tags present (excluding default system tags)
+  if (!force) {
+    const isNote = bookmark.content_type === 'note' || bookmark.url?.startsWith('slip://note/');
+    // If note has tags other than default 'note', or if web bookmark has any tags, skip
+    const meaningfulTags = currentTags.filter(t => isNote ? t.name !== 'note' : true);
+    if (meaningfulTags.length > 0) {
+      return { tags: currentTags, added: [], skipped: true };
+    }
+  }
+
+  const activeConfig = getActiveAIConfig();
+  if (!activeConfig) {
+    return { tags: currentTags, added: [], skipped: true };
+  }
+
+  // Fetch all existing user tags across the system
+  const allTags = db.prepare(`SELECT DISTINCT name FROM tags ORDER BY name ASC`).all() as { name: string }[];
+  const existingTags = allTags.map(t => t.name);
+
+  // Assemble content
+  const contentParts: string[] = [];
+  if (bookmark.title) contentParts.push(`Title: ${bookmark.title}`);
+  if (bookmark.description) contentParts.push(`Description: ${bookmark.description}`);
+  if (bookmark.personal_note) contentParts.push(`Personal Note: ${bookmark.personal_note}`);
+  if (bookmark.raw_text && bookmark.raw_text !== bookmark.title && bookmark.raw_text !== bookmark.description) {
+    contentParts.push(`Content: ${bookmark.raw_text.slice(0, 2000)}`);
+  }
+  if (bookmark.url && !bookmark.url.startsWith('slip://')) {
+    contentParts.push(`URL: ${bookmark.url}`);
+  }
+
+  const content = contentParts.join('\n\n');
+  if (!content.trim()) {
+    return { tags: currentTags, added: [], skipped: true };
+  }
+
+  const rawTagsResult = await generateAutoTags({
+    content,
+    existingTags,
+    config: activeConfig
+  });
+
+  const validatedTags = processTags(rawTagsResult, existingTags);
+  if (validatedTags.length === 0) {
+    return { tags: currentTags, added: [] };
+  }
+
+  const findOrCreateTag = db.prepare(`
+    INSERT INTO tags (name) VALUES (?)
+    ON CONFLICT(name) DO UPDATE SET name=excluded.name
+    RETURNING id
+  `);
+
+  const linkTag = db.prepare(`
+    INSERT OR IGNORE INTO bookmark_tags (bookmark_id, tag_id) VALUES (?, ?)
+  `);
+
+  const tx = db.transaction(() => {
+    for (const tagName of validatedTags) {
+      const clean = tagName.trim().toLowerCase().replace(/^#+/, '');
+      if (clean) {
+        const tagRecord = findOrCreateTag.get(clean) as { id: number };
+        linkTag.run(numericId, tagRecord.id);
+      }
+    }
+  });
+
+  tx();
+
+  const finalTags = db.prepare(`
+    SELECT t.id, t.name FROM tags t
+    JOIN bookmark_tags bt ON t.id = bt.tag_id
+    WHERE bt.bookmark_id = ?
+  `).all(numericId) as { id: number; name: string }[];
+
+  return { tags: finalTags, added: validatedTags };
+}
+
+export async function testProviderConnection(params: {
+  provider: AIProviderId;
+  apiKey: string;
+  apiUrl?: string;
+  model?: string;
+}): Promise<{ success: boolean; message: string; latencyMs?: number }> {
+  const { provider, apiKey, apiUrl, model } = params;
+  const trimmedKey = (apiKey || '').trim();
+  const trimmedUrl = (apiUrl || '').trim();
+  const targetModel = (model || '').trim() || KNOWN_AI_PROVIDERS[provider]?.defaultModel || 'default';
+
+  if (provider !== 'custom' && !trimmedKey) {
+    return { success: false, message: 'API key is required.' };
+  }
+
+  if (provider === 'custom' && !trimmedUrl) {
+    return { success: false, message: 'Custom API URL is required.' };
+  }
+
+  const startTime = Date.now();
+
+  try {
+    if (provider === 'openai') {
+      const baseUrl = apiUrl || KNOWN_AI_PROVIDERS.openai.defaultUrl;
+      const res = await axios.get(`${baseUrl}/models/${targetModel}`, {
+        headers: {
+          Authorization: `Bearer ${trimmedKey}`
+        },
+        timeout: 8000,
+        validateStatus: () => true
+      });
+
+      const latencyMs = Date.now() - startTime;
+      if (res.status === 200) {
+        return { success: true, message: `Connected to OpenAI model "${targetModel}" successfully (${latencyMs}ms).`, latencyMs };
+      } else if (res.status === 404) {
+        return { success: false, message: `OpenAI model "${targetModel}" was not found. Please verify the model name.` };
+      } else if (res.status === 401) {
+        return { success: false, message: 'OpenAI returned 401 Unauthorized: Invalid API key.' };
+      }
+      return { success: false, message: `OpenAI returned status ${res.status}: ${res.data?.error?.message || 'Error'}` };
+    } else if (provider === 'claude') {
+      const baseUrl = apiUrl || KNOWN_AI_PROVIDERS.claude.defaultUrl;
+      const res = await axios.get(`${baseUrl}/models/${targetModel}`, {
+        headers: {
+          'x-api-key': trimmedKey,
+          'anthropic-version': '2023-06-01'
+        },
+        timeout: 8000,
+        validateStatus: () => true
+      });
+
+      const latencyMs = Date.now() - startTime;
+      if (res.status === 200 || res.status === 400) {
+        return { success: true, message: `Connected to Anthropic Claude model "${targetModel}" successfully (${latencyMs}ms).`, latencyMs };
+      } else if (res.status === 404) {
+        return { success: false, message: `Anthropic Claude model "${targetModel}" was not found. Please verify the model name.` };
+      } else if (res.status === 401) {
+        return { success: false, message: 'Anthropic Claude returned 401 Unauthorized: Invalid API key.' };
+      }
+      return { success: false, message: `Anthropic API returned status ${res.status}.` };
+    } else if (provider === 'gemini') {
+      const baseUrl = apiUrl || KNOWN_AI_PROVIDERS.gemini.defaultUrl;
+      const cleanModel = targetModel.replace(/^models\//, '');
+      const res = await axios.get(`${baseUrl}/models/${cleanModel}?key=${encodeURIComponent(trimmedKey)}`, {
+        timeout: 8000,
+        validateStatus: () => true
+      });
+
+      const latencyMs = Date.now() - startTime;
+      if (res.status === 200) {
+        return { success: true, message: `Connected to Google Gemini model "${cleanModel}" successfully (${latencyMs}ms).`, latencyMs };
+      } else if (res.status === 404) {
+        return { success: false, message: `Google Gemini model "${cleanModel}" was not found for this API key. Please verify the model name (e.g. gemini-2.5-flash or gemini-2.0-flash).` };
+      } else if (res.status === 400 || res.status === 403) {
+        return { success: false, message: `Google Gemini authentication failed: ${res.data?.error?.message || 'Invalid API key.'}` };
+      }
+      return { success: false, message: `Google Gemini returned status ${res.status}.` };
+    } else {
+      // Custom provider
+      const targetUrl = trimmedUrl.includes('://') ? trimmedUrl : `https://${trimmedUrl}`;
+      const headers: Record<string, string> = {};
+      if (trimmedKey) {
+        headers['Authorization'] = `Bearer ${trimmedKey}`;
+      }
+
+      const res = await axios.get(targetUrl, {
+        headers,
+        timeout: 8000,
+        validateStatus: () => true
+      });
+
+      const latencyMs = Date.now() - startTime;
+      if (res.status < 500) {
+        return { success: true, message: `Custom endpoint reached with model "${targetModel}" (${res.status} ${res.statusText}, ${latencyMs}ms).`, latencyMs };
+      }
+      return { success: false, message: `Custom endpoint returned server error ${res.status}.` };
+    }
+  } catch (err: any) {
+    if (err.response?.status === 401) {
+      return { success: false, message: 'Authentication failed: Invalid API key.' };
+    }
+    if (err.code === 'ECONNABORTED' || err.message?.includes('timeout')) {
+      return { success: false, message: 'Connection test timed out after 8 seconds.' };
+    }
+    return { success: false, message: err.message || 'Connection test failed.' };
+  }
+}

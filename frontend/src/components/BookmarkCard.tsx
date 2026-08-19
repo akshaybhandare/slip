@@ -10,7 +10,8 @@ import {
   FileText,
   Image as ImageIcon,
   FileCode2,
-  MoreHorizontal
+  MoreHorizontal,
+  Sparkles
 } from 'lucide-react';
 import { Bookmark } from '../types';
 import { renderFormattedNote, renderInlineMarkdown } from '../utils/markdown';
@@ -21,6 +22,7 @@ interface BookmarkCardProps {
   onShare: (bookmark: Bookmark) => void;
   onEdit: (bookmark: Bookmark) => void;
   onRescrape: (id: number) => Promise<void>;
+  onAutoTag?: (id: number) => Promise<void>;
   onDelete: (id: number) => void;
   onTagClick: (tagName: string) => void;
 }
@@ -31,10 +33,12 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
   onShare,
   onEdit,
   onRescrape,
+  onAutoTag,
   onDelete,
   onTagClick
 }) => {
   const [rescaping, setRescraping] = useState(false);
+  const [autoTagging, setAutoTagging] = useState(false);
   const [showNote, setShowNote] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -85,6 +89,16 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
     }
   };
 
+  const handleAutoTagClick = async () => {
+    if (!onAutoTag) return;
+    setAutoTagging(true);
+    try {
+      await onAutoTag(bookmark.id);
+    } finally {
+      setAutoTagging(false);
+    }
+  };
+
   const handleShareClick = () => {
     onShare(bookmark);
   };
@@ -100,7 +114,13 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
   };
 
   return (
-    <article className={`bookmark-card ${isNote ? 'note-bookmark-card' : ''} ${isDocument ? 'doc-bookmark-card' : ''} ${isMenuOpen ? 'menu-active' : ''}`}>
+    <article className={`bookmark-card ${isNote ? 'note-bookmark-card' : ''} ${isDocument ? 'doc-bookmark-card' : ''} ${isMenuOpen ? 'menu-active' : ''} ${autoTagging ? 'is-auto-tagging' : ''}`}>
+      {autoTagging && (
+        <div className="card-ai-progress-bar" title="AI Auto-tagging in progress...">
+          <div className="card-ai-progress-pulse" />
+        </div>
+      )}
+
       {/* 1. Note Card Header Banner */}
       {isNote ? (
         <div
@@ -347,9 +367,9 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
           </div>
         )}
 
-        {bookmark.tags && bookmark.tags.length > 0 && (
+        {((bookmark.tags && bookmark.tags.length > 0) || autoTagging) && (
           <div className="card-tags">
-            {bookmark.tags.slice(0, 3).map((t) => (
+            {bookmark.tags && bookmark.tags.slice(0, 3).map((t) => (
               <span
                 key={t.id || t.name}
                 className="tag-pill"
@@ -358,12 +378,18 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
                 #{t.name}
               </span>
             ))}
-            {bookmark.tags.length > 3 && (
+            {bookmark.tags && bookmark.tags.length > 3 && (
               <span
                 className="tag-pill-more"
                 title={bookmark.tags.slice(3).map((t) => `#${t.name}`).join(', ')}
               >
                 +{bookmark.tags.length - 3}
+              </span>
+            )}
+            {autoTagging && (
+              <span className="tag-pill tag-pill-ai-loading">
+                <Sparkles size={11} className="spin-animation" />
+                <span>Auto-tagging...</span>
               </span>
             )}
           </div>
@@ -451,6 +477,20 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
                     >
                       <RefreshCw size={15} className={rescaping ? 'spin-animation' : ''} />
                       <span>{rescaping ? 'Re-scraping...' : 'Re-scrape Metadata'}</span>
+                    </button>
+                  )}
+
+                  {onAutoTag && !isDocument && !isLocalImage && (
+                    <button
+                      className="card-dropdown-item"
+                      onClick={() => {
+                        setIsMenuOpen(false);
+                        handleAutoTagClick();
+                      }}
+                      disabled={autoTagging}
+                    >
+                      <Sparkles size={15} className={autoTagging ? 'spin-animation' : ''} />
+                      <span>{autoTagging ? 'Auto-tagging...' : 'Auto-tag with AI'}</span>
                     </button>
                   )}
 

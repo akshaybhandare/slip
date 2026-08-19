@@ -11,6 +11,7 @@ import {
   updateBookmark,
   deleteBookmark,
   rescrapeBookmark,
+  autoTagBookmark,
   rescrapeAllBookmarks,
   logoutUser,
   getMe
@@ -25,12 +26,21 @@ import { ShareModal } from './components/ShareModal';
 import { ImportModal } from './components/ImportModal';
 import { AuthModal } from './components/AuthModal';
 import { AddUserModal } from './components/AddUserModal';
+import { AIConnectModal } from './components/AIConnectModal';
 import { BookmarkPlus, Plus } from 'lucide-react';
 import { useTheme } from './hooks/useTheme';
+import { useAIConfig } from './hooks/useAIConfig';
+import { AI_PROVIDERS } from './config/aiConfig';
 
 export const App: React.FC = () => {
   const { themeMode, toggleTheme } = useTheme();
   const [user, setUser] = useState<User | null>(null);
+  const {
+    aiConfig,
+    connect: connectAI,
+    disconnect: disconnectAI,
+    testConnection: testAIConnection
+  } = useAIConfig(user);
   const [bookmarks, setBookmarks] = useState<Bookmark[]>([]);
   const [tags, setTags] = useState<Tag[]>([]);
   const [activeType, setActiveType] = useState<ContentType>('all');
@@ -43,6 +53,7 @@ export const App: React.FC = () => {
   // Modals
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [isAddUserOpen, setIsAddUserOpen] = useState(false);
+  const [isAIOpen, setIsAIOpen] = useState(false);
   const [droppedFile, setDroppedFile] = useState<File | null>(null);
   const [isImportOpen, setIsImportOpen] = useState(false);
   const [readerBookmark, setReaderBookmark] = useState<Bookmark | null>(null);
@@ -189,6 +200,16 @@ export const App: React.FC = () => {
     }
   };
 
+  const handleAutoTagBookmark = async (id: number) => {
+    try {
+      const refreshed = await autoTagBookmark(id);
+      setBookmarks((prev) => prev.map((b) => (b.id === id ? refreshed : b)));
+      fetchTags().then(setTags).catch(() => {});
+    } catch (err: any) {
+      alert(err.message || 'Failed to auto-tag with AI');
+    }
+  };
+
   const handleRescrapeAll = async () => {
     setIsRescrapingAll(true);
     try {
@@ -231,6 +252,9 @@ export const App: React.FC = () => {
         onRescrapeAllClick={handleRescrapeAll}
         isRescrapingAll={isRescrapingAll}
         onLogoutClick={handleLogout}
+        onAIClick={() => setIsAIOpen(true)}
+        isAIConnected={aiConfig.isConnected}
+        aiProviderName={AI_PROVIDERS[aiConfig.provider]?.name}
         user={user}
         themeMode={themeMode}
         onToggleTheme={toggleTheme}
@@ -255,6 +279,7 @@ export const App: React.FC = () => {
           onShare={setShareTargetBookmark}
           onEdit={setEditingBookmark}
           onRescrape={handleRescrapeBookmark}
+          onAutoTag={handleAutoTagBookmark}
           onDelete={handleDeleteBookmark}
           onTagClick={(tagName) => setSelectedTag(tagName)}
         />
@@ -300,6 +325,15 @@ export const App: React.FC = () => {
         availableTags={tags}
       />
 
+      <AIConnectModal
+        isOpen={isAIOpen}
+        onClose={() => setIsAIOpen(false)}
+        aiConfig={aiConfig}
+        isAdmin={Boolean(user?.isAdmin || user?.id === 1)}
+        onConnect={connectAI}
+        onDisconnect={disconnectAI}
+        onTestConnection={testAIConnection}
+      />
 
       <EditBookmarkModal
         bookmark={editingBookmark}

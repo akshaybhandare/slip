@@ -5,6 +5,7 @@ import { authenticate, AuthenticatedRequest } from '../middleware/auth';
 import { scrapeUrl, ScrapedMetadata, extractPlatformTag } from '../services/scraper';
 import { scrapeQueue } from '../services/queue';
 import { cacheThumbnail, saveUploadedFile, saveUploadedImage } from '../services/thumbnail';
+import { autoTagBookmark } from '../services/aiService';
 
 const router = Router();
 
@@ -224,6 +225,22 @@ async function handleNoteCreation(req: AuthenticatedRequest, res: Response) {
     });
 
     const { bookmarkId, tagSet } = insertTransaction();
+    const finalTagSet = new Set<string>(tagSet);
+
+    // Auto-tag note with AI if user did not specify explicit tags
+    const hasCustomTags = Array.isArray(tags) ? tags.length > 0 : Boolean(tags && String(tags).trim());
+    if (!hasCustomTags) {
+      try {
+        const autoResult = await autoTagBookmark({ bookmarkId, userId, force: false });
+        if (autoResult && autoResult.tags) {
+          for (const t of autoResult.tags) {
+            finalTagSet.add(t.name);
+          }
+        }
+      } catch (aiErr) {
+        console.warn('AI auto-tag for note creation failed:', aiErr);
+      }
+    }
 
     const createdBookmark = db.prepare(`
       SELECT id, user_id, url, title, description, personal_note, content_type, 
@@ -231,7 +248,7 @@ async function handleNoteCreation(req: AuthenticatedRequest, res: Response) {
       FROM bookmarks WHERE id = ?
     `).get(bookmarkId) as any;
 
-    createdBookmark.tags = tagSet;
+    createdBookmark.tags = Array.from(finalTagSet);
 
     return res.status(201).json(createdBookmark);
   } catch (err: any) {
@@ -544,6 +561,16 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
 
     const newBookmarkId = insertTransaction();
 
+    // Auto-tag with AI if user did not provide custom tags
+    const hasCustomTags = Array.isArray(tags) ? tags.length > 0 : Boolean(tags && String(tags).trim());
+    if (!hasCustomTags) {
+      try {
+        await autoTagBookmark({ bookmarkId: newBookmarkId, userId, force: false });
+      } catch (aiErr) {
+        console.warn('AI auto-tag for bookmark creation failed:', aiErr);
+      }
+    }
+
     const createdBookmark = db.prepare(`SELECT * FROM bookmarks WHERE id = ?`).get(newBookmarkId) as any;
     const attachedTags = db.prepare(`
       SELECT t.id, t.name FROM tags t
@@ -843,7 +870,40 @@ router.post('/:id/rescrape', async (req: AuthenticatedRequest, res: Response) =>
   }
 });
 
-// 8. Global Re-scrape All User Bookmarks
+// 7.5 Auto-tag Bookmark with AI
+router.post('/:id/auto-tag', async (req: AuthenticatedRequest, res: Response) => {
+  const userId = req.user!.id;
+  const { id } = req.params;
+
+  try {
+    const db = getDb();
+    const existing = db.prepare(`SELECT * FROM bookmarks WHERE id = ? AND user_id = ?`).get(id, userId) as any;
+    if (!existing) {
+      return res.status(404).json({ message: 'Bookmark not found or unauthorized' });
+    }
+
+    const result = await autoTagBookmark({
+      bookmarkId: Number(id),
+      userId,
+      force: true
+    });
+
+    const updated = db.prepare(`SELECT * FROM bookmarks WHERE id = ?`).get(id) as any;
+    const attachedTags = db.prepare(`
+      SELECT t.id, t.name FROM tags t
+      JOIN bookmark_tags bt ON t.id = bt.tag_id
+      WHERE bt.bookmark_id = ?
+    `).all(id);
+
+    updated.tags = attachedTags;
+    res.status(200).json(updated);
+  } catch (err: any) {
+    console.error('Auto-tag bookmark error:', err);
+    res.status(500).json({ message: err.message || 'Failed to auto-tag bookmark' });
+  }
+});
+
+// 8. Global Re-scrape All User Bookmarks & AI Auto-tag Untagged Items
 router.post('/rescrape-all', async (req: AuthenticatedRequest, res: Response) => {
   const userId = req.user!.id;
   try {
@@ -857,11 +917,21 @@ router.post('/rescrape-all', async (req: AuthenticatedRequest, res: Response) =>
         AND content_type NOT IN ('note', 'document', 'image')
     `).all(userId) as any[];
 
-    if (userBookmarks.length === 0) {
-      return res.status(200).json({ message: 'No web bookmarks to rescrape', count: 0 });
+    const untaggedNotes = db.prepare(`
+      SELECT b.id, b.url, b.title, b.description, b.content_type
+      FROM bookmarks b
+      LEFT JOIN bookmark_tags bt ON b.id = bt.bookmark_id
+      LEFT JOIN tags t ON bt.tag_id = t.id AND t.name != 'note'
+      WHERE b.user_id = ? AND b.content_type = 'note'
+      GROUP BY b.id
+      HAVING COUNT(t.id) = 0
+    `).all(userId) as any[];
+
+    if (userBookmarks.length === 0 && untaggedNotes.length === 0) {
+      return res.status(200).json({ message: 'No bookmarks to sync', count: 0 });
     }
 
-    // Queue only web bookmarks into background scrapeQueue
+    // Queue web bookmarks into background scrapeQueue with auto-tagging hook
     for (const b of userBookmarks) {
       scrapeQueue.add(async () => {
         try {
@@ -909,15 +979,42 @@ router.post('/rescrape-all', async (req: AuthenticatedRequest, res: Response) =>
               INSERT OR IGNORE INTO bookmark_tags (bookmark_id, tag_id) VALUES (?, ?)
             `).run(b.id, tagRecord.id);
           }
+
+          // Hook in auto-tagging for untagged cards
+          try {
+            await autoTagBookmark({
+              bookmarkId: b.id,
+              userId,
+              force: false
+            });
+          } catch (aiErr) {
+            console.warn(`Auto-tag during sync-all failed for bookmark ${b.id}:`, aiErr);
+          }
         } catch (queueErr) {
           console.error(`Failed to rescrape bookmark ID ${b.id}:`, queueErr);
         }
       });
     }
 
+    // Queue untagged note bookmarks for AI auto-tagging
+    for (const noteBm of untaggedNotes) {
+      scrapeQueue.add(async () => {
+        try {
+          await autoTagBookmark({
+            bookmarkId: noteBm.id,
+            userId,
+            force: false
+          });
+        } catch (noteErr) {
+          console.warn(`Auto-tag note during sync-all failed for ${noteBm.id}:`, noteErr);
+        }
+      });
+    }
+
+    const totalCount = userBookmarks.length + untaggedNotes.length;
     res.status(202).json({
-      message: `Global re-scrape initiated for ${userBookmarks.length} bookmarks`,
-      count: userBookmarks.length
+      message: `Global re-scrape and auto-tag initiated for ${totalCount} items`,
+      count: totalCount
     });
   } catch (err: any) {
     console.error('Global rescrape error:', err);

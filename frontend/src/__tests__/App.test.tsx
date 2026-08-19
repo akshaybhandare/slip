@@ -27,7 +27,11 @@ vi.mock('../api', () => ({
   getAuthStatus: vi.fn(),
   updateBookmark: vi.fn(),
   rescrapeBookmark: vi.fn(),
-  rescrapeAllBookmarks: vi.fn()
+  rescrapeAllBookmarks: vi.fn(),
+  fetchAIConfig: vi.fn(),
+  saveAIConfigApi: vi.fn(),
+  testAIConnectionApi: vi.fn(),
+  disconnectAIConfigApi: vi.fn()
 }));
 
 describe('Frontend SPA Component Architecture & Mobile UI Interactions', () => {
@@ -69,6 +73,14 @@ describe('Frontend SPA Component Architecture & Mobile UI Interactions', () => {
       { id: 1, username: 'testuser', created_at: new Date().toISOString(), bookmark_count: 2 }
     ]);
     vi.mocked(api.rescrapeAllBookmarks).mockResolvedValue({ message: 'Global re-scrape initiated for 2 bookmarks', count: 2 });
+    vi.mocked(api.fetchAIConfig).mockResolvedValue({
+      isConnected: false,
+      provider: 'openai',
+      maskedApiKey: '',
+      apiUrl: '',
+      lastTestedAt: null,
+      isAdmin: true
+    });
   });
 
   it('renders navbar brand title, search input, and global sync button', async () => {

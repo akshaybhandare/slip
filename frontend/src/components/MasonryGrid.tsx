@@ -8,6 +8,7 @@ interface MasonryGridProps {
   onShare: (bookmark: Bookmark) => void;
   onEdit: (bookmark: Bookmark) => void;
   onRescrape: (id: number) => Promise<void>;
+  onAutoTag?: (id: number) => Promise<void>;
   onDelete: (id: number) => void;
   onTagClick: (tagName: string) => void;
 }
@@ -18,6 +19,7 @@ export const MasonryGrid: React.FC<MasonryGridProps> = ({
   onShare,
   onEdit,
   onRescrape,
+  onAutoTag,
   onDelete,
   onTagClick
 }) => {
@@ -58,6 +60,7 @@ export const MasonryGrid: React.FC<MasonryGridProps> = ({
               onShare={onShare}
               onEdit={onEdit}
               onRescrape={onRescrape}
+              onAutoTag={onAutoTag}
               onDelete={onDelete}
               onTagClick={onTagClick}
             />

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Bookmark as BookmarkIcon, Search, Plus, Upload, Download, LogOut, RefreshCw, X, Sun, Moon, Monitor, MoreVertical, UserPlus } from 'lucide-react';
+import { Bookmark as BookmarkIcon, Search, Plus, Upload, Download, LogOut, RefreshCw, X, Sun, Moon, Monitor, MoreVertical, UserPlus, Sparkles } from 'lucide-react';
 import { User } from '../types';
 import { ThemeMode } from '../hooks/useTheme';
 
@@ -12,6 +12,9 @@ interface NavbarProps {
   onRescrapeAllClick: () => void;
   isRescrapingAll: boolean;
   onLogoutClick: () => void;
+  onAIClick?: () => void;
+  isAIConnected?: boolean;
+  aiProviderName?: string;
   user: User | null;
   themeMode?: ThemeMode;
   onToggleTheme?: () => void;
@@ -26,6 +29,9 @@ export const Navbar: React.FC<NavbarProps> = ({
   onRescrapeAllClick,
   isRescrapingAll,
   onLogoutClick,
+  onAIClick,
+  isAIConnected = false,
+  aiProviderName,
   user,
   themeMode = 'system',
   onToggleTheme
@@ -100,6 +106,17 @@ export const Navbar: React.FC<NavbarProps> = ({
               <span className="btn-text-hide-mobile">{isRescrapingAll ? 'Syncing...' : 'Sync All'}</span>
             </button>
 
+            {onAIClick && (
+              <button
+                className="btn btn-secondary"
+                onClick={onAIClick}
+                title={isAIConnected ? `AI Connected (${aiProviderName || 'Active'})` : 'Connect your AI'}
+                aria-label="Connect AI"
+              >
+                <Sparkles size={15} style={{ color: isAIConnected ? 'var(--color-primary)' : undefined }} />
+              </button>
+            )}
+
             <button className="btn btn-secondary" onClick={onImportClick} title="Import HTML Bookmarks">
               <Upload size={15} />
             </button>
@@ -134,6 +151,19 @@ export const Navbar: React.FC<NavbarProps> = ({
 
             {isMenuOpen && (
               <div className="nav-dropdown-menu">
+                {onAIClick && (
+                  <button
+                    className="nav-dropdown-item"
+                    onClick={() => {
+                      setIsMenuOpen(false);
+                      onAIClick();
+                    }}
+                  >
+                    <Sparkles size={15} style={{ color: isAIConnected ? 'var(--color-primary)' : undefined }} />
+                    <span>{isAIConnected ? `AI (${aiProviderName || 'Active'}) · Connected ✓` : 'Connect AI'}</span>
+                  </button>
+                )}
+
                 <button
                   className="nav-dropdown-item"
                   onClick={() => {

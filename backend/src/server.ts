@@ -8,6 +8,7 @@ import authRouter from './routes/auth';
 import bookmarksRouter from './routes/bookmarks';
 import shareRouter from './routes/share';
 import ioRouter from './routes/io';
+import aiRouter from './routes/ai';
 import { CACHE_DIR, isSafeFilename } from './services/thumbnail';
 
 // Load environmental variables from the project root
@@ -45,6 +46,7 @@ app.use('/api/auth', authRouter);
 app.use('/api/bookmarks', bookmarksRouter);
 app.use('/api/share', shareRouter);
 app.use('/api/io', ioRouter);
+app.use('/api/ai', aiRouter);
 
 // Cached Thumbnail & File Serving
 app.get('/api/cache/:filename', (req, res) => {

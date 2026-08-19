@@ -250,6 +250,12 @@ export async function rescrapeBookmark(id: number): Promise<Bookmark> {
   });
 }
 
+export async function autoTagBookmark(id: number): Promise<Bookmark> {
+  return apiFetch<Bookmark>(`/bookmarks/${id}/auto-tag`, {
+    method: 'POST'
+  });
+}
+
 export async function rescrapeAllBookmarks(): Promise<{ message: string; count: number }> {
   return apiFetch<{ message: string; count: number }>('/bookmarks/rescrape-all', {
     method: 'POST'
@@ -288,3 +294,50 @@ export async function importBookmarksHtml(html: string): Promise<{ message: stri
     body: JSON.stringify({ html })
   });
 }
+
+// --- AI APIs ---
+
+export interface AIConfigResponse {
+  isConnected: boolean;
+  provider: 'openai' | 'claude' | 'gemini' | 'custom';
+  model?: string;
+  maskedApiKey: string;
+  apiUrl: string;
+  lastTestedAt: string | null;
+  isAdmin: boolean;
+}
+
+export async function fetchAIConfig(): Promise<AIConfigResponse> {
+  return apiFetch<AIConfigResponse>('/ai/config');
+}
+
+export async function testAIConnectionApi(data: {
+  provider: string;
+  apiKey?: string;
+  apiUrl?: string;
+  model?: string;
+}): Promise<{ success: boolean; message: string; latencyMs?: number }> {
+  return apiFetch<{ success: boolean; message: string; latencyMs?: number }>('/ai/test', {
+    method: 'POST',
+    body: JSON.stringify(data)
+  });
+}
+
+export async function saveAIConfigApi(data: {
+  provider: string;
+  apiKey: string;
+  apiUrl?: string;
+  model?: string;
+}): Promise<{ message: string; config: AIConfigResponse; testResult?: any }> {
+  return apiFetch<{ message: string; config: AIConfigResponse; testResult?: any }>('/ai/config', {
+    method: 'POST',
+    body: JSON.stringify(data)
+  });
+}
+
+export async function disconnectAIConfigApi(): Promise<{ message: string; config: AIConfigResponse }> {
+  return apiFetch<{ message: string; config: AIConfigResponse }>('/ai/config', {
+    method: 'DELETE'
+  });
+}
+

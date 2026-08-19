@@ -17,7 +17,8 @@ backend/data/cache/*
 !backend/data/cache/.gitkeep
 backend/data/backups/
 data/
-config/
+/config/
+!frontend/src/config/
 *.db
 *.db-shm
 *.db-wal
