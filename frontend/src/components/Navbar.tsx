@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Bookmark as BookmarkIcon, Search, Plus, Upload, Download, LogOut, RefreshCw, X, Sun, Moon, Monitor, MoreVertical, UserPlus, Sparkles, CornerDownLeft } from 'lucide-react';
+import { Bookmark as BookmarkIcon, Search, Plus, Upload, Download, LogOut, RefreshCw, X, Sun, Moon, Monitor, MoreVertical, UserPlus, Sparkles, CornerDownLeft, Paperclip } from 'lucide-react';
 import { User } from '../types';
 import { ThemeMode } from '../hooks/useTheme';
 
@@ -22,6 +22,8 @@ interface NavbarProps {
   user: User | null;
   themeMode?: ThemeMode;
   onToggleTheme?: () => void;
+  isClipsView?: boolean;
+  onToggleClipsView?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -42,7 +44,9 @@ export const Navbar: React.FC<NavbarProps> = ({
   aiProviderName,
   user,
   themeMode = 'system',
-  onToggleTheme
+  onToggleTheme,
+  isClipsView = false,
+  onToggleClipsView
 }) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -104,6 +108,18 @@ export const Navbar: React.FC<NavbarProps> = ({
 
           {/* Desktop-Only Action Buttons */}
           <div className="nav-desktop-actions">
+            {onToggleClipsView && (
+              <button
+                className={`btn btn-secondary nav-clips-toggle-btn ${isClipsView ? 'active-clips-btn' : ''}`}
+                onClick={onToggleClipsView}
+                title={isClipsView ? 'Return to Main Stream' : 'Browse Clips (Folders)'}
+                aria-label="Clips & Folders"
+              >
+                <Paperclip size={15} className="nav-paperclip-icon" />
+                <span className="btn-text-hide-mobile">{isClipsView ? 'Main Stream' : 'Clips'}</span>
+              </button>
+            )}
+
             <button
               className="btn btn-secondary"
               onClick={onRescrapeAllClick}
@@ -159,6 +175,18 @@ export const Navbar: React.FC<NavbarProps> = ({
 
             {isMenuOpen && (
               <div className="nav-dropdown-menu">
+                {onToggleClipsView && (
+                  <button
+                    className="nav-dropdown-item"
+                    onClick={() => {
+                      setIsMenuOpen(false);
+                      onToggleClipsView();
+                    }}
+                  >
+                    <Paperclip size={15} style={isClipsView ? { color: 'var(--color-primary)' } : undefined} />
+                    <span>{isClipsView ? 'Main Stream' : 'Clips (Folders)'}</span>
+                  </button>
+                )}
                 {(isAIConnected || user?.isAdmin || user?.id === 1) && onAIClick && (
                   <button
                     className="nav-dropdown-item"

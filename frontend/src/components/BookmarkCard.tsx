@@ -11,7 +11,8 @@ import {
   Image as ImageIcon,
   FileCode2,
   MoreHorizontal,
-  Sparkles
+  Sparkles,
+  Paperclip
 } from 'lucide-react';
 import { Bookmark } from '../types';
 import { renderFormattedNote, renderInlineMarkdown } from '../utils/markdown';
@@ -26,6 +27,8 @@ interface BookmarkCardProps {
   isAIConnected?: boolean;
   onDelete: (id: number) => void;
   onTagClick: (tagName: string) => void;
+  onManageClips?: (bookmark: Bookmark) => void;
+  onRemoveFromClip?: (bookmarkId: number) => void;
 }
 
 export const BookmarkCard: React.FC<BookmarkCardProps> = ({
@@ -37,7 +40,9 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
   onAutoTag,
   isAIConnected = true,
   onDelete,
-  onTagClick
+  onTagClick,
+  onManageClips,
+  onRemoveFromClip
 }) => {
   const [rescaping, setRescraping] = useState(false);
   const [autoTagging, setAutoTagging] = useState(false);
@@ -488,6 +493,32 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
                     <Edit3 size={15} />
                     <span>Edit Bookmark</span>
                   </button>
+
+                  {onManageClips && (
+                    <button
+                      className="card-dropdown-item"
+                      onClick={() => {
+                        setIsMenuOpen(false);
+                        onManageClips(bookmark);
+                      }}
+                    >
+                      <Paperclip size={15} />
+                      <span>Organize in Clip</span>
+                    </button>
+                  )}
+
+                  {onRemoveFromClip && (
+                    <button
+                      className="card-dropdown-item"
+                      onClick={() => {
+                        setIsMenuOpen(false);
+                        onRemoveFromClip(bookmark.id);
+                      }}
+                    >
+                      <Paperclip size={15} style={{ opacity: 0.6 }} />
+                      <span>Unclip from this Stack</span>
+                    </button>
+                  )}
 
                   {!isNote && (
                     <a

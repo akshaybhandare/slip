@@ -25,6 +25,7 @@
 * **🧠 Smart Scraping Engine**: Automatically extracts OpenGraph tags, JSON-LD structured schemas, article text, and falls back to full-page screenshots when anti-bot firewalls block metadata.
 * **⚡ Instant FTS5 Search**: Full-text indexing across bookmark titles, descriptions, reader text, domain names, and tags.
 * **✨ Semantic Smart Search**: Natural language conceptual search that understands conversational queries, synonyms, parent franchises, and troubleshooting intents with relevance scores and explanations.
+* **📁 Clips (Hierarchical Folders)**: Organize cards into nested collections and sub-clips (e.g. `Hobbies` > `3D Printing` > Slips). Hidden by default with zero visual intrusion into the main stream.
 * **🏷️ AI Auto-Tagging**: Intelligently assigns tags on save, re-scrape, or card menus while strictly reusing and prioritizing your existing tag vocabulary.
 * **🤖 Bring Your Own AI (BYO-AI)**: Seamlessly connect OpenAI, Anthropic Claude, Google Gemini, or local models (Ollama, Together, OpenRouter) with AES-256 encrypted database storage.
 * **🛡️ Zero-AI Disconnected Fallback**: All AI options, buttons, badges, and operations are strictly gated. When no AI provider is connected, Slip functions as classic, lightweight Slip without any AI clutter or hints.

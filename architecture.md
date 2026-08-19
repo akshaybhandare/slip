@@ -104,6 +104,21 @@ erDiagram
         TEXT name
         TEXT created_at
     }
+
+    CLIPS {
+        INTEGER id PK
+        INTEGER user_id FK
+        TEXT name
+        INTEGER parent_id FK
+        TEXT created_at
+        TEXT updated_at
+    }
+
+    CLIP_BOOKMARKS {
+        INTEGER clip_id PK,FK
+        INTEGER bookmark_id PK,FK
+        TEXT created_at
+    }
 ```
 
 ### 2.1. Table Definitions (DDL)
@@ -189,6 +204,33 @@ CREATE TABLE api_keys (
 );
 
 CREATE INDEX idx_api_keys_hash ON api_keys(token_hash);
+
+-- Clips Table (Hierarchical Folders)
+CREATE TABLE clips (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    name TEXT NOT NULL,
+    parent_id INTEGER,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now')),
+    FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY(parent_id) REFERENCES clips(id) ON DELETE CASCADE
+);
+
+CREATE INDEX idx_clips_user ON clips(user_id);
+CREATE INDEX idx_clips_parent ON clips(parent_id);
+
+-- Clip Bookmarks Association Table
+CREATE TABLE clip_bookmarks (
+    clip_id INTEGER NOT NULL,
+    bookmark_id INTEGER NOT NULL,
+    created_at TEXT DEFAULT (datetime('now')),
+    PRIMARY KEY (clip_id, bookmark_id),
+    FOREIGN KEY(clip_id) REFERENCES clips(id) ON DELETE CASCADE,
+    FOREIGN KEY(bookmark_id) REFERENCES bookmarks(id) ON DELETE CASCADE
+);
+
+CREATE INDEX idx_clip_bookmarks_bookmark ON clip_bookmarks(bookmark_id);
 
 -- Full-Text Search Virtual Table (FTS5)
 CREATE VIRTUAL TABLE bookmarks_fts USING fts5(

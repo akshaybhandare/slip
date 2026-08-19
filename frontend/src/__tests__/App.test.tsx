@@ -31,7 +31,17 @@ vi.mock('../api', () => ({
   fetchAIConfig: vi.fn(),
   saveAIConfigApi: vi.fn(),
   testAIConnectionApi: vi.fn(),
-  disconnectAIConfigApi: vi.fn()
+  disconnectAIConfigApi: vi.fn(),
+  fetchClips: vi.fn().mockResolvedValue([]),
+  fetchClip: vi.fn(),
+  createClip: vi.fn(),
+  updateClip: vi.fn(),
+  deleteClip: vi.fn(),
+  addBookmarkToClip: vi.fn(),
+  removeBookmarkFromClip: vi.fn(),
+  fetchBookmarkClips: vi.fn().mockResolvedValue([]),
+  setBookmarkClip: vi.fn().mockResolvedValue({ message: 'Success', clip: null, clips: [] }),
+  setBookmarkClips: vi.fn().mockResolvedValue({ message: 'Success', clips: [] })
 }));
 
 describe('Frontend SPA Component Architecture & Mobile UI Interactions', () => {
@@ -278,4 +288,43 @@ describe('Frontend SPA Component Architecture & Mobile UI Interactions', () => {
       });
     });
   });
+
+  it('toggles Clips view when Clips button is clicked in Navbar', async () => {
+    vi.mocked(api.fetchClips).mockResolvedValue([
+      {
+        id: 10,
+        user_id: 1,
+        name: 'Hobbies',
+        parent_id: null,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        item_count: 2,
+        subclip_count: 1
+      }
+    ]);
+
+    render(<App />);
+
+    const clipsBtn = screen.getByRole('button', { name: /Clips/i });
+    expect(clipsBtn).toBeInTheDocument();
+    fireEvent.click(clipsBtn);
+
+    await waitFor(() => {
+      expect(screen.getByText('Clip Hierarchy')).toBeInTheDocument();
+      expect(screen.getByText('All Clips (Root)')).toBeInTheDocument();
+      expect(screen.getByText('Hobbies')).toBeInTheDocument();
+      expect(localStorage.getItem('slip_clips_view')).toBe('true');
+    });
+
+    // Clicking Main Stream button returns to feed and updates persistence
+    const backBtn = screen.getByRole('button', { name: /Main Stream/i });
+    fireEvent.click(backBtn);
+
+    await waitFor(() => {
+      expect(screen.queryByText('Clip Hierarchy')).not.toBeInTheDocument();
+      expect(localStorage.getItem('slip_clips_view')).toBe('false');
+    });
+  });
 });
+
+

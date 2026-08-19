@@ -28,6 +28,8 @@ import { ImportModal } from './components/ImportModal';
 import { AuthModal } from './components/AuthModal';
 import { AddUserModal } from './components/AddUserModal';
 import { AIConnectModal } from './components/AIConnectModal';
+import { ClipsView } from './components/ClipsView';
+import { AddToClipModal } from './components/AddToClipModal';
 import { BookmarkPlus, Plus, Sparkles } from 'lucide-react';
 import { useTheme } from './hooks/useTheme';
 import { useAIConfig } from './hooks/useAIConfig';
@@ -68,7 +70,33 @@ export const App: React.FC = () => {
   const [isRescrapingAll, setIsRescrapingAll] = useState(false);
   const [needsAuth, setNeedsAuth] = useState(false);
 
-  // Modals
+  // Modals & Views
+  const [isClipsView, setIsClipsView] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('slip_clips_view') === 'true';
+    } catch {
+      return false;
+    }
+  });
+
+  const handleSetClipsView = useCallback((val: boolean) => {
+    setIsClipsView(val);
+    try {
+      localStorage.setItem('slip_clips_view', String(val));
+    } catch {}
+  }, []);
+
+  const handleToggleClipsView = useCallback(() => {
+    setIsClipsView((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem('slip_clips_view', String(next));
+      } catch {}
+      return next;
+    });
+  }, []);
+
+  const [managingClipsBookmark, setManagingClipsBookmark] = useState<Bookmark | null>(null);
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [isAddUserOpen, setIsAddUserOpen] = useState(false);
   const [isAIOpen, setIsAIOpen] = useState(false);
@@ -330,86 +358,109 @@ export const App: React.FC = () => {
         user={user}
         themeMode={themeMode}
         onToggleTheme={toggleTheme}
+        isClipsView={isClipsView}
+        onToggleClipsView={handleToggleClipsView}
       />
 
-      <FilterTabs
-        activeType={activeType}
-        onTypeChange={setActiveType}
-        tags={tags}
-        selectedTag={selectedTag}
-        onTagSelect={setSelectedTag}
-      />
-
-      {searchNotice && (
-        <div style={{
-          maxWidth: '800px',
-          margin: '0 auto 16px',
-          padding: '10px 16px',
-          borderRadius: '8px',
-          background: 'rgba(234, 179, 8, 0.12)',
-          border: '1px solid rgba(234, 179, 8, 0.35)',
-          color: 'var(--color-on-surface)',
-          fontSize: '13px',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: '12px'
-        }}>
-          <span>{searchNotice}</span>
-          <button
-            onClick={() => setSearchNotice(null)}
-            style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--color-muted)', padding: '2px 6px', fontSize: '14px' }}
-            title="Dismiss notice"
-          >
-            ✕
-          </button>
-        </div>
-      )}
-
-      {loading ? (
-        <div style={{ textAlign: 'center', padding: '4rem 0', color: 'var(--color-muted)' }}>
-          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', fontSize: '15px' }}>
-            {effectiveSmartSearch && searchQuery.trim() ? (
-              <>
-                <Sparkles size={18} className="sparkle-spin" style={{ color: 'var(--color-primary)' }} />
-                <span>{`Searching your archive with AI for "${searchQuery}"...`}</span>
-              </>
-            ) : (
-              <span>Loading your visual archive...</span>
-            )}
-          </div>
-        </div>
-      ) : bookmarks.length > 0 ? (
-        <MasonryGrid
-          bookmarks={bookmarks}
+      {isClipsView ? (
+        <ClipsView
+          onBackToFeed={() => handleSetClipsView(false)}
           onOpenReader={setReaderBookmark}
           onShare={setShareTargetBookmark}
           onEdit={setEditingBookmark}
           onRescrape={handleRescrapeBookmark}
           onAutoTag={aiConfig.isConnected ? handleAutoTagBookmark : undefined}
           isAIConnected={aiConfig.isConnected}
-          onDelete={handleDeleteBookmark}
-          onTagClick={(tagName) => setSelectedTag(tagName)}
+          onDeleteBookmark={handleDeleteBookmark}
+          onTagClick={(tagName) => {
+            setSelectedTag(tagName);
+            handleSetClipsView(false);
+          }}
+          onManageBookmarkClips={setManagingClipsBookmark}
         />
       ) : (
-        <div className="empty-state">
-          <BookmarkPlus className="empty-icon" />
-          <h3 style={{ fontSize: '20px', fontWeight: 600, marginBottom: '8px', color: 'var(--color-secondary)', letterSpacing: '-0.4px' }}>
-            {searchQuery ? 'No matching bookmarks found' : 'Your visual mind is empty'}
-          </h3>
-          <p style={{ maxWidth: '440px', margin: '0 auto 24px', fontSize: '14px', color: 'var(--color-muted)' }}>
-            {searchQuery
-              ? effectiveSmartSearch
-                ? `No semantic matches found for "${searchQuery}". Try rephrasing your description or switch to standard keyword search.`
-                : `We couldn't find any bookmarks matching "${searchQuery}". Try a different keyword.`
-              : 'Save your first article, video, design inspiration, or product link with a single click.'}
-          </p>
-          {!searchQuery && (
-            <button className="btn btn-primary" onClick={() => setIsAddOpen(true)}>
-              Save Your First Bookmark
-            </button>
+        <>
+          <FilterTabs
+            activeType={activeType}
+            onTypeChange={setActiveType}
+            tags={tags}
+            selectedTag={selectedTag}
+            onTagSelect={setSelectedTag}
+          />
+
+          {searchNotice && (
+            <div style={{
+              maxWidth: '800px',
+              margin: '0 auto 16px',
+              padding: '10px 16px',
+              borderRadius: '8px',
+              background: 'rgba(234, 179, 8, 0.12)',
+              border: '1px solid rgba(234, 179, 8, 0.35)',
+              color: 'var(--color-on-surface)',
+              fontSize: '13px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: '12px'
+            }}>
+              <span>{searchNotice}</span>
+              <button
+                onClick={() => setSearchNotice(null)}
+                style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--color-muted)', padding: '2px 6px', fontSize: '14px' }}
+                title="Dismiss notice"
+              >
+                ✕
+              </button>
+            </div>
           )}
-        </div>
+
+          {loading ? (
+            <div style={{ textAlign: 'center', padding: '4rem 0', color: 'var(--color-muted)' }}>
+              <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', fontSize: '15px' }}>
+                {effectiveSmartSearch && searchQuery.trim() ? (
+                  <>
+                    <Sparkles size={18} className="sparkle-spin" style={{ color: 'var(--color-primary)' }} />
+                    <span>{`Searching your archive with AI for "${searchQuery}"...`}</span>
+                  </>
+                ) : (
+                  <span>Loading your visual archive...</span>
+                )}
+              </div>
+            </div>
+          ) : bookmarks.length > 0 ? (
+            <MasonryGrid
+              bookmarks={bookmarks}
+              onOpenReader={setReaderBookmark}
+              onShare={setShareTargetBookmark}
+              onEdit={setEditingBookmark}
+              onRescrape={handleRescrapeBookmark}
+              onAutoTag={aiConfig.isConnected ? handleAutoTagBookmark : undefined}
+              isAIConnected={aiConfig.isConnected}
+              onDelete={handleDeleteBookmark}
+              onTagClick={(tagName) => setSelectedTag(tagName)}
+              onManageClips={setManagingClipsBookmark}
+            />
+          ) : (
+            <div className="empty-state">
+              <BookmarkPlus className="empty-icon" />
+              <h3 style={{ fontSize: '20px', fontWeight: 600, marginBottom: '8px', color: 'var(--color-secondary)', letterSpacing: '-0.4px' }}>
+                {searchQuery ? 'No matching bookmarks found' : 'Your visual mind is empty'}
+              </h3>
+              <p style={{ maxWidth: '440px', margin: '0 auto 24px', fontSize: '14px', color: 'var(--color-muted)' }}>
+                {searchQuery
+                  ? effectiveSmartSearch
+                    ? `No semantic matches found for "${searchQuery}". Try rephrasing your description or switch to standard keyword search.`
+                    : `We couldn't find any bookmarks matching "${searchQuery}". Try a different keyword.`
+                  : 'Save your first article, video, design inspiration, or product link with a single click.'}
+              </p>
+              {!searchQuery && (
+                <button className="btn btn-primary" onClick={() => setIsAddOpen(true)}>
+                  Save Your First Bookmark
+                </button>
+              )}
+            </div>
+          )}
+        </>
       )}
 
       {/* Mobile Floating Action Button (FAB) */}
@@ -450,6 +501,12 @@ export const App: React.FC = () => {
         onClose={() => setEditingBookmark(null)}
         onUpdate={handleUpdateBookmark}
         availableTags={tags}
+      />
+
+      <AddToClipModal
+        bookmark={managingClipsBookmark}
+        onClose={() => setManagingClipsBookmark(null)}
+        onSuccess={() => loadData()}
       />
 
       <ReaderModal

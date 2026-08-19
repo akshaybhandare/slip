@@ -47,3 +47,26 @@ export interface UserListItem {
   created_at: string;
   bookmark_count: number;
 }
+
+export interface Clip {
+  id: number;
+  user_id: number;
+  name: string;
+  parent_id: number | null;
+  created_at: string;
+  updated_at: string;
+  item_count?: number;
+  subclip_count?: number;
+}
+
+export interface ClipBreadcrumb {
+  id: number;
+  name: string;
+}
+
+export interface ClipDetail {
+  clip: Clip;
+  breadcrumbs: ClipBreadcrumb[];
+  subclips: Clip[];
+  bookmarks: Bookmark[];
+}

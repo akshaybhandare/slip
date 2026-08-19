@@ -1,4 +1,4 @@
-import { Bookmark, ContentType, Tag, User, UserListItem } from './types';
+import { Bookmark, ContentType, Tag, User, UserListItem, Clip, ClipDetail } from './types';
 
 const API_BASE = '/api';
 
@@ -344,4 +344,67 @@ export async function disconnectAIConfigApi(): Promise<{ message: string; config
     method: 'DELETE'
   });
 }
+
+// --- Clips (Folders) APIs ---
+
+export async function fetchClips(): Promise<Clip[]> {
+  return apiFetch<Clip[]>('/clips');
+}
+
+export async function fetchClip(id: number): Promise<ClipDetail> {
+  return apiFetch<ClipDetail>(`/clips/${id}`);
+}
+
+export async function createClip(name: string, parentId?: number | null): Promise<Clip> {
+  return apiFetch<Clip>('/clips', {
+    method: 'POST',
+    body: JSON.stringify({ name, parentId: parentId || null })
+  });
+}
+
+export async function updateClip(id: number, data: { name?: string; parentId?: number | null }): Promise<Clip> {
+  return apiFetch<Clip>(`/clips/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(data)
+  });
+}
+
+export async function deleteClip(id: number): Promise<{ message: string }> {
+  return apiFetch<{ message: string }>(`/clips/${id}`, {
+    method: 'DELETE'
+  });
+}
+
+export async function addBookmarkToClip(clipId: number, bookmarkId: number): Promise<{ message: string }> {
+  return apiFetch<{ message: string }>(`/clips/${clipId}/bookmarks`, {
+    method: 'POST',
+    body: JSON.stringify({ bookmarkId })
+  });
+}
+
+export async function removeBookmarkFromClip(clipId: number, bookmarkId: number): Promise<{ message: string }> {
+  return apiFetch<{ message: string }>(`/clips/${clipId}/bookmarks/${bookmarkId}`, {
+    method: 'DELETE'
+  });
+}
+
+export async function fetchBookmarkClips(bookmarkId: number): Promise<Clip[]> {
+  return apiFetch<Clip[]>(`/clips/bookmark/${bookmarkId}`);
+}
+
+export async function setBookmarkClip(bookmarkId: number, clipId: number | null): Promise<{ message: string; clip: Clip | null; clips: Clip[] }> {
+  return apiFetch<{ message: string; clip: Clip | null; clips: Clip[] }>(`/clips/bookmark/${bookmarkId}`, {
+    method: 'PUT',
+    body: JSON.stringify({ clipId })
+  });
+}
+
+export async function setBookmarkClips(bookmarkId: number, clipIds: number[]): Promise<{ message: string; clips: Clip[] }> {
+  return apiFetch<{ message: string; clips: Clip[] }>(`/clips/bookmark/${bookmarkId}`, {
+    method: 'PUT',
+    body: JSON.stringify({ clipIds })
+  });
+}
+
+
 

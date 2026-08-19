@@ -12,6 +12,8 @@ interface MasonryGridProps {
   isAIConnected?: boolean;
   onDelete: (id: number) => void;
   onTagClick: (tagName: string) => void;
+  onManageClips?: (bookmark: Bookmark) => void;
+  onRemoveFromClip?: (bookmarkId: number) => void;
 }
 
 export const MasonryGrid: React.FC<MasonryGridProps> = ({
@@ -23,7 +25,9 @@ export const MasonryGrid: React.FC<MasonryGridProps> = ({
   onAutoTag,
   isAIConnected,
   onDelete,
-  onTagClick
+  onTagClick,
+  onManageClips,
+  onRemoveFromClip
 }) => {
   const [columnCount, setColumnCount] = useState(2);
 
@@ -66,6 +70,8 @@ export const MasonryGrid: React.FC<MasonryGridProps> = ({
               isAIConnected={isAIConnected}
               onDelete={onDelete}
               onTagClick={onTagClick}
+              onManageClips={onManageClips}
+              onRemoveFromClip={onRemoveFromClip}
             />
           ))}
         </div>
