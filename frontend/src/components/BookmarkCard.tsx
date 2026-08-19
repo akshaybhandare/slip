@@ -23,6 +23,7 @@ interface BookmarkCardProps {
   onEdit: (bookmark: Bookmark) => void;
   onRescrape: (id: number) => Promise<void>;
   onAutoTag?: (id: number) => Promise<void>;
+  isAIConnected?: boolean;
   onDelete: (id: number) => void;
   onTagClick: (tagName: string) => void;
 }
@@ -34,6 +35,7 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
   onEdit,
   onRescrape,
   onAutoTag,
+  isAIConnected = true,
   onDelete,
   onTagClick
 }) => {
@@ -116,7 +118,7 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
 
   return (
     <article className={`bookmark-card ${isNote ? 'note-bookmark-card' : ''} ${isDocument ? 'doc-bookmark-card' : ''} ${isMenuOpen ? 'menu-active' : ''} ${autoTagging ? 'is-auto-tagging' : ''}`}>
-      {autoTagging && (
+      {isAIConnected && autoTagging && (
         <div className="card-ai-progress-bar" title="AI Auto-tagging in progress...">
           <div className="card-ai-progress-pulse" />
         </div>
@@ -261,7 +263,7 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
 
       <div className="card-content">
         {/* AI Semantic Match Indicator */}
-        {bookmark.matchReason && (
+        {isAIConnected && bookmark.matchReason && (
           <div
             className={`card-ai-match-badge ${isMatchReasonExpanded ? 'ai-match-expanded' : ''}`}
             title={`Semantic Relevance: ${bookmark.matchScore || 0}%\nClick to toggle full explanation`}
@@ -420,7 +422,7 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
                 +{bookmark.tags.length - 3}
               </span>
             )}
-            {autoTagging && (
+            {isAIConnected && autoTagging && (
               <span className="tag-pill tag-pill-ai-loading">
                 <Sparkles size={11} className="spin-animation" />
                 <span>Auto-tagging...</span>
@@ -514,7 +516,7 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
                     </button>
                   )}
 
-                  {onAutoTag && !isDocument && !isLocalImage && (
+                  {isAIConnected && onAutoTag && !isDocument && !isLocalImage && (
                     <button
                       className="card-dropdown-item"
                       onClick={() => {

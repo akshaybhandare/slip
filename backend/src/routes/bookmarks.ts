@@ -1046,24 +1046,30 @@ router.post('/rescrape-all', async (req: AuthenticatedRequest, res: Response) =>
       });
     }
 
-    // Queue untagged note bookmarks for AI auto-tagging
-    for (const noteBm of untaggedNotes) {
-      scrapeQueue.add(async () => {
-        try {
-          await autoTagBookmark({
-            bookmarkId: noteBm.id,
-            userId,
-            force: false
-          });
-        } catch (noteErr) {
-          console.warn(`Auto-tag note during sync-all failed for ${noteBm.id}:`, noteErr);
-        }
-      });
+    const aiConfig = getActiveAIConfig();
+
+    // Queue untagged note bookmarks for AI auto-tagging only if AI is connected
+    if (aiConfig) {
+      for (const noteBm of untaggedNotes) {
+        scrapeQueue.add(async () => {
+          try {
+            await autoTagBookmark({
+              bookmarkId: noteBm.id,
+              userId,
+              force: false
+            });
+          } catch (noteErr) {
+            console.warn(`Auto-tag note during sync-all failed for ${noteBm.id}:`, noteErr);
+          }
+        });
+      }
     }
 
-    const totalCount = userBookmarks.length + untaggedNotes.length;
+    const totalCount = userBookmarks.length + (aiConfig ? untaggedNotes.length : 0);
     res.status(202).json({
-      message: `Global re-scrape and auto-tag initiated for ${totalCount} items`,
+      message: aiConfig
+        ? `Global re-scrape and auto-tag initiated for ${totalCount} items`
+        : `Global re-scrape initiated for ${totalCount} items`,
       count: totalCount
     });
   } catch (err: any) {

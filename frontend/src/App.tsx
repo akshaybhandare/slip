@@ -54,6 +54,15 @@ export const App: React.FC = () => {
       return false;
     }
   });
+
+  const effectiveSmartSearch = Boolean(aiConfig.isConnected && isSmartSearch);
+
+  useEffect(() => {
+    if (!aiConfig.isConnected) {
+      setIsSmartSearch(false);
+    }
+  }, [aiConfig.isConnected]);
+
   const [searchNotice, setSearchNotice] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [isRescrapingAll, setIsRescrapingAll] = useState(false);
@@ -70,8 +79,7 @@ export const App: React.FC = () => {
   const [editingBookmark, setEditingBookmark] = useState<Bookmark | null>(null);
 
   const handleToggleSmartSearch = useCallback(() => {
-    if (!aiConfig.isConnected && !isSmartSearch) {
-      setIsAIOpen(true);
+    if (!aiConfig.isConnected) {
       return;
     }
     setIsSmartSearch((prev) => {
@@ -81,7 +89,7 @@ export const App: React.FC = () => {
       } catch {}
       return next;
     });
-  }, [aiConfig.isConnected, isSmartSearch]);
+  }, [aiConfig.isConnected]);
 
   // Drag and drop setup
   useEffect(() => {
@@ -129,18 +137,13 @@ export const App: React.FC = () => {
     if (needsAuth) return;
 
     const targetQuery = typeof queryOverride === 'string' ? queryOverride : searchQuery;
-    const targetSmart = typeof smartOverride === 'boolean' ? smartOverride : isSmartSearch;
+    const targetSmart = aiConfig.isConnected && (typeof smartOverride === 'boolean' ? smartOverride : isSmartSearch);
     const cleanQ = targetQuery.trim();
 
     setLoading(true);
     try {
       if (cleanQ.length > 0) {
         if (targetSmart) {
-          if (!aiConfig.isConnected) {
-            setIsAIOpen(true);
-            setLoading(false);
-            return;
-          }
           try {
             setSearchNotice(null);
             const searchResults = await smartSearchBookmarks(cleanQ);
@@ -178,7 +181,7 @@ export const App: React.FC = () => {
 
   // Handle live search vs enter-to-search
   useEffect(() => {
-    if (isSmartSearch) {
+    if (effectiveSmartSearch) {
       // In Smart Search mode: If user clears the input, reset list immediately
       if (searchQuery.trim() === '') {
         loadData('', false);
@@ -193,11 +196,11 @@ export const App: React.FC = () => {
     }, 250);
 
     return () => clearTimeout(debounceTimer);
-  }, [searchQuery, isSmartSearch, loadData]);
+  }, [searchQuery, effectiveSmartSearch, loadData]);
 
   const handleSearchSubmit = useCallback(() => {
-    loadData(searchQuery, isSmartSearch);
-  }, [searchQuery, isSmartSearch, loadData]);
+    loadData(searchQuery, effectiveSmartSearch);
+  }, [searchQuery, effectiveSmartSearch, loadData]);
 
   const handleAuthSuccess = (loggedUser: User) => {
     setUser(loggedUser);
@@ -313,7 +316,7 @@ export const App: React.FC = () => {
         onSearchChange={setSearchQuery}
         onSearchSubmit={handleSearchSubmit}
         isSearching={loading}
-        isSmartSearch={isSmartSearch}
+        isSmartSearch={effectiveSmartSearch}
         onToggleSmartSearch={handleToggleSmartSearch}
         onAddClick={() => setIsAddOpen(true)}
         onAddUserClick={() => setIsAddUserOpen(true)}
@@ -366,12 +369,14 @@ export const App: React.FC = () => {
       {loading ? (
         <div style={{ textAlign: 'center', padding: '4rem 0', color: 'var(--color-muted)' }}>
           <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', fontSize: '15px' }}>
-            <Sparkles size={18} className="sparkle-spin" style={{ color: 'var(--color-primary)' }} />
-            <span>
-              {isSmartSearch && searchQuery.trim()
-                ? `Searching your archive with AI for "${searchQuery}"...`
-                : 'Loading your visual archive...'}
-            </span>
+            {effectiveSmartSearch && searchQuery.trim() ? (
+              <>
+                <Sparkles size={18} className="sparkle-spin" style={{ color: 'var(--color-primary)' }} />
+                <span>{`Searching your archive with AI for "${searchQuery}"...`}</span>
+              </>
+            ) : (
+              <span>Loading your visual archive...</span>
+            )}
           </div>
         </div>
       ) : bookmarks.length > 0 ? (
@@ -381,7 +386,8 @@ export const App: React.FC = () => {
           onShare={setShareTargetBookmark}
           onEdit={setEditingBookmark}
           onRescrape={handleRescrapeBookmark}
-          onAutoTag={handleAutoTagBookmark}
+          onAutoTag={aiConfig.isConnected ? handleAutoTagBookmark : undefined}
+          isAIConnected={aiConfig.isConnected}
           onDelete={handleDeleteBookmark}
           onTagClick={(tagName) => setSelectedTag(tagName)}
         />
@@ -393,7 +399,7 @@ export const App: React.FC = () => {
           </h3>
           <p style={{ maxWidth: '440px', margin: '0 auto 24px', fontSize: '14px', color: 'var(--color-muted)' }}>
             {searchQuery
-              ? isSmartSearch
+              ? effectiveSmartSearch
                 ? `No semantic matches found for "${searchQuery}". Try rephrasing your description or switch to standard keyword search.`
                 : `We couldn't find any bookmarks matching "${searchQuery}". Try a different keyword.`
               : 'Save your first article, video, design inspiration, or product link with a single click.'}

@@ -371,7 +371,7 @@ describe('Navbar and App AI Integration', () => {
   it('renders AI button in desktop toolbar and opens modal on click', async () => {
     render(<App />);
 
-    const aiButton = screen.getByRole('button', { name: /Connect AI/i });
+    const aiButton = await waitFor(() => screen.getByRole('button', { name: /Connect AI/i }));
     expect(aiButton).toBeInTheDocument();
 
     fireEvent.click(aiButton);
@@ -572,5 +572,90 @@ describe('AI Smart Search UI & Interactions', () => {
     // Click again to collapse
     fireEvent.click(badge!);
     expect(badge).not.toHaveClass('ai-match-expanded');
+  });
+
+  it('hides Smart Search toggle button and enter search button when AI is disconnected', async () => {
+    const { Navbar } = await import('../components/Navbar');
+
+    render(
+      <Navbar
+        searchQuery="testing search"
+        onSearchChange={vi.fn()}
+        onSearchSubmit={vi.fn()}
+        isSmartSearch={false}
+        onToggleSmartSearch={vi.fn()}
+        onAddClick={vi.fn()}
+        onImportClick={vi.fn()}
+        onRescrapeAllClick={vi.fn()}
+        isRescrapingAll={false}
+        onLogoutClick={vi.fn()}
+        isAIConnected={false}
+        user={{ id: 1, username: 'admin' }}
+      />
+    );
+
+    // Smart search toggle button must NOT exist
+    expect(screen.queryByRole('button', { name: /Toggle Smart Search/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Search with AI/i })).not.toBeInTheDocument();
+    expect(screen.getByPlaceholderText('Search your archive & tags...')).toBeInTheDocument();
+  });
+
+  it('hides "Auto-tag with AI" option in BookmarkCard dropdown menu when isAIConnected is false', async () => {
+    const mockBookmark = {
+      id: 50,
+      user_id: 1,
+      url: 'https://example.com/item',
+      title: 'Sample Item',
+      description: 'Sample description',
+      content_type: 'website' as const,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      tags: []
+    };
+
+    const { BookmarkCard } = await import('../components/BookmarkCard');
+
+    render(
+      <BookmarkCard
+        bookmark={mockBookmark}
+        onOpenReader={vi.fn()}
+        onShare={vi.fn()}
+        onEdit={vi.fn()}
+        onRescrape={vi.fn()}
+        onAutoTag={vi.fn()}
+        isAIConnected={false}
+        onDelete={vi.fn()}
+        onTagClick={vi.fn()}
+      />
+    );
+
+    const moreBtn = screen.getByRole('button', { name: /More actions/i });
+    fireEvent.click(moreBtn);
+
+    // Auto-tag with AI should NOT be in the document
+    expect(screen.queryByText(/Auto-tag with AI/i)).not.toBeInTheDocument();
+  });
+
+  it('hides AI button for non-admin users when AI is not connected', async () => {
+    const { Navbar } = await import('../components/Navbar');
+
+    render(
+      <Navbar
+        searchQuery=""
+        onSearchChange={vi.fn()}
+        onAddClick={vi.fn()}
+        onImportClick={vi.fn()}
+        onRescrapeAllClick={vi.fn()}
+        isRescrapingAll={false}
+        onLogoutClick={vi.fn()}
+        onAIClick={vi.fn()}
+        isAIConnected={false}
+        user={{ id: 2, username: 'regularuser', isAdmin: false }}
+      />
+    );
+
+    // Regular user must NOT see AI buttons
+    expect(screen.queryByRole('button', { name: /Connect AI/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /AI Connected/i })).not.toBeInTheDocument();
   });
 });

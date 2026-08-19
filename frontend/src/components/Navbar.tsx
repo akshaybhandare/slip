@@ -114,7 +114,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               <span className="btn-text-hide-mobile">{isRescrapingAll ? 'Syncing...' : 'Sync All'}</span>
             </button>
 
-            {onAIClick && (
+            {(isAIConnected || user?.isAdmin || user?.id === 1) && onAIClick && (
               <button
                 className="btn btn-secondary"
                 onClick={onAIClick}
@@ -159,7 +159,7 @@ export const Navbar: React.FC<NavbarProps> = ({
 
             {isMenuOpen && (
               <div className="nav-dropdown-menu">
-                {onAIClick && (
+                {(isAIConnected || user?.isAdmin || user?.id === 1) && onAIClick && (
                   <button
                     className="nav-dropdown-item"
                     onClick={() => {
@@ -239,12 +239,12 @@ export const Navbar: React.FC<NavbarProps> = ({
         </div>
       </div>
 
-      <div className={`search-wrapper ${isSmartSearch ? 'smart-search-mode' : ''}`}>
+      <div className={`search-wrapper ${isAIConnected && isSmartSearch ? 'smart-search-mode' : ''}`}>
         <Search
-          className={`search-icon ${isSmartSearch && searchQuery ? 'search-icon-clickable' : ''}`}
+          className={`search-icon ${isAIConnected && isSmartSearch && searchQuery ? 'search-icon-clickable' : ''}`}
           size={17}
           onClick={() => {
-            if (isSmartSearch && onSearchSubmit) {
+            if (isAIConnected && isSmartSearch && onSearchSubmit) {
               onSearchSubmit();
             }
           }}
@@ -253,7 +253,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           type="text"
           className="search-input"
           placeholder={
-            isSmartSearch
+            isAIConnected && isSmartSearch
               ? "Describe what you're looking for (press Enter to search)..."
               : "Search your archive & tags..."
           }
@@ -276,7 +276,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             <X size={14} />
           </button>
         )}
-        {isSmartSearch && searchQuery.trim() && onSearchSubmit && (
+        {isAIConnected && isSmartSearch && searchQuery.trim() && onSearchSubmit && (
           <button
             type="button"
             className={`search-enter-btn ${isSearching ? 'loading' : ''}`}
@@ -293,17 +293,15 @@ export const Navbar: React.FC<NavbarProps> = ({
             <span className="search-enter-text">{isSearching ? 'Thinking...' : 'Search'}</span>
           </button>
         )}
-        {onToggleSmartSearch && (
+        {isAIConnected && onToggleSmartSearch && (
           <button
             type="button"
             className={`search-smart-btn ${isSmartSearch ? 'active' : ''}`}
             onClick={onToggleSmartSearch}
             title={
-              isAIConnected
-                ? isSmartSearch
-                  ? "Smart Search (AI Semantic Matching) is ON — Click for standard search"
-                  : "Smart Search (AI Semantic Matching) is OFF — Click to enable"
-                : "Connect AI in settings to enable Smart Search"
+              isSmartSearch
+                ? "Smart Search (AI Semantic Matching) is ON — Click for standard search"
+                : "Smart Search (AI Semantic Matching) is OFF — Click to enable"
             }
             aria-label="Toggle Smart Search"
           >
