@@ -56,6 +56,8 @@ export function initDb(dbPath = getDbPath()): Database.Database {
       raw_text TEXT,
       image_path TEXT,
       favicon_path TEXT,
+      is_pinned INTEGER DEFAULT 0,
+      pinned_at TEXT,
       created_at TEXT DEFAULT (datetime('now')),
       updated_at TEXT DEFAULT (datetime('now')),
       FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
@@ -161,6 +163,21 @@ export function initDb(dbPath = getDbPath()): Database.Database {
     db.exec(`ALTER TABLE bookmarks ADD COLUMN personal_note TEXT;`);
   } catch {
     // Column already present
+  }
+  try {
+    db.exec(`ALTER TABLE bookmarks ADD COLUMN is_pinned INTEGER DEFAULT 0;`);
+  } catch {
+    // Column already present
+  }
+  try {
+    db.exec(`ALTER TABLE bookmarks ADD COLUMN pinned_at TEXT;`);
+  } catch {
+    // Column already present
+  }
+  try {
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_bookmarks_pinned ON bookmarks(user_id, is_pinned);`);
+  } catch {
+    // Index already present
   }
 
   // Setup FTS5 virtual table

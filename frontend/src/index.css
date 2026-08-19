@@ -3382,3 +3382,244 @@ body {
   }
 }
 
+/* ==========================================================================
+   Refined Architectural Pin & Pinned Slips System
+   ========================================================================== */
+
+/* Pinned Card Styling */
+.bookmark-card.is-pinned-card {
+  border-color: rgba(228, 43, 12, 0.28);
+  box-shadow: 0 4px 20px -2px rgba(228, 43, 12, 0.08), 0 1px 3px rgba(0, 0, 0, 0.03);
+  position: relative;
+}
+
+.bookmark-card.is-pinned-card::before {
+  content: '';
+  position: absolute;
+  top: -1px;
+  left: 20px;
+  right: 20px;
+  height: 2.5px;
+  background: linear-gradient(90deg, transparent 0%, var(--color-primary) 25%, var(--color-primary) 75%, transparent 100%);
+  border-radius: 2px;
+  z-index: 15;
+  pointer-events: none;
+}
+
+.bookmark-card.is-pinned-card:hover {
+  border-color: rgba(228, 43, 12, 0.5);
+  box-shadow: 0 8px 28px -2px rgba(228, 43, 12, 0.14), 0 2px 6px rgba(0, 0, 0, 0.05);
+}
+
+[data-theme="dark"] .bookmark-card.is-pinned-card {
+  border-color: rgba(228, 43, 12, 0.4);
+  box-shadow: 0 4px 24px -2px rgba(228, 43, 12, 0.18), 0 2px 8px rgba(0, 0, 0, 0.4);
+}
+
+[data-theme="dark"] .bookmark-card.is-pinned-card:hover {
+  border-color: rgba(228, 43, 12, 0.65);
+  box-shadow: 0 8px 32px -2px rgba(228, 43, 12, 0.28), 0 3px 12px rgba(0, 0, 0, 0.55);
+}
+
+/* Elegant Floating Pin Button / Jewel Badge */
+.slip-pushpin-btn,
+.slip-pin-btn {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 25;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  border-radius: 9999px;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  cursor: pointer;
+  outline: none;
+  user-select: none;
+  font-family: inherit;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Unpinned State - Minimalist floating glass pill */
+.slip-pushpin-btn.is-unpinned,
+.slip-pin-btn.is-unpinned {
+  opacity: 0;
+  transform: translateY(-2px) scale(0.92);
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  background: rgba(255, 255, 255, 0.82);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  color: var(--color-muted);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+.bookmark-card:hover .slip-pushpin-btn.is-unpinned,
+.bookmark-card:hover .slip-pin-btn.is-unpinned {
+  opacity: 0.85;
+  transform: translateY(0) scale(1);
+}
+
+.slip-pushpin-btn.is-unpinned:hover,
+.slip-pin-btn.is-unpinned:hover {
+  opacity: 1;
+  background: #ffffff;
+  border-color: rgba(228, 43, 12, 0.4);
+  color: var(--color-primary);
+  transform: scale(1.08);
+  box-shadow: 0 4px 14px rgba(228, 43, 12, 0.18);
+}
+
+[data-theme="dark"] .slip-pushpin-btn.is-unpinned,
+[data-theme="dark"] .slip-pin-btn.is-unpinned {
+  background: rgba(24, 25, 30, 0.82);
+  border-color: rgba(255, 255, 255, 0.12);
+  color: #94a3b8;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+}
+
+[data-theme="dark"] .slip-pushpin-btn.is-unpinned:hover,
+[data-theme="dark"] .slip-pin-btn.is-unpinned:hover {
+  background: #252830;
+  border-color: rgba(228, 43, 12, 0.55);
+  color: #ff6042;
+  box-shadow: 0 4px 16px rgba(228, 43, 12, 0.28);
+}
+
+/* Pinned State - Refined Editorial Jewel Badge */
+.slip-pushpin-btn.is-pinned,
+.slip-pin-btn.is-pinned {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  height: 27px;
+  padding: 0 9px 0 7px;
+  background: rgba(255, 255, 255, 0.94);
+  border: 1px solid rgba(228, 43, 12, 0.3);
+  color: var(--color-primary);
+  box-shadow: 0 2px 10px rgba(228, 43, 12, 0.12), 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+.slip-pushpin-btn.is-pinned:hover,
+.slip-pin-btn.is-pinned:hover {
+  background: #ffffff;
+  border-color: var(--color-primary);
+  transform: scale(1.05);
+  box-shadow: 0 4px 16px rgba(228, 43, 12, 0.22);
+}
+
+[data-theme="dark"] .slip-pushpin-btn.is-pinned,
+[data-theme="dark"] .slip-pin-btn.is-pinned {
+  background: rgba(30, 22, 22, 0.92);
+  border-color: rgba(228, 43, 12, 0.45);
+  color: #ff6042;
+  box-shadow: 0 2px 12px rgba(228, 43, 12, 0.22);
+}
+
+[data-theme="dark"] .slip-pushpin-btn.is-pinned:hover,
+[data-theme="dark"] .slip-pin-btn.is-pinned:hover {
+  background: rgba(38, 25, 25, 0.96);
+  border-color: #ff6042;
+  box-shadow: 0 4px 18px rgba(228, 43, 12, 0.35);
+}
+
+/* SVG Pin Icon Styles */
+.slip-pin-svg,
+.slip-pushpin-svg {
+  display: block;
+  flex-shrink: 0;
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.slip-pushpin-btn.is-unpinned:hover .slip-pin-svg,
+.slip-pin-btn.is-unpinned:hover .slip-pin-svg {
+  transform: rotate(-10deg) scale(1.08);
+}
+
+.slip-pushpin-btn.is-pinned:hover .slip-pin-svg,
+.slip-pin-btn.is-pinned:hover .slip-pin-svg {
+  transform: scale(1.08);
+}
+
+/* Micro-Badge Typography */
+.slip-pin-label,
+.slip-pinned-indicator {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: inherit;
+  line-height: 1;
+}
+
+/* Micro-snap animation on pin click */
+@keyframes elegant-pin-snap {
+  0% {
+    transform: scale(0.9);
+  }
+  50% {
+    transform: scale(1.12);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.slip-pushpin-btn.is-pinning,
+.slip-pin-btn.is-pinning {
+  animation: elegant-pin-snap 0.26s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Pinned Slips Feed Bar */
+.pinned-slips-bar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  margin: 0 auto 16px;
+  max-width: 1440px;
+}
+
+.pinned-slips-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 12px;
+  border-radius: 9999px;
+  background: rgba(228, 43, 12, 0.06);
+  border: 1px solid rgba(228, 43, 12, 0.2);
+  color: var(--color-secondary);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
+  transition: all 0.2s ease;
+}
+
+.pinned-slips-chip:hover {
+  background: rgba(228, 43, 12, 0.1);
+  border-color: rgba(228, 43, 12, 0.32);
+}
+
+[data-theme="dark"] .pinned-slips-chip {
+  background: rgba(228, 43, 12, 0.12);
+  border-color: rgba(228, 43, 12, 0.32);
+  color: var(--color-on-surface);
+}
+
+.pinned-chip-text {
+  font-weight: 500;
+}
+
+/* Touch devices accessibility */
+@media (hover: none) {
+  .slip-pushpin-btn.is-unpinned,
+  .slip-pin-btn.is-unpinned {
+    opacity: 0.7;
+    transform: translateY(0) scale(1);
+  }
+}
+

@@ -32,6 +32,8 @@ vi.mock('../api', () => ({
   saveAIConfigApi: vi.fn(),
   testAIConnectionApi: vi.fn(),
   disconnectAIConfigApi: vi.fn(),
+  fetchPinConfig: vi.fn().mockResolvedValue({ maxPinnedSlips: 5 }),
+  togglePinBookmark: vi.fn(),
   fetchClips: vi.fn().mockResolvedValue([]),
   fetchClip: vi.fn(),
   createClip: vi.fn(),
@@ -71,10 +73,12 @@ describe('Frontend SPA Component Architecture & Mobile UI Interactions', () => {
   ];
 
   beforeEach(() => {
+    localStorage.clear();
     vi.clearAllMocks();
     vi.mocked(api.getMe).mockResolvedValue({ user: { id: 1, username: 'testuser', isAdmin: true } });
     vi.mocked(api.getAuthStatus).mockResolvedValue({ initialized: true });
     vi.mocked(api.fetchBookmarks).mockResolvedValue(mockBookmarks);
+    vi.mocked(api.fetchPinConfig).mockResolvedValue({ maxPinnedSlips: 5 });
     vi.mocked(api.fetchTags).mockResolvedValue([
       { id: 1, name: 'database', count: 1 },
       { id: 2, name: 'react', count: 1 }
@@ -317,12 +321,128 @@ describe('Frontend SPA Component Architecture & Mobile UI Interactions', () => {
     });
 
     // Clicking Main Stream button returns to feed and updates persistence
-    const backBtn = screen.getByRole('button', { name: /Main Stream/i });
+    const backBtn = screen.getByRole('button', { name: /Clips & Folders/i });
     fireEvent.click(backBtn);
 
     await waitFor(() => {
       expect(screen.queryByText('Clip Hierarchy')).not.toBeInTheDocument();
       expect(localStorage.getItem('slip_clips_view')).toBe('false');
+    });
+  });
+
+  it('renders tactile pushpin on bookmark cards and toggles pin status on click', async () => {
+    const mockPins: Bookmark[] = [
+      {
+        id: 101,
+        user_id: 1,
+        url: 'https://example.com/pinned-item',
+        title: 'Important Pinned Architecture Memo',
+        description: 'Key system diagram',
+        content_type: 'website',
+        is_pinned: true,
+        pinned_at: new Date().toISOString(),
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        tags: []
+      },
+      {
+        id: 102,
+        user_id: 1,
+        url: 'https://example.com/unpinned-item',
+        title: 'Regular Unpinned Article',
+        description: 'Just a regular read',
+        content_type: 'website',
+        is_pinned: false,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        tags: []
+      }
+    ];
+
+    vi.mocked(api.fetchBookmarks).mockResolvedValue(mockPins);
+    vi.mocked(api.fetchPinConfig).mockResolvedValue({ maxPinnedSlips: 5 });
+    vi.mocked(api.togglePinBookmark).mockResolvedValue({
+      ...mockPins[1],
+      is_pinned: true,
+      pinned_at: new Date().toISOString()
+    });
+
+    render(<App />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Important Pinned Architecture Memo')).toBeInTheDocument();
+      expect(screen.getByText('Regular Unpinned Article')).toBeInTheDocument();
+      expect(screen.getByText(/1 of 5 slips pinned to top/i)).toBeInTheDocument();
+    });
+
+    // Check pushpin button for unpinned article
+    const unpinnedBtn = screen.getByRole('button', { name: 'Pin slip to top' });
+    expect(unpinnedBtn).toBeInTheDocument();
+
+    fireEvent.click(unpinnedBtn);
+
+    await waitFor(() => {
+      expect(api.togglePinBookmark).toHaveBeenCalledWith(102);
+    });
+  });
+
+  it('displays notice when attempting to pin beyond maxPinnedSlips limit', async () => {
+    const mockPinnedList: Bookmark[] = [
+      {
+        id: 201,
+        user_id: 1,
+        url: 'https://example.com/p1',
+        title: 'Pinned Item 1',
+        description: 'First pinned item',
+        content_type: 'website',
+        is_pinned: true,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        tags: []
+      },
+      {
+        id: 202,
+        user_id: 1,
+        url: 'https://example.com/p2',
+        title: 'Pinned Item 2',
+        description: 'Second pinned item',
+        content_type: 'website',
+        is_pinned: true,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        tags: []
+      },
+      {
+        id: 203,
+        user_id: 1,
+        url: 'https://example.com/p3',
+        title: 'Unpinned Item 3',
+        description: 'Third unpinned item',
+        content_type: 'website',
+        is_pinned: false,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        tags: []
+      }
+    ];
+
+    vi.mocked(api.fetchBookmarks).mockResolvedValue(mockPinnedList);
+    vi.mocked(api.fetchPinConfig).mockResolvedValue({ maxPinnedSlips: 2 });
+
+    render(<App />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Pinned Item 1')).toBeInTheDocument();
+      expect(screen.getByText('Unpinned Item 3')).toBeInTheDocument();
+      expect(screen.getByText(/2 of 2 slips pinned to top/i)).toBeInTheDocument();
+    });
+
+    const unpinBtn = screen.getByRole('button', { name: 'Pin slip to top' });
+    fireEvent.click(unpinBtn);
+
+    await waitFor(() => {
+      expect(screen.getByText(/Pinboard full! You can pin up to 2 slips at once/i)).toBeInTheDocument();
+      expect(api.togglePinBookmark).not.toHaveBeenCalled();
     });
   });
 });

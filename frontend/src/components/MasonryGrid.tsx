@@ -9,6 +9,7 @@ interface MasonryGridProps {
   onEdit: (bookmark: Bookmark) => void;
   onRescrape: (id: number) => Promise<void>;
   onAutoTag?: (id: number) => Promise<void>;
+  onTogglePin?: (id: number) => Promise<void>;
   isAIConnected?: boolean;
   onDelete: (id: number) => void;
   onTagClick: (tagName: string) => void;
@@ -23,6 +24,7 @@ export const MasonryGrid: React.FC<MasonryGridProps> = ({
   onEdit,
   onRescrape,
   onAutoTag,
+  onTogglePin,
   isAIConnected,
   onDelete,
   onTagClick,
@@ -67,6 +69,7 @@ export const MasonryGrid: React.FC<MasonryGridProps> = ({
               onEdit={onEdit}
               onRescrape={onRescrape}
               onAutoTag={onAutoTag}
+              onTogglePin={onTogglePin}
               isAIConnected={isAIConnected}
               onDelete={onDelete}
               onTagClick={onTagClick}

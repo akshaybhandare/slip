@@ -14,12 +14,15 @@ import {
   rescrapeBookmark,
   autoTagBookmark,
   rescrapeAllBookmarks,
+  fetchPinConfig,
+  togglePinBookmark,
   logoutUser,
   getMe
 } from './api';
 import { Navbar } from './components/Navbar';
 import { FilterTabs } from './components/FilterTabs';
 import { MasonryGrid } from './components/MasonryGrid';
+import { SlipPinIcon } from './components/BookmarkCard';
 import { AddBookmarkModal } from './components/AddBookmarkModal';
 import { EditBookmarkModal } from './components/EditBookmarkModal';
 import { ReaderModal } from './components/ReaderModal';
@@ -65,10 +68,23 @@ export const App: React.FC = () => {
     }
   }, [aiConfig.isConnected]);
 
+  const [maxPinnedSlips, setMaxPinnedSlips] = useState<number>(5);
+
   const [searchNotice, setSearchNotice] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [isRescrapingAll, setIsRescrapingAll] = useState(false);
   const [needsAuth, setNeedsAuth] = useState(false);
+
+  // Load pin config on mount
+  useEffect(() => {
+    fetchPinConfig()
+      .then((cfg) => {
+        if (cfg && typeof cfg.maxPinnedSlips === 'number') {
+          setMaxPinnedSlips(cfg.maxPinnedSlips);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   // Modals & Views
   const [isClipsView, setIsClipsView] = useState<boolean>(() => {
@@ -324,6 +340,41 @@ export const App: React.FC = () => {
     }
   };
 
+  const pinnedCount = bookmarks.filter((b) => Boolean(b.is_pinned)).length;
+
+  const handleTogglePin = async (id: number) => {
+    const targetBookmark = bookmarks.find((b) => b.id === id);
+    const isCurrentlyPinned = Boolean(targetBookmark?.is_pinned);
+
+    if (!isCurrentlyPinned && pinnedCount >= maxPinnedSlips) {
+      setSearchNotice(`📌 Pinboard full! You can pin up to ${maxPinnedSlips} slips at once. Unpin a slip to make room for this one.`);
+      return;
+    }
+
+    try {
+      const updated = await togglePinBookmark(id);
+      setBookmarks((prev) => {
+        const nextList = prev.map((b) => (b.id === id ? updated : b));
+        return nextList.sort((a, b) => {
+          const aPin = Boolean(a.is_pinned) ? 1 : 0;
+          const bPin = Boolean(b.is_pinned) ? 1 : 0;
+          if (aPin !== bPin) return bPin - aPin;
+          if (aPin && bPin) {
+            const aPinnedTime = a.pinned_at ? new Date(a.pinned_at).getTime() : 0;
+            const bPinnedTime = b.pinned_at ? new Date(b.pinned_at).getTime() : 0;
+            if (aPinnedTime !== bPinnedTime) return bPinnedTime - aPinnedTime;
+          }
+          return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+        });
+      });
+      if (searchNotice && searchNotice.includes('Pinboard full')) {
+        setSearchNotice(null);
+      }
+    } catch (err: any) {
+      setSearchNotice(err.message || 'Failed to pin slip');
+    }
+  };
+
   const handleDeleteBookmark = async (id: number) => {
     if (!window.confirm('Are you sure you want to delete this bookmark?')) return;
     try {
@@ -370,6 +421,7 @@ export const App: React.FC = () => {
           onEdit={setEditingBookmark}
           onRescrape={handleRescrapeBookmark}
           onAutoTag={aiConfig.isConnected ? handleAutoTagBookmark : undefined}
+          onTogglePin={handleTogglePin}
           isAIConnected={aiConfig.isConnected}
           onDeleteBookmark={handleDeleteBookmark}
           onTagClick={(tagName) => {
@@ -387,6 +439,15 @@ export const App: React.FC = () => {
             selectedTag={selectedTag}
             onTagSelect={setSelectedTag}
           />
+
+          {pinnedCount > 0 && !searchQuery && (
+            <div className="pinned-slips-bar">
+              <span className="pinned-slips-chip">
+                <SlipPinIcon isPinned={true} size={13} />
+                <span className="pinned-chip-text">{`${pinnedCount} of ${maxPinnedSlips} slips pinned to top`}</span>
+              </span>
+            </div>
+          )}
 
           {searchNotice && (
             <div style={{
@@ -435,6 +496,7 @@ export const App: React.FC = () => {
               onEdit={setEditingBookmark}
               onRescrape={handleRescrapeBookmark}
               onAutoTag={aiConfig.isConnected ? handleAutoTagBookmark : undefined}
+              onTogglePin={handleTogglePin}
               isAIConnected={aiConfig.isConnected}
               onDelete={handleDeleteBookmark}
               onTagClick={(tagName) => setSelectedTag(tagName)}

@@ -1,6 +1,7 @@
 import { Router, Response } from 'express';
 import crypto from 'crypto';
 import { getDb } from '../db';
+import { getMaxPinnedSlips } from '../config';
 import { authenticate, AuthenticatedRequest } from '../middleware/auth';
 import { scrapeUrl, ScrapedMetadata, extractPlatformTag } from '../services/scraper';
 import { scrapeQueue } from '../services/queue';
@@ -136,11 +137,12 @@ async function handleFileUpload(req: AuthenticatedRequest, res: Response) {
 
     const createdBookmark = db.prepare(`
       SELECT id, user_id, url, title, description, personal_note, content_type, 
-             image_path, favicon_path, created_at, updated_at
+             image_path, favicon_path, is_pinned, pinned_at, created_at, updated_at
       FROM bookmarks WHERE id = ?
     `).get(bookmarkId) as any;
 
     createdBookmark.tags = tagSet;
+    createdBookmark.is_pinned = Boolean(createdBookmark.is_pinned);
 
     return res.status(201).json(createdBookmark);
   } catch (err: any) {
@@ -241,11 +243,12 @@ async function handleNoteCreation(req: AuthenticatedRequest, res: Response) {
 
     const createdBookmark = db.prepare(`
       SELECT id, user_id, url, title, description, personal_note, content_type, 
-             image_path, favicon_path, created_at, updated_at
+             image_path, favicon_path, is_pinned, pinned_at, created_at, updated_at
       FROM bookmarks WHERE id = ?
     `).get(bookmarkId) as any;
 
     createdBookmark.tags = Array.from(finalTagSet);
+    createdBookmark.is_pinned = Boolean(createdBookmark.is_pinned);
 
     return res.status(201).json(createdBookmark);
   } catch (err: any) {
@@ -260,7 +263,18 @@ router.post('/upload', handleFileUpload);
 router.post('/note', handleNoteCreation);
 
 
-// 1. Get All Bookmarks (Filtered by user, optional contentType or tag)
+// 0.5 Get Pinned Slips Configuration
+router.get('/pin-config', (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const maxPinnedSlips = getMaxPinnedSlips();
+    res.status(200).json({ maxPinnedSlips });
+  } catch (err) {
+    console.error('Fetch pin config error:', err);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+// 1. Get All Bookmarks (Filtered by user, optional contentType or tag; Pinned slips ordered first)
 router.get('/', (req: AuthenticatedRequest, res: Response) => {
   const userId = req.user!.id;
   const { contentType, tag, limit = 50, offset = 0 } = req.query;
@@ -269,7 +283,7 @@ router.get('/', (req: AuthenticatedRequest, res: Response) => {
     const db = getDb();
     let query = `
       SELECT b.id, b.user_id, b.url, b.title, b.description, b.personal_note, b.content_type, 
-             b.image_path, b.favicon_path, b.created_at, b.updated_at
+             b.image_path, b.favicon_path, b.is_pinned, b.pinned_at, b.created_at, b.updated_at
       FROM bookmarks b
     `;
     const params: any[] = [userId];
@@ -290,7 +304,7 @@ router.get('/', (req: AuthenticatedRequest, res: Response) => {
       params.push(contentType);
     }
 
-    query += ` ORDER BY b.created_at DESC LIMIT ? OFFSET ?`;
+    query += ` ORDER BY b.is_pinned DESC, b.pinned_at DESC, b.created_at DESC LIMIT ? OFFSET ?`;
     params.push(Number(limit), Number(offset));
 
     const bookmarks = db.prepare(query).all(...params) as any[];
@@ -305,6 +319,7 @@ router.get('/', (req: AuthenticatedRequest, res: Response) => {
 
     for (const b of bookmarks) {
       b.tags = tagQuery.all(b.id);
+      b.is_pinned = Boolean(b.is_pinned);
     }
 
     res.status(200).json(bookmarks);
@@ -385,13 +400,13 @@ router.get('/search', async (req: AuthenticatedRequest, res: Response) => {
       try {
         const ftsQuery = `
           SELECT b.id, b.user_id, b.url, b.title, b.description, b.personal_note, b.content_type, 
-                 b.image_path, b.favicon_path, b.created_at, b.updated_at,
+                 b.image_path, b.favicon_path, b.is_pinned, b.pinned_at, b.created_at, b.updated_at,
                  snippet(bookmarks_fts, -1, '<mark>', '</mark>', '...', 25) as snippet,
                  bm25(bookmarks_fts) as rank
           FROM bookmarks_fts
           JOIN bookmarks b ON bookmarks_fts.rowid = b.id
           WHERE bookmarks_fts MATCH ? AND b.user_id = ?
-          ORDER BY rank ASC
+          ORDER BY b.is_pinned DESC, rank ASC
           LIMIT ? OFFSET ?
         `;
         bookmarks = db.prepare(ftsQuery).all(sanitizedTerms, userId, Number(limit), Number(offset)) as any[];
@@ -411,10 +426,10 @@ router.get('/search', async (req: AuthenticatedRequest, res: Response) => {
 
       const likeQuery = `
         SELECT b.id, b.user_id, b.url, b.title, b.description, b.personal_note, b.content_type, 
-               b.image_path, b.favicon_path, b.created_at, b.updated_at
+               b.image_path, b.favicon_path, b.is_pinned, b.pinned_at, b.created_at, b.updated_at
         FROM bookmarks b
         WHERE b.user_id = ? AND (${conditions})
-        ORDER BY b.created_at DESC
+        ORDER BY b.is_pinned DESC, b.pinned_at DESC, b.created_at DESC
         LIMIT ? OFFSET ?
       `;
       bookmarks = db.prepare(likeQuery).all(...params) as any[];
@@ -429,6 +444,7 @@ router.get('/search', async (req: AuthenticatedRequest, res: Response) => {
 
     for (const b of bookmarks) {
       b.tags = tagQuery.all(b.id);
+      b.is_pinned = Boolean(b.is_pinned);
     }
 
     res.status(200).json(bookmarks);
@@ -490,6 +506,7 @@ router.get('/:id', (req: AuthenticatedRequest, res: Response) => {
     `).all(bookmark.id);
 
     bookmark.tags = tags;
+    bookmark.is_pinned = Boolean(bookmark.is_pinned);
     res.status(200).json(bookmark);
   } catch (err) {
     console.error('Fetch bookmark details error:', err);
@@ -641,14 +658,28 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
 router.put('/:id', (req: AuthenticatedRequest, res: Response) => {
   const userId = req.user!.id;
   const { id } = req.params;
-  const { title, description, personalNote, contentType, tags } = req.body;
+  const { title, description, personalNote, contentType, tags, isPinned, is_pinned } = req.body;
 
   try {
     const db = getDb();
 
-    const existing = db.prepare(`SELECT id FROM bookmarks WHERE id = ? AND user_id = ?`).get(id, userId);
+    const existing = db.prepare(`SELECT id, is_pinned FROM bookmarks WHERE id = ? AND user_id = ?`).get(id, userId) as { id: number; is_pinned: number } | undefined;
     if (!existing) {
       return res.status(404).json({ message: 'Bookmark not found or unauthorized' });
+    }
+
+    if (isPinned !== undefined || is_pinned !== undefined) {
+      const wantsPin = isPinned !== undefined ? Boolean(isPinned) : Boolean(is_pinned);
+      if (wantsPin && !existing.is_pinned) {
+        const pinnedCount = db.prepare(`SELECT COUNT(*) as count FROM bookmarks WHERE user_id = ? AND is_pinned = 1 AND id != ?`).get(userId, id) as { count: number };
+        const maxPins = getMaxPinnedSlips();
+        if (pinnedCount.count >= maxPins) {
+          return res.status(400).json({
+            message: `Maximum limit of ${maxPins} pinned slips reached. Please unpin a slip before pinning another.`,
+            maxPinnedSlips: maxPins
+          });
+        }
+      }
     }
 
     const updateTransaction = db.transaction(() => {
@@ -670,6 +701,16 @@ router.put('/:id', (req: AuthenticatedRequest, res: Response) => {
       if (contentType !== undefined) {
         updates.push('content_type = ?');
         params.push(contentType);
+      }
+      if (isPinned !== undefined || is_pinned !== undefined) {
+        const wantsPin = isPinned !== undefined ? Boolean(isPinned) : Boolean(is_pinned);
+        if (wantsPin) {
+          updates.push('is_pinned = 1');
+          updates.push('pinned_at = CURRENT_TIMESTAMP');
+        } else {
+          updates.push('is_pinned = 0');
+          updates.push('pinned_at = NULL');
+        }
       }
 
       params.push(id, userId);
@@ -708,10 +749,67 @@ router.put('/:id', (req: AuthenticatedRequest, res: Response) => {
     `).all(id);
 
     updated.tags = attachedTags;
+    updated.is_pinned = Boolean(updated.is_pinned);
 
     res.status(200).json(updated);
   } catch (err) {
     console.error('Update bookmark error:', err);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+// 5.0 Toggle / Set Pin Status for Bookmark
+router.put('/:id/pin', (req: AuthenticatedRequest, res: Response) => {
+  const userId = req.user!.id;
+  const { id } = req.params;
+  const { pinned } = req.body || {};
+
+  try {
+    const db = getDb();
+    const existing = db.prepare(`SELECT id, is_pinned FROM bookmarks WHERE id = ? AND user_id = ?`).get(id, userId) as { id: number; is_pinned: number } | undefined;
+
+    if (!existing) {
+      return res.status(404).json({ message: 'Bookmark not found or unauthorized' });
+    }
+
+    const targetPinned = typeof pinned === 'boolean' ? pinned : !Boolean(existing.is_pinned);
+    const maxPins = getMaxPinnedSlips();
+
+    if (targetPinned) {
+      const pinnedCount = db.prepare(`SELECT COUNT(*) as count FROM bookmarks WHERE user_id = ? AND is_pinned = 1 AND id != ?`).get(userId, id) as { count: number };
+      if (pinnedCount.count >= maxPins) {
+        return res.status(400).json({
+          message: `Maximum limit of ${maxPins} pinned slips reached. Please unpin a slip before pinning another.`,
+          maxPinnedSlips: maxPins
+        });
+      }
+
+      db.prepare(`
+        UPDATE bookmarks 
+        SET is_pinned = 1, pinned_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP 
+        WHERE id = ? AND user_id = ?
+      `).run(id, userId);
+    } else {
+      db.prepare(`
+        UPDATE bookmarks 
+        SET is_pinned = 0, pinned_at = NULL, updated_at = CURRENT_TIMESTAMP 
+        WHERE id = ? AND user_id = ?
+      `).run(id, userId);
+    }
+
+    const updated = db.prepare(`SELECT * FROM bookmarks WHERE id = ?`).get(id) as any;
+    const attachedTags = db.prepare(`
+      SELECT t.id, t.name FROM tags t
+      JOIN bookmark_tags bt ON t.id = bt.tag_id
+      WHERE bt.bookmark_id = ?
+    `).all(id);
+
+    updated.tags = attachedTags;
+    updated.is_pinned = Boolean(updated.is_pinned);
+
+    res.status(200).json(updated);
+  } catch (err) {
+    console.error('Toggle pin error:', err);
     res.status(500).json({ message: 'Internal server error' });
   }
 });

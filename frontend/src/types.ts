@@ -27,12 +27,18 @@ export interface Bookmark {
   image_path?: string | null;
   favicon_path?: string | null;
   reader_html?: string | null;
+  is_pinned?: boolean | number;
+  pinned_at?: string | null;
   created_at: string;
   updated_at: string;
   tags?: Tag[];
   snippet?: string;
   matchScore?: number;
   matchReason?: string;
+}
+
+export interface PinConfig {
+  maxPinnedSlips: number;
 }
 
 export interface User {

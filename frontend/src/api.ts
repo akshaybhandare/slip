@@ -1,4 +1,4 @@
-import { Bookmark, ContentType, Tag, User, UserListItem, Clip, ClipDetail } from './types';
+import { Bookmark, ContentType, Tag, User, UserListItem, Clip, ClipDetail, PinConfig } from './types';
 
 const API_BASE = '/api';
 
@@ -269,6 +269,17 @@ export async function rescrapeAllBookmarks(): Promise<{ message: string; count: 
 export async function deleteBookmark(id: number): Promise<{ message: string }> {
   return apiFetch<{ message: string }>(`/bookmarks/${id}`, {
     method: 'DELETE'
+  });
+}
+
+export async function fetchPinConfig(): Promise<PinConfig> {
+  return apiFetch<PinConfig>('/bookmarks/pin-config');
+}
+
+export async function togglePinBookmark(id: number, pinned?: boolean): Promise<Bookmark> {
+  return apiFetch<Bookmark>(`/bookmarks/${id}/pin`, {
+    method: 'PUT',
+    body: JSON.stringify(typeof pinned === 'boolean' ? { pinned } : {})
   });
 }
 
