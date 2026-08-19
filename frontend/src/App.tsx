@@ -3,6 +3,7 @@ import { Bookmark, ContentType, Tag, User } from './types';
 import {
   fetchBookmarks,
   searchBookmarks,
+  smartSearchBookmarks,
   fetchTags,
   createBookmark,
   uploadImageBookmark,
@@ -27,7 +28,7 @@ import { ImportModal } from './components/ImportModal';
 import { AuthModal } from './components/AuthModal';
 import { AddUserModal } from './components/AddUserModal';
 import { AIConnectModal } from './components/AIConnectModal';
-import { BookmarkPlus, Plus } from 'lucide-react';
+import { BookmarkPlus, Plus, Sparkles } from 'lucide-react';
 import { useTheme } from './hooks/useTheme';
 import { useAIConfig } from './hooks/useAIConfig';
 import { AI_PROVIDERS } from './config/aiConfig';
@@ -46,6 +47,14 @@ export const App: React.FC = () => {
   const [activeType, setActiveType] = useState<ContentType>('all');
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [isSmartSearch, setIsSmartSearch] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('slip_smart_search') === 'true';
+    } catch {
+      return false;
+    }
+  });
+  const [searchNotice, setSearchNotice] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [isRescrapingAll, setIsRescrapingAll] = useState(false);
   const [needsAuth, setNeedsAuth] = useState(false);
@@ -60,16 +69,33 @@ export const App: React.FC = () => {
   const [shareTargetBookmark, setShareTargetBookmark] = useState<Bookmark | null>(null);
   const [editingBookmark, setEditingBookmark] = useState<Bookmark | null>(null);
 
-  // Window-level drag-and-drop support for quick image & PDF bookmarking
+  const handleToggleSmartSearch = useCallback(() => {
+    if (!aiConfig.isConnected && !isSmartSearch) {
+      setIsAIOpen(true);
+      return;
+    }
+    setIsSmartSearch((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem('slip_smart_search', String(next));
+      } catch {}
+      return next;
+    });
+  }, [aiConfig.isConnected, isSmartSearch]);
+
+  // Drag and drop setup
   useEffect(() => {
     const handleDragOver = (e: DragEvent) => {
       e.preventDefault();
+      e.stopPropagation();
     };
+
     const handleDrop = (e: DragEvent) => {
       e.preventDefault();
+      e.stopPropagation();
       if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length > 0) {
         const file = e.dataTransfer.files[0];
-        const isImage = file.type.startsWith('image/');
+        const isImage = file.type.startsWith('image/') || /\.(png|jpe?g|webp|gif|svg)$/i.test(file.name);
         const isPdf = file.type === 'application/pdf' || /\.pdf$/i.test(file.name);
         if (isImage || isPdf) {
           setDroppedFile(file);
@@ -99,15 +125,39 @@ export const App: React.FC = () => {
       });
   }, []);
 
-  const loadData = useCallback(async () => {
+  const loadData = useCallback(async (queryOverride?: string, smartOverride?: boolean) => {
     if (needsAuth) return;
+
+    const targetQuery = typeof queryOverride === 'string' ? queryOverride : searchQuery;
+    const targetSmart = typeof smartOverride === 'boolean' ? smartOverride : isSmartSearch;
+    const cleanQ = targetQuery.trim();
 
     setLoading(true);
     try {
-      if (searchQuery.trim().length > 0) {
-        const searchResults = await searchBookmarks(searchQuery.trim());
-        setBookmarks(searchResults);
+      if (cleanQ.length > 0) {
+        if (targetSmart) {
+          if (!aiConfig.isConnected) {
+            setIsAIOpen(true);
+            setLoading(false);
+            return;
+          }
+          try {
+            setSearchNotice(null);
+            const searchResults = await smartSearchBookmarks(cleanQ);
+            setBookmarks(searchResults);
+          } catch (aiErr: any) {
+            console.warn('Smart search provider error, smoothly falling back to keyword search:', aiErr);
+            const fallbackResults = await searchBookmarks(cleanQ);
+            setBookmarks(fallbackResults);
+            setSearchNotice(`AI Smart Search encountered a provider issue (${aiErr.message || 'Provider busy'}). Showing keyword search matches below.`);
+          }
+        } else {
+          setSearchNotice(null);
+          const searchResults = await searchBookmarks(cleanQ);
+          setBookmarks(searchResults);
+        }
       } else {
+        setSearchNotice(null);
         const [bList, tList] = await Promise.all([
           fetchBookmarks(activeType, selectedTag || undefined),
           fetchTags()
@@ -124,15 +174,30 @@ export const App: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [activeType, selectedTag, searchQuery, needsAuth]);
+  }, [activeType, selectedTag, searchQuery, isSmartSearch, aiConfig.isConnected, needsAuth]);
 
+  // Handle live search vs enter-to-search
   useEffect(() => {
+    if (isSmartSearch) {
+      // In Smart Search mode: If user clears the input, reset list immediately
+      if (searchQuery.trim() === '') {
+        loadData('', false);
+      }
+      // Otherwise do NOT search automatically while typing in smart mode; wait for Enter
+      return;
+    }
+
+    // In Standard Search mode: Live debounced search (250ms)
     const debounceTimer = setTimeout(() => {
-      loadData();
+      loadData(searchQuery, false);
     }, 250);
 
     return () => clearTimeout(debounceTimer);
-  }, [loadData]);
+  }, [searchQuery, isSmartSearch, loadData]);
+
+  const handleSearchSubmit = useCallback(() => {
+    loadData(searchQuery, isSmartSearch);
+  }, [searchQuery, isSmartSearch, loadData]);
 
   const handleAuthSuccess = (loggedUser: User) => {
     setUser(loggedUser);
@@ -246,6 +311,10 @@ export const App: React.FC = () => {
       <Navbar
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
+        onSearchSubmit={handleSearchSubmit}
+        isSearching={loading}
+        isSmartSearch={isSmartSearch}
+        onToggleSmartSearch={handleToggleSmartSearch}
         onAddClick={() => setIsAddOpen(true)}
         onAddUserClick={() => setIsAddUserOpen(true)}
         onImportClick={() => setIsImportOpen(true)}
@@ -268,9 +337,42 @@ export const App: React.FC = () => {
         onTagSelect={setSelectedTag}
       />
 
-      {loading && bookmarks.length === 0 ? (
+      {searchNotice && (
+        <div style={{
+          maxWidth: '800px',
+          margin: '0 auto 16px',
+          padding: '10px 16px',
+          borderRadius: '8px',
+          background: 'rgba(234, 179, 8, 0.12)',
+          border: '1px solid rgba(234, 179, 8, 0.35)',
+          color: 'var(--color-on-surface)',
+          fontSize: '13px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: '12px'
+        }}>
+          <span>{searchNotice}</span>
+          <button
+            onClick={() => setSearchNotice(null)}
+            style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--color-muted)', padding: '2px 6px', fontSize: '14px' }}
+            title="Dismiss notice"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
+      {loading ? (
         <div style={{ textAlign: 'center', padding: '4rem 0', color: 'var(--color-muted)' }}>
-          Loading your visual archive...
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', fontSize: '15px' }}>
+            <Sparkles size={18} className="sparkle-spin" style={{ color: 'var(--color-primary)' }} />
+            <span>
+              {isSmartSearch && searchQuery.trim()
+                ? `Searching your archive with AI for "${searchQuery}"...`
+                : 'Loading your visual archive...'}
+            </span>
+          </div>
         </div>
       ) : bookmarks.length > 0 ? (
         <MasonryGrid
@@ -289,9 +391,11 @@ export const App: React.FC = () => {
           <h3 style={{ fontSize: '20px', fontWeight: 600, marginBottom: '8px', color: 'var(--color-secondary)', letterSpacing: '-0.4px' }}>
             {searchQuery ? 'No matching bookmarks found' : 'Your visual mind is empty'}
           </h3>
-          <p style={{ maxWidth: '420px', margin: '0 auto 24px', fontSize: '14px', color: 'var(--color-muted)' }}>
+          <p style={{ maxWidth: '440px', margin: '0 auto 24px', fontSize: '14px', color: 'var(--color-muted)' }}>
             {searchQuery
-              ? `We couldn't find any bookmarks matching "${searchQuery}". Try a different keyword.`
+              ? isSmartSearch
+                ? `No semantic matches found for "${searchQuery}". Try rephrasing your description or switch to standard keyword search.`
+                : `We couldn't find any bookmarks matching "${searchQuery}". Try a different keyword.`
               : 'Save your first article, video, design inspiration, or product link with a single click.'}
           </p>
           {!searchQuery && (

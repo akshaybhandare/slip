@@ -67,6 +67,43 @@ Return JSON only:
   "newTags": ["genuinely-new-tag"]
 }`;
 
+export const SMART_SEARCH_SYSTEM_PROMPT = `You are an intelligent semantic search, conceptual reasoning, and relevance ranking engine for Slip visual bookmarks.
+
+Your mission is to deeply understand the user's search query — including conversational queries, vague memories, specific sub-topics, synonyms, parent franchises, implied intent, and technical troubleshooting — and identify all relevant bookmarks from the provided candidate list.
+
+### 1. Conceptual & Semantic Association Rules
+- **Parent & Sub-Topic Relations**: Always associate sub-topics, spin-offs, characters, and eras with their parent franchise (e.g., "clone wars", "mandalorian", "jedi" -> Star Wars; "spiderman", "avengers", "loki" -> Marvel / MCU; "pixel 9", "android 15" -> Google / Mobile).
+- **Problem & Solution Mapping**: Connect symptoms and conversational problem descriptions to guides, tools, and documentation (e.g., "Bambu printers clogging / nozzle stuck" -> hotend maintenance, extruder cold pull, 3D printing troubleshooting).
+- **Tech Stack & Concept Equivalents**: Understand technical synonyms, programming libraries, and design patterns (e.g., "fast web server" -> Go, Rust, Actix, Nginx, Bun; "css grid tricks" -> responsive web design, flexbox).
+- **Intent & Topical Overlaps**: Connect goals to resources (e.g., "get fit at home" -> bodyweight workout, kettlebell routine, fitness; "cheap dinner idea" -> quick pasta, sheet pan meal, budget recipes).
+- **Typo, Shorthand & Compound Words**: Handle conversational phrasing, shorthand, hyphens, and compound words gracefully (e.g., "star-wars", "yt video", "ml papers").
+
+### 2. Candidate Evaluation
+Evaluate each candidate using all available metadata: title, description (desc), personal notes (note), tags, and content snippets.
+
+### 3. Relevance Scoring Guidelines (0 - 100)
+- **80 - 100 (Direct Match)**: Directly addresses the exact query, topic, or specific entity requested.
+- **50 - 79 (Strong Semantic / Franchise Match)**: Belongs to the same franchise, theme, parent topic, or provides a direct solution to the described problem.
+- **25 - 49 (Related Concept / Partial Overlap)**: Topically or tangentially connected concept that a user searching for this query would find valuable.
+- **0 - 24 (Irrelevant)**: Unrelated topic. Do NOT include in the matches array.
+
+### 4. Ranking & Explanations
+- Order matches strictly by score descending (highest relevance first).
+- For every match, provide a concise, factual 1-sentence "reason" highlighting WHY it matches the user's intent.
+- If no candidates are relevant, return {"matches": []}.
+
+### 5. Output Format
+Output valid JSON ONLY matching this exact schema without any markdown formatting or commentary:
+{
+  "matches": [
+    {
+      "id": 123,
+      "score": 92,
+      "reason": "Direct Star Wars universe collection containing films and series from the Clone Wars timeline."
+    }
+  ]
+}`;
+
 export function getActiveAIConfig(): { provider: AIProviderId; apiKey: string; apiUrl: string; model: string } | null {
   try {
     const db = getDb();
@@ -266,7 +303,11 @@ export async function generateAutoTags(params: {
         ? base
         : `${base.replace(/\/+$/, '')}/chat/completions`;
 
-      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        'HTTP-Referer': 'https://github.com/slip-archive/slip',
+        'X-Title': 'Slip Visual Bookmarks'
+      };
       if (apiKey) {
         headers['Authorization'] = `Bearer ${apiKey}`;
       }
@@ -279,11 +320,12 @@ export async function generateAutoTags(params: {
             { role: 'system', content: AUTO_TAG_SYSTEM_PROMPT },
             { role: 'user', content: userPrompt }
           ],
+          max_tokens: 500,
           temperature: 0.2
         },
         {
           headers,
-          timeout: 15000
+          timeout: 25000
         }
       );
       rawOutput = res.data?.choices?.[0]?.message?.content || res.data?.response || '';
@@ -403,6 +445,368 @@ export async function autoTagBookmark(params: {
   `).all(numericId) as { id: number; name: string }[];
 
   return { tags: finalTags, added: validatedTags };
+}
+
+export interface SmartSearchResultItem {
+  id: number;
+  score: number;
+  reason: string;
+}
+
+export const SEARCH_STOP_WORDS = new Set([
+  'a', 'about', 'above', 'after', 'again', 'against', 'all', 'am', 'an', 'and', 'any', 'are', 'aren',
+  'as', 'at', 'be', 'because', 'been', 'before', 'being', 'below', 'between', 'both', 'but', 'by',
+  'can', 'cannot', 'could', 'did', 'do', 'does', 'doing', 'down', 'during', 'each', 'few', 'for',
+  'from', 'further', 'had', 'has', 'have', 'having', 'he', 'her', 'here', 'hers', 'herself', 'him',
+  'himself', 'his', 'how', 'i', 'if', 'in', 'into', 'is', 'it', 'its', 'itself', 'let', 'me', 'more',
+  'most', 'my', 'myself', 'no', 'nor', 'not', 'of', 'off', 'on', 'once', 'only', 'or', 'other', 'ought',
+  'our', 'ours', 'ourselves', 'out', 'over', 'own', 'same', 'she', 'should', 'so', 'some', 'such',
+  'than', 'that', 'the', 'their', 'theirs', 'them', 'themselves', 'then', 'there', 'these', 'they',
+  'this', 'those', 'through', 'to', 'too', 'under', 'until', 'up', 'very', 'was', 'we', 'were',
+  'what', 'when', 'where', 'which', 'while', 'who', 'whom', 'why', 'with', 'would', 'you', 'your',
+  'yours', 'yourself', 'yourselves', 'article', 'page', 'post', 'website', 'link', 'find', 'search',
+  'looking', 'show', 'remember', 'something'
+]);
+
+export function extractSearchTokens(query: string): string[] {
+  return (query || '')
+    .toLowerCase()
+    .replace(/[^\w\s]/g, ' ')
+    .split(/\s+/)
+    .map(t => t.trim())
+    .filter(t => t.length >= 2 && !SEARCH_STOP_WORDS.has(t));
+}
+
+export async function performSmartSearch(params: {
+  query: string;
+  userId: number;
+  limit?: number;
+  config?: { provider: AIProviderId; apiKey: string; apiUrl?: string; model?: string };
+}): Promise<any[]> {
+  const { query, userId, limit = 50 } = params;
+  const cleanQuery = (query || '').trim();
+  if (!cleanQuery) return [];
+
+  const db = getDb();
+  const activeConfig = params.config || getActiveAIConfig();
+  if (!activeConfig || !activeConfig.apiKey) {
+    throw new Error('AI provider is not configured or connected. Please connect an AI provider in settings.');
+  }
+
+  // 1. Fast Candidate Selection
+  const candidateIds = new Set<number>();
+  
+  // Check total bookmarks for user
+  const countRow = db.prepare('SELECT COUNT(*) as count FROM bookmarks WHERE user_id = ?').get(userId) as { count: number };
+  const totalCount = countRow?.count || 0;
+
+  if (totalCount <= 120) {
+    // If library <= 120 bookmarks, include all user bookmarks directly for 100% semantic coverage
+    const allRows = db.prepare('SELECT id FROM bookmarks WHERE user_id = ? ORDER BY created_at DESC').all(userId) as { id: number }[];
+    for (const r of allRows) {
+      candidateIds.add(r.id);
+    }
+  } else {
+    // For large libraries (> 120 bookmarks), perform indexed multi-token retrieval
+    const tokens = extractSearchTokens(cleanQuery);
+    if (tokens.length > 0) {
+      const ftsOrQuery = tokens.map(t => `${t}*`).join(' OR ');
+      try {
+        const ftsMatches = db.prepare(`
+          SELECT rowid FROM bookmarks_fts 
+          WHERE bookmarks_fts MATCH ? AND rowid IN (SELECT id FROM bookmarks WHERE user_id = ?)
+          ORDER BY bm25(bookmarks_fts) ASC
+          LIMIT 40
+        `).all(ftsOrQuery, userId) as { rowid: number }[];
+        for (const m of ftsMatches) {
+          candidateIds.add(m.rowid);
+        }
+      } catch {
+        // Fallback
+      }
+
+      try {
+        const tagConditions = tokens.map(() => 't.name LIKE ?').join(' OR ');
+        const tagParams: any[] = [userId];
+        for (const t of tokens) {
+          tagParams.push(`%${t}%`);
+        }
+        const tagMatches = db.prepare(`
+          SELECT DISTINCT bt.bookmark_id 
+          FROM bookmark_tags bt
+          JOIN tags t ON bt.tag_id = t.id
+          JOIN bookmarks b ON bt.bookmark_id = b.id
+          WHERE b.user_id = ? AND (${tagConditions})
+          LIMIT 25
+        `).all(...tagParams) as { bookmark_id: number }[];
+        for (const tm of tagMatches) {
+          candidateIds.add(tm.bookmark_id);
+        }
+      } catch {
+        // Fallback
+      }
+    }
+
+    // Always include top recent bookmarks
+    const recentRows = db.prepare(`
+      SELECT id FROM bookmarks 
+      WHERE user_id = ? 
+      ORDER BY created_at DESC 
+      LIMIT 30
+    `).all(userId) as { id: number }[];
+    for (const r of recentRows) {
+      candidateIds.add(r.id);
+      if (candidateIds.size >= 80) break;
+    }
+  }
+
+  if (candidateIds.size === 0) {
+    return [];
+  }
+
+  // 2. Fetch data ONLY for candidate IDs (constant minimal memory footprint)
+  const candidateIdList = Array.from(candidateIds);
+  const candidatePlaceholders = candidateIdList.map(() => '?').join(',');
+  const candidateBookmarks = db.prepare(`
+    SELECT b.id, b.title, b.description, b.personal_note, b.content_type, b.url,
+           substr(b.raw_text, 1, 600) as content_snippet
+    FROM bookmarks b
+    WHERE b.id IN (${candidatePlaceholders}) AND b.user_id = ?
+    ORDER BY b.created_at DESC
+  `).all(...candidateIdList, userId) as any[];
+
+  if (candidateBookmarks.length === 0) {
+    return [];
+  }
+
+  // Batch attach tags for candidates in a single query
+  const tagRows = db.prepare(`
+    SELECT bt.bookmark_id, t.name 
+    FROM bookmark_tags bt
+    JOIN tags t ON bt.tag_id = t.id
+    WHERE bt.bookmark_id IN (${candidatePlaceholders})
+  `).all(...candidateIdList) as { bookmark_id: number; name: string }[];
+
+  const tagsByBookmark = new Map<number, string[]>();
+  for (const tr of tagRows) {
+    if (!tagsByBookmark.has(tr.bookmark_id)) {
+      tagsByBookmark.set(tr.bookmark_id, []);
+    }
+    tagsByBookmark.get(tr.bookmark_id)!.push(tr.name);
+  }
+
+  for (const b of candidateBookmarks) {
+    b.tags = tagsByBookmark.get(b.id) || [];
+  }
+
+  // Format compact candidates payload (max 35 items to ensure compatibility with small & free tier models)
+  const topCandidates = candidateBookmarks.slice(0, 35);
+  const candidatesPayload = topCandidates.map(b => {
+    const item: any = { id: b.id, title: b.title || 'Untitled' };
+    if (b.description) item.desc = b.description.slice(0, 140);
+    if (b.personal_note) item.note = b.personal_note.slice(0, 140);
+    if (b.tags && b.tags.length > 0) item.tags = b.tags;
+    if (!b.description && b.content_snippet) item.snippet = b.content_snippet.slice(0, 140);
+    return item;
+  });
+
+  const userPrompt = `User Search Query: "${cleanQuery}"\n\nCandidate Bookmarks:\n${JSON.stringify(candidatesPayload, null, 2)}`;
+
+  const { provider, apiKey, apiUrl } = activeConfig;
+  const model = (activeConfig.model || '').trim() || KNOWN_AI_PROVIDERS[provider]?.defaultModel || 'default';
+
+  let rawOutput = '';
+
+  try {
+    if (provider === 'openai') {
+      const baseUrl = apiUrl || KNOWN_AI_PROVIDERS.openai.defaultUrl;
+      const res = await axios.post(
+        `${baseUrl}/chat/completions`,
+        {
+          model,
+          messages: [
+            { role: 'system', content: SMART_SEARCH_SYSTEM_PROMPT },
+            { role: 'user', content: userPrompt }
+          ],
+          response_format: { type: 'json_object' },
+          temperature: 0.1
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${apiKey}`,
+            'Content-Type': 'application/json'
+          },
+          timeout: 25000
+        }
+      );
+      rawOutput = res.data?.choices?.[0]?.message?.content || '';
+    } else if (provider === 'claude') {
+      const baseUrl = apiUrl || KNOWN_AI_PROVIDERS.claude.defaultUrl;
+      const res = await axios.post(
+        `${baseUrl}/messages`,
+        {
+          model,
+          system: SMART_SEARCH_SYSTEM_PROMPT,
+          messages: [
+            { role: 'user', content: userPrompt }
+          ],
+          max_tokens: 1500,
+          temperature: 0.1
+        },
+        {
+          headers: {
+            'x-api-key': apiKey,
+            'anthropic-version': '2023-06-01',
+            'content-type': 'application/json'
+          },
+          timeout: 25000
+        }
+      );
+      rawOutput = res.data?.content?.[0]?.text || '';
+    } else if (provider === 'gemini') {
+      const baseUrl = apiUrl || KNOWN_AI_PROVIDERS.gemini.defaultUrl;
+      const cleanModel = model.replace(/^models\//, '');
+      const res = await axios.post(
+        `${baseUrl}/models/${cleanModel}:generateContent?key=${encodeURIComponent(apiKey)}`,
+        {
+          systemInstruction: {
+            parts: [{ text: SMART_SEARCH_SYSTEM_PROMPT }]
+          },
+          contents: [
+            {
+              parts: [{ text: userPrompt }]
+            }
+          ],
+          generationConfig: {
+            responseMimeType: 'application/json',
+            temperature: 0.1
+          }
+        },
+        {
+          headers: { 'Content-Type': 'application/json' },
+          timeout: 25000
+        }
+      );
+      rawOutput = res.data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    } else {
+      // Custom provider (OpenAI compatible / OpenRouter / Ollama)
+      const base = apiUrl?.includes('://') ? apiUrl : `https://${apiUrl || ''}`;
+      const targetUrl = base.endsWith('/chat/completions') || base.includes('/generate')
+        ? base
+        : `${base.replace(/\/+$/, '')}/chat/completions`;
+
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        'HTTP-Referer': 'https://github.com/slip-archive/slip',
+        'X-Title': 'Slip Visual Bookmarks'
+      };
+      if (apiKey) {
+        headers['Authorization'] = `Bearer ${apiKey}`;
+      }
+      let res: any;
+      try {
+        res = await axios.post(
+          targetUrl,
+          {
+            model,
+            messages: [
+              { role: 'system', content: SMART_SEARCH_SYSTEM_PROMPT },
+              { role: 'user', content: userPrompt }
+            ],
+            max_tokens: 800,
+            temperature: 0.1
+          },
+          {
+            headers,
+            timeout: 25000
+          }
+        );
+      } catch (firstErr: any) {
+        // If provider rejected system role or returned error, try combining instructions into user role
+        const combinedPrompt = `${SMART_SEARCH_SYSTEM_PROMPT}\n\n---\n\n${userPrompt}`;
+        res = await axios.post(
+          targetUrl,
+          {
+            model,
+            messages: [
+              { role: 'user', content: combinedPrompt }
+            ],
+            max_tokens: 800,
+            temperature: 0.1
+          },
+          {
+            headers,
+            timeout: 25000
+          }
+        );
+      }
+      rawOutput = res.data?.choices?.[0]?.message?.content || res.data?.response || '';
+    }
+  } catch (err: any) {
+    const errorDetail = err.response?.data?.error?.message || err.response?.data?.message || err.message || 'AI request failed';
+    throw new Error(`AI Smart Search Error (${provider} / ${model}): ${errorDetail}`);
+  }
+
+  // 3. Parse JSON output
+  let parsed: any = {};
+  const cleaned = (rawOutput || '').replace(/```(?:json)?|```/g, '').trim();
+  try {
+    parsed = JSON.parse(cleaned);
+  } catch {
+    const match = cleaned.match(/\{[\s\S]*\}/);
+    if (match) {
+      try { parsed = JSON.parse(match[0]); } catch {}
+    }
+  }
+
+  const rawMatches: any[] = Array.isArray(parsed.matches) ? parsed.matches : [];
+  if (rawMatches.length === 0) {
+    return [];
+  }
+
+  // 4. Map valid candidate matches
+  const scoreMap = new Map<number, { score: number; reason: string }>();
+  for (const m of rawMatches) {
+    const id = Number(m.id);
+    const score = typeof m.score === 'number' ? m.score : 50;
+    const reason = typeof m.reason === 'string' ? m.reason.trim() : '';
+    if (id && score >= 25) {
+      scoreMap.set(id, { score, reason });
+    }
+  }
+
+  if (scoreMap.size === 0) {
+    return [];
+  }
+
+  // 5. Fetch full bookmark records
+  const matchedIds = Array.from(scoreMap.keys());
+  const placeholders = matchedIds.map(() => '?').join(',');
+  const fullBookmarks = db.prepare(`
+    SELECT b.id, b.user_id, b.url, b.title, b.description, b.personal_note, b.content_type,
+           b.image_path, b.favicon_path, b.created_at, b.updated_at
+    FROM bookmarks b
+    WHERE b.id IN (${placeholders}) AND b.user_id = ?
+  `).all(...matchedIds, userId) as any[];
+
+  const fullTagQuery = db.prepare(`
+    SELECT t.id, t.name 
+    FROM tags t
+    JOIN bookmark_tags bt ON t.id = bt.tag_id
+    WHERE bt.bookmark_id = ?
+  `);
+
+  for (const b of fullBookmarks) {
+    b.tags = fullTagQuery.all(b.id);
+    const meta = scoreMap.get(b.id);
+    b.matchScore = meta?.score || 50;
+    b.matchReason = meta?.reason || '';
+  }
+
+  // Sort by score descending (preserving LLM ranking)
+  fullBookmarks.sort((a, b) => (b.matchScore || 0) - (a.matchScore || 0));
+
+  return fullBookmarks.slice(0, Number(limit));
 }
 
 export async function testProviderConnection(params: {

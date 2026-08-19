@@ -1,11 +1,15 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Bookmark as BookmarkIcon, Search, Plus, Upload, Download, LogOut, RefreshCw, X, Sun, Moon, Monitor, MoreVertical, UserPlus, Sparkles } from 'lucide-react';
+import { Bookmark as BookmarkIcon, Search, Plus, Upload, Download, LogOut, RefreshCw, X, Sun, Moon, Monitor, MoreVertical, UserPlus, Sparkles, CornerDownLeft } from 'lucide-react';
 import { User } from '../types';
 import { ThemeMode } from '../hooks/useTheme';
 
 interface NavbarProps {
   searchQuery: string;
   onSearchChange: (q: string) => void;
+  onSearchSubmit?: () => void;
+  isSearching?: boolean;
+  isSmartSearch?: boolean;
+  onToggleSmartSearch?: () => void;
   onAddClick: () => void;
   onAddUserClick?: () => void;
   onImportClick: () => void;
@@ -23,6 +27,10 @@ interface NavbarProps {
 export const Navbar: React.FC<NavbarProps> = ({
   searchQuery,
   onSearchChange,
+  onSearchSubmit,
+  isSearching = false,
+  isSmartSearch = false,
+  onToggleSmartSearch,
   onAddClick,
   onAddUserClick,
   onImportClick,
@@ -231,14 +239,32 @@ export const Navbar: React.FC<NavbarProps> = ({
         </div>
       </div>
 
-      <div className="search-wrapper">
-        <Search className="search-icon" size={17} />
+      <div className={`search-wrapper ${isSmartSearch ? 'smart-search-mode' : ''}`}>
+        <Search
+          className={`search-icon ${isSmartSearch && searchQuery ? 'search-icon-clickable' : ''}`}
+          size={17}
+          onClick={() => {
+            if (isSmartSearch && onSearchSubmit) {
+              onSearchSubmit();
+            }
+          }}
+        />
         <input
           type="text"
           className="search-input"
-          placeholder="Search your archive & tags..."
+          placeholder={
+            isSmartSearch
+              ? "Describe what you're looking for (press Enter to search)..."
+              : "Search your archive & tags..."
+          }
           value={searchQuery}
           onChange={(e) => onSearchChange(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              onSearchSubmit?.();
+            }
+          }}
         />
         {searchQuery && (
           <button
@@ -248,6 +274,41 @@ export const Navbar: React.FC<NavbarProps> = ({
             title="Clear search"
           >
             <X size={14} />
+          </button>
+        )}
+        {isSmartSearch && searchQuery.trim() && onSearchSubmit && (
+          <button
+            type="button"
+            className={`search-enter-btn ${isSearching ? 'loading' : ''}`}
+            onClick={() => !isSearching && onSearchSubmit()}
+            disabled={isSearching}
+            title={isSearching ? 'Searching...' : 'Search with AI (Press Enter)'}
+            aria-label="Search with AI"
+          >
+            {isSearching ? (
+              <RefreshCw size={12} className="spin-slow" />
+            ) : (
+              <CornerDownLeft size={12} />
+            )}
+            <span className="search-enter-text">{isSearching ? 'Thinking...' : 'Search'}</span>
+          </button>
+        )}
+        {onToggleSmartSearch && (
+          <button
+            type="button"
+            className={`search-smart-btn ${isSmartSearch ? 'active' : ''}`}
+            onClick={onToggleSmartSearch}
+            title={
+              isAIConnected
+                ? isSmartSearch
+                  ? "Smart Search (AI Semantic Matching) is ON — Click for standard search"
+                  : "Smart Search (AI Semantic Matching) is OFF — Click to enable"
+                : "Connect AI in settings to enable Smart Search"
+            }
+            aria-label="Toggle Smart Search"
+          >
+            <Sparkles size={14} className={isSmartSearch ? 'sparkle-spin' : ''} />
+            <span className="smart-btn-text">Smart</span>
           </button>
         )}
       </div>

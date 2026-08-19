@@ -41,6 +41,7 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
   const [autoTagging, setAutoTagging] = useState(false);
   const [showNote, setShowNote] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isMatchReasonExpanded, setIsMatchReasonExpanded] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
   // Close card menu when clicking/tapping outside
@@ -259,6 +260,39 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
       )}
 
       <div className="card-content">
+        {/* AI Semantic Match Indicator */}
+        {bookmark.matchReason && (
+          <div
+            className={`card-ai-match-badge ${isMatchReasonExpanded ? 'ai-match-expanded' : ''}`}
+            title={`Semantic Relevance: ${bookmark.matchScore || 0}%\nClick to toggle full explanation`}
+            onClick={(e) => {
+              e.stopPropagation();
+              setIsMatchReasonExpanded(prev => !prev);
+            }}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                e.stopPropagation();
+                setIsMatchReasonExpanded(prev => !prev);
+              }
+            }}
+          >
+            <div className="ai-match-left">
+              <Sparkles size={13} className="ai-match-icon" />
+              <span className="ai-match-text">
+                {bookmark.matchReason}
+              </span>
+            </div>
+            <div className="ai-match-right">
+              {typeof bookmark.matchScore === 'number' && (
+                <span className="ai-match-score">{bookmark.matchScore}%</span>
+              )}
+            </div>
+          </div>
+        )}
+
         {!isNote && !isDocument && bookmark.image_path && (
           <div className="card-header-info">
             {bookmark.favicon_path ? (

@@ -391,4 +391,191 @@ describe('AI Backend Encryption, Authorization & Database Persistence', () => {
       expect(res.status).toBe(404);
     });
   });
+
+  describe('Smart Search (Semantic Similarity Search Engine)', () => {
+    it('contains expected rules and schema instructions in SMART_SEARCH_SYSTEM_PROMPT', () => {
+      expect(aiService.SMART_SEARCH_SYSTEM_PROMPT).toContain('intelligent semantic search');
+      expect(aiService.SMART_SEARCH_SYSTEM_PROMPT).toContain('Bambu printers clogging');
+      expect(aiService.SMART_SEARCH_SYSTEM_PROMPT).toContain('"matches": [');
+      expect(aiService.SMART_SEARCH_SYSTEM_PROMPT).toContain('"score":');
+      expect(aiService.SMART_SEARCH_SYSTEM_PROMPT).toContain('"reason":');
+    });
+
+    it('returns 400 when smart search is executed without AI connected', async () => {
+      const db = getDb();
+      db.prepare('DELETE FROM settings WHERE key = ?').run('ai_config');
+
+      const res = await request(app)
+        .get('/api/bookmarks/search?q=bambu+printer+issues&smart=true')
+        .set('Authorization', `Bearer ${regularToken}`);
+
+      expect(res.status).toBe(400);
+      expect(res.body.message).toMatch(/AI provider is not connected/i);
+
+      const res2 = await request(app)
+        .get('/api/bookmarks/smart-search?q=bambu+printer+issues')
+        .set('Authorization', `Bearer ${regularToken}`);
+
+      expect(res2.status).toBe(400);
+      expect(res2.body.message).toMatch(/AI provider is not connected/i);
+    });
+
+    it('performs semantic similarity search and finds relevant bookmarks based on natural language intent', async () => {
+      const db = getDb();
+
+      // Configure AI provider
+      db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run(
+        'ai_config',
+        JSON.stringify({
+          provider: 'openai',
+          encrypted_api_key: encryptSecret('sk-test-ai-key-1234'),
+          masked_api_key: '••••••••1234',
+          api_url: 'https://api.openai.com/v1',
+          is_connected: true,
+          last_tested_at: new Date().toISOString()
+        })
+      );
+
+      // Insert test bookmarks for regularUser (id: 2)
+      // 1. Target bookmark: Bambu Lab maintenance guide (does not have exact keyword "clogging" in title)
+      const bm1 = db.prepare(`
+        INSERT INTO bookmarks (user_id, url, title, description, personal_note, content_type, raw_text)
+        VALUES (?, ?, ?, ?, ?, 'article', ?)
+      `).run(
+        2,
+        'https://wiki.bambulab.com/en/x1/troubleshooting/nozzle-clog',
+        'Bambu Lab Extruder Jam & Hotend Maintenance Guide',
+        'Step-by-step walkthrough to clear filament blockages, cold pulls, and replace the hardened steel nozzle assembly on X1C.',
+        'Had that frustrating filament jam with PETG-CF last Sunday. Need to follow the cold pull method next time.',
+        'When printing high temp carbon fiber filaments, the 0.4mm nozzle might experience severe heat creep and filament jamming...'
+      );
+      const targetBookmarkId = Number(bm1.lastInsertRowid);
+
+      // 2. Irrelevant bookmark: Pasta recipe
+      const bm2 = db.prepare(`
+        INSERT INTO bookmarks (user_id, url, title, description, content_type)
+        VALUES (?, ?, ?, ?, 'website')
+      `).run(2, 'https://recipes.com/pasta', 'Creamy Tuscan Garlic Chicken', 'Delicious dinner recipe with spinach and sun-dried tomatoes');
+      const recipeBookmarkId = Number(bm2.lastInsertRowid);
+
+      // Mock OpenAI chat completion response for the natural language query
+      jest.spyOn(axios, 'post').mockResolvedValueOnce({
+        data: {
+          choices: [
+            {
+              message: {
+                content: JSON.stringify({
+                  matches: [
+                    {
+                      id: targetBookmarkId,
+                      score: 96,
+                      reason: 'Specifically covers troubleshooting Bambu Lab nozzle jams, filament clogging, and hotend clearing.'
+                    }
+                  ]
+                })
+              }
+            }
+          ]
+        }
+      } as any);
+
+      const res = await request(app)
+        .get('/api/bookmarks/search?q=that+article+about+Bambu+printers+where+I+was+having+clogging+problems&smart=true')
+        .set('Authorization', `Bearer ${regularToken}`);
+
+      expect(res.status).toBe(200);
+      expect(Array.isArray(res.body)).toBe(true);
+      expect(res.body.length).toBe(1);
+      expect(res.body[0].id).toBe(targetBookmarkId);
+      expect(res.body[0].title).toBe('Bambu Lab Extruder Jam & Hotend Maintenance Guide');
+      expect(res.body[0].matchScore).toBe(96);
+      expect(res.body[0].matchReason).toBe('Specifically covers troubleshooting Bambu Lab nozzle jams, filament clogging, and hotend clearing.');
+    });
+
+    it('returns empty array when query is empty', async () => {
+      const res = await request(app)
+        .get('/api/bookmarks/search?q=&smart=true')
+        .set('Authorization', `Bearer ${regularToken}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual([]);
+    });
+
+    it('enforces user data isolation in smart search', async () => {
+      const db = getDb();
+      // Insert bookmark belonging to Admin (id: 1)
+      const adminBm = db.prepare(`
+        INSERT INTO bookmarks (user_id, url, title, description, content_type)
+        VALUES (1, 'https://admin-secret.com', 'Admin Private Bambu Notes', 'Confidential 3D printer notes', 'note')
+      `).run();
+      const adminBmId = Number(adminBm.lastInsertRowid);
+
+      // Mock AI trying to return adminBmId to regular user
+      jest.spyOn(axios, 'post').mockResolvedValueOnce({
+        data: {
+          choices: [
+            {
+              message: {
+                content: JSON.stringify({
+                  matches: [
+                    {
+                      id: adminBmId,
+                      score: 99,
+                      reason: 'Private admin note'
+                    }
+                  ]
+                })
+              }
+            }
+          ]
+        }
+      } as any);
+
+      const res = await request(app)
+        .get('/api/bookmarks/smart-search?q=Bambu+notes')
+        .set('Authorization', `Bearer ${regularToken}`);
+
+      expect(res.status).toBe(200);
+      // Admin bookmark MUST NOT be returned to regular user!
+      expect(res.body.find((b: any) => b.id === adminBmId)).toBeUndefined();
+    });
+
+    it('correctly handles hyphenated search queries like star-wars without SQL syntax error', async () => {
+      const db = getDb();
+      const swBm = db.prepare(`
+        INSERT INTO bookmarks (user_id, url, title, description, content_type)
+        VALUES (2, 'https://starwars.com', 'List of Star Wars Movies', 'Complete chronological order of all Star Wars saga films', 'article')
+      `).run();
+      const swBmId = Number(swBm.lastInsertRowid);
+
+      jest.spyOn(axios, 'post').mockResolvedValueOnce({
+        data: {
+          choices: [
+            {
+              message: {
+                content: JSON.stringify({
+                  matches: [
+                    {
+                      id: swBmId,
+                      score: 95,
+                      reason: 'Contains complete list of Star Wars movies and franchise timeline.'
+                    }
+                  ]
+                })
+              }
+            }
+          ]
+        }
+      } as any);
+
+      const res = await request(app)
+        .get('/api/bookmarks/smart-search?q=star-wars')
+        .set('Authorization', `Bearer ${regularToken}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.length).toBeGreaterThan(0);
+      expect(res.body[0].id).toBe(swBmId);
+      expect(res.body[0].matchReason).toContain('Star Wars');
+    });
+  });
 });

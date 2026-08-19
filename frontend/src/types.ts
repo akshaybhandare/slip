@@ -31,6 +31,8 @@ export interface Bookmark {
   updated_at: string;
   tags?: Tag[];
   snippet?: string;
+  matchScore?: number;
+  matchReason?: string;
 }
 
 export interface User {

@@ -16,6 +16,7 @@ import * as api from '../api';
 vi.mock('../api', () => ({
   fetchBookmarks: vi.fn(),
   searchBookmarks: vi.fn(),
+  smartSearchBookmarks: vi.fn(),
   fetchTags: vi.fn(),
   createBookmark: vi.fn(),
   uploadImageBookmark: vi.fn(),
@@ -439,5 +440,137 @@ describe('BookmarkCard AI Auto-Tag Action', () => {
 
     fireEvent.click(autoTagBtn);
     expect(mockOnAutoTag).toHaveBeenCalledWith(42);
+  });
+});
+
+describe('AI Smart Search UI & Interactions', () => {
+  it('renders Smart Search toggle button in Navbar and toggles placeholder text', async () => {
+    const { Navbar } = await import('../components/Navbar');
+    const onSearchChange = vi.fn();
+    const onToggleSmartSearch = vi.fn();
+
+    const { rerender } = render(
+      <Navbar
+        searchQuery=""
+        onSearchChange={onSearchChange}
+        isSmartSearch={false}
+        onToggleSmartSearch={onToggleSmartSearch}
+        onAddClick={vi.fn()}
+        onImportClick={vi.fn()}
+        onRescrapeAllClick={vi.fn()}
+        isRescrapingAll={false}
+        onLogoutClick={vi.fn()}
+        isAIConnected={true}
+        user={{ id: 1, username: 'admin' }}
+      />
+    );
+
+    // Standard search placeholder
+    const input = screen.getByPlaceholderText('Search your archive & tags...');
+    expect(input).toBeInTheDocument();
+
+    const smartBtn = screen.getByRole('button', { name: /Toggle Smart Search/i });
+    expect(smartBtn).toBeInTheDocument();
+    expect(smartBtn).not.toHaveClass('active');
+
+    fireEvent.click(smartBtn);
+    expect(onToggleSmartSearch).toHaveBeenCalledTimes(1);
+
+    // Rerender in active Smart Search mode
+    rerender(
+      <Navbar
+        searchQuery=""
+        onSearchChange={onSearchChange}
+        isSmartSearch={true}
+        onToggleSmartSearch={onToggleSmartSearch}
+        onAddClick={vi.fn()}
+        onImportClick={vi.fn()}
+        onRescrapeAllClick={vi.fn()}
+        isRescrapingAll={false}
+        onLogoutClick={vi.fn()}
+        isAIConnected={true}
+        user={{ id: 1, username: 'admin' }}
+      />
+    );
+
+    expect(screen.getByPlaceholderText(/Describe what you're looking for/i)).toBeInTheDocument();
+    const activeSmartBtn = screen.getByRole('button', { name: /Toggle Smart Search/i });
+    expect(activeSmartBtn).toHaveClass('active');
+  });
+
+  it('triggers onSearchSubmit when hitting Enter or clicking search button in Smart Search mode', async () => {
+    const { Navbar } = await import('../components/Navbar');
+    const onSearchChange = vi.fn();
+    const onSearchSubmit = vi.fn();
+
+    render(
+      <Navbar
+        searchQuery="article about Bambu printers clogging"
+        onSearchChange={onSearchChange}
+        onSearchSubmit={onSearchSubmit}
+        isSmartSearch={true}
+        onToggleSmartSearch={vi.fn()}
+        onAddClick={vi.fn()}
+        onImportClick={vi.fn()}
+        onRescrapeAllClick={vi.fn()}
+        isRescrapingAll={false}
+        onLogoutClick={vi.fn()}
+        isAIConnected={true}
+        user={{ id: 1, username: 'admin' }}
+      />
+    );
+
+    const input = screen.getByDisplayValue('article about Bambu printers clogging');
+    
+    // 1. Hit Enter key in input
+    fireEvent.keyDown(input, { key: 'Enter', code: 'Enter' });
+    expect(onSearchSubmit).toHaveBeenCalledTimes(1);
+
+    // 2. Click the Search button
+    const submitBtn = screen.getByRole('button', { name: /Search with AI/i });
+    expect(submitBtn).toBeInTheDocument();
+    fireEvent.click(submitBtn);
+    expect(onSearchSubmit).toHaveBeenCalledTimes(2);
+  });
+
+  it('renders AI semantic match reason badge and score on BookmarkCard', async () => {
+    const mockBookmark = {
+      id: 99,
+      user_id: 1,
+      url: 'https://wiki.bambulab.com/en/x1/troubleshooting/nozzle-clog',
+      title: 'Bambu Lab Extruder Jam & Hotend Maintenance Guide',
+      description: 'Step-by-step troubleshooting guide for clearing filament clogs',
+      content_type: 'article' as const,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      matchScore: 96,
+      matchReason: 'Specifically covers troubleshooting Bambu Lab nozzle jams and filament clogging.'
+    };
+
+    const { BookmarkCard } = await import('../components/BookmarkCard');
+
+    render(
+      <BookmarkCard
+        bookmark={mockBookmark}
+        onOpenReader={vi.fn()}
+        onShare={vi.fn()}
+        onEdit={vi.fn()}
+        onRescrape={vi.fn()}
+        onDelete={vi.fn()}
+        onTagClick={vi.fn()}
+      />
+    );
+
+    const badge = screen.getByText('Specifically covers troubleshooting Bambu Lab nozzle jams and filament clogging.').closest('.card-ai-match-badge');
+    expect(badge).toBeInTheDocument();
+    expect(badge).not.toHaveClass('ai-match-expanded');
+
+    // Click to expand
+    fireEvent.click(badge!);
+    expect(badge).toHaveClass('ai-match-expanded');
+
+    // Click again to collapse
+    fireEvent.click(badge!);
+    expect(badge).not.toHaveClass('ai-match-expanded');
   });
 });

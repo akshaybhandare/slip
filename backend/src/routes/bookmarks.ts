@@ -5,7 +5,7 @@ import { authenticate, AuthenticatedRequest } from '../middleware/auth';
 import { scrapeUrl, ScrapedMetadata, extractPlatformTag } from '../services/scraper';
 import { scrapeQueue } from '../services/queue';
 import { cacheThumbnail, saveUploadedFile, saveUploadedImage } from '../services/thumbnail';
-import { autoTagBookmark } from '../services/aiService';
+import { autoTagBookmark, performSmartSearch, getActiveAIConfig } from '../services/aiService';
 
 const router = Router();
 
@@ -227,19 +227,16 @@ async function handleNoteCreation(req: AuthenticatedRequest, res: Response) {
     const { bookmarkId, tagSet } = insertTransaction();
     const finalTagSet = new Set<string>(tagSet);
 
-    // Auto-tag note with AI if user did not specify explicit tags
+    // Queue background async auto-tagging for untagged notes (non-blocking)
     const hasCustomTags = Array.isArray(tags) ? tags.length > 0 : Boolean(tags && String(tags).trim());
     if (!hasCustomTags) {
-      try {
-        const autoResult = await autoTagBookmark({ bookmarkId, userId, force: false });
-        if (autoResult && autoResult.tags) {
-          for (const t of autoResult.tags) {
-            finalTagSet.add(t.name);
-          }
+      scrapeQueue.add(async () => {
+        try {
+          await autoTagBookmark({ bookmarkId, userId, force: false });
+        } catch (aiErr) {
+          console.warn('Background AI auto-tag for note failed:', aiErr);
         }
-      } catch (aiErr) {
-        console.warn('AI auto-tag for note creation failed:', aiErr);
-      }
+      });
     }
 
     const createdBookmark = db.prepare(`
@@ -340,10 +337,10 @@ router.get('/tags', (req: AuthenticatedRequest, res: Response) => {
   }
 });
 
-// 3. Search Bookmarks (Full-Text Search with snippet highlighting and fallback)
-router.get('/search', (req: AuthenticatedRequest, res: Response) => {
+// 3. Search Bookmarks (Full-Text Search + AI Smart Search with fallback)
+router.get('/search', async (req: AuthenticatedRequest, res: Response) => {
   const userId = req.user!.id;
-  const { q, limit = 50, offset = 0 } = req.query;
+  const { q, limit = 50, offset = 0, smart = 'false' } = req.query;
 
   if (!q || typeof q !== 'string' || q.trim() === '') {
     return res.status(200).json([]);
@@ -351,10 +348,32 @@ router.get('/search', (req: AuthenticatedRequest, res: Response) => {
 
   const cleanQuery = q.trim();
   const db = getDb();
+  const isSmart = smart === 'true' || smart === '1';
+
+  // If Smart Search requested
+  if (isSmart) {
+    try {
+      const activeConfig = getActiveAIConfig();
+      if (!activeConfig) {
+        return res.status(400).json({
+          message: 'AI provider is not connected. Please connect an AI provider in settings to use Smart Search.'
+        });
+      }
+      const smartResults = await performSmartSearch({
+        query: cleanQuery,
+        userId,
+        limit: Number(limit)
+      });
+      return res.status(200).json(smartResults);
+    } catch (err: any) {
+      console.error('Smart search error:', err);
+      return res.status(500).json({ message: err.message || 'Smart search failed' });
+    }
+  }
 
   try {
     const terms = cleanQuery
-      .replace(/[^\w\s-]/g, ' ')
+      .replace(/[^\w\s]/g, ' ')
       .split(/\s+/)
       .filter(term => term.length > 0);
 
@@ -416,6 +435,35 @@ router.get('/search', (req: AuthenticatedRequest, res: Response) => {
   } catch (err) {
     console.error('Search bookmarks error:', err);
     res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+// Explicit Smart Search endpoint
+router.get('/smart-search', async (req: AuthenticatedRequest, res: Response) => {
+  const userId = req.user!.id;
+  const { q, limit = 50 } = req.query;
+
+  if (!q || typeof q !== 'string' || q.trim() === '') {
+    return res.status(200).json([]);
+  }
+
+  const cleanQuery = q.trim();
+  try {
+    const activeConfig = getActiveAIConfig();
+    if (!activeConfig) {
+      return res.status(400).json({
+        message: 'AI provider is not connected. Please connect an AI provider in settings to use Smart Search.'
+      });
+    }
+    const smartResults = await performSmartSearch({
+      query: cleanQuery,
+      userId,
+      limit: Number(limit)
+    });
+    return res.status(200).json(smartResults);
+  } catch (err: any) {
+    console.error('Smart search error:', err);
+    return res.status(500).json({ message: err.message || 'Smart search failed' });
   }
 });
 
@@ -561,14 +609,16 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
 
     const newBookmarkId = insertTransaction();
 
-    // Auto-tag with AI if user did not provide custom tags
+    // Queue background async auto-tagging for untagged bookmarks (non-blocking)
     const hasCustomTags = Array.isArray(tags) ? tags.length > 0 : Boolean(tags && String(tags).trim());
     if (!hasCustomTags) {
-      try {
-        await autoTagBookmark({ bookmarkId: newBookmarkId, userId, force: false });
-      } catch (aiErr) {
-        console.warn('AI auto-tag for bookmark creation failed:', aiErr);
-      }
+      scrapeQueue.add(async () => {
+        try {
+          await autoTagBookmark({ bookmarkId: newBookmarkId, userId, force: false });
+        } catch (aiErr) {
+          console.warn('Background AI auto-tag for bookmark failed:', aiErr);
+        }
+      });
     }
 
     const createdBookmark = db.prepare(`SELECT * FROM bookmarks WHERE id = ?`).get(newBookmarkId) as any;
