@@ -345,6 +345,34 @@ export async function disconnectAIConfigApi(): Promise<{ message: string; config
   });
 }
 
+export type NoteAssistAction =
+  | 'continue'
+  | 'rephrase'
+  | 'fix_grammar'
+  | 'rewrite'
+  | 'propose'
+  | 'title'
+  | 'custom';
+
+export interface NoteAssistParams {
+  action: NoteAssistAction;
+  text: string;
+  title?: string;
+  instruction?: string;
+}
+
+export interface NoteAssistResponse {
+  result: string;
+  proposedTitle?: string;
+}
+
+export async function assistNoteApi(params: NoteAssistParams): Promise<NoteAssistResponse> {
+  return apiFetch<NoteAssistResponse>('/ai/note-assist', {
+    method: 'POST',
+    body: JSON.stringify(params)
+  });
+}
+
 // --- Clips (Folders) APIs ---
 
 export async function fetchClips(): Promise<Clip[]> {

@@ -13,6 +13,7 @@ import { EditBookmarkModal } from '../components/EditBookmarkModal';
 import { ShareModal } from '../components/ShareModal';
 import { BookmarkCard } from '../components/BookmarkCard';
 import { Bookmark } from '../types';
+import * as api from '../api';
 
 describe('Markdown Parsing & List Interactions Utility', () => {
   it('resolves strikethrough, bold, italic, and inline code in inline text/titles', () => {
@@ -303,5 +304,216 @@ describe('EditBookmarkModal Note vs Non-Note fields', () => {
     // Click Edit Bookmark from menu
     fireEvent.click(screen.getByText('Edit Bookmark'));
     expect(onEditMock).toHaveBeenCalledWith(bookmark);
+  });
+});
+
+describe('NoteEditor AI Utilities (Rephrase, Grammar, Rewrite, Propose Title)', () => {
+  it('opens AI menu when AI is connected and displays streamlined utilities', () => {
+    render(
+      <NoteEditor
+        title="Project Roadmap"
+        onTitleChange={vi.fn()}
+        content="Key milestone: deliver beta by next Friday."
+        onContentChange={vi.fn()}
+        isAIConnected={true}
+      />
+    );
+
+    const aiButton = screen.getByTitle(/AI Note Utilities/i);
+    expect(aiButton).toBeInTheDocument();
+
+    // Menu is closed initially
+    expect(screen.queryByText('Rephrase')).not.toBeInTheDocument();
+
+    // Click AI Assist trigger
+    fireEvent.click(aiButton);
+
+    // Streamlined menu items appear
+    expect(screen.getByText('AI Note Utilities')).toBeInTheDocument();
+    expect(screen.getByText('Rephrase')).toBeInTheDocument();
+    expect(screen.getByText('Fix Grammar & Spelling')).toBeInTheDocument();
+    expect(screen.getByText('Rewrite Style...')).toBeInTheDocument();
+    expect(screen.getByText('Propose Title')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText(/Custom instruction/i)).toBeInTheDocument();
+  });
+
+  it('shows not connected banner when AI is not connected and user clicks AI Assist', () => {
+    const openSettingsMock = vi.fn();
+    render(
+      <NoteEditor
+        title="My Note"
+        onTitleChange={vi.fn()}
+        content="Some content"
+        onContentChange={vi.fn()}
+        isAIConnected={false}
+        onOpenAISettings={openSettingsMock}
+      />
+    );
+
+    const aiButton = screen.getByTitle(/Requires connected AI provider/i);
+    fireEvent.click(aiButton);
+
+    expect(screen.getByText(/AI provider is not connected/i)).toBeInTheDocument();
+    const connectBtn = screen.getByText('Connect AI in Settings');
+    expect(connectBtn).toBeInTheDocument();
+
+    fireEvent.click(connectBtn);
+    expect(openSettingsMock).toHaveBeenCalled();
+  });
+
+  it('executes Rephrase action and allows replacing note content', async () => {
+    const handleContent = vi.fn();
+    vi.spyOn(api, 'assistNoteApi').mockResolvedValueOnce({
+      result: 'Slip provides a seamless bookmarking and note-taking experience.'
+    });
+
+    render(
+      <NoteEditor
+        title="Note"
+        onTitleChange={vi.fn()}
+        content="Slip is nice for notes and links saving."
+        onContentChange={handleContent}
+        isAIConnected={true}
+      />
+    );
+
+    fireEvent.click(screen.getByTitle(/AI Note Utilities/i));
+    fireEvent.click(screen.getByText('Rephrase'));
+
+    const result = await screen.findByText(/Slip provides a seamless bookmarking/i);
+    expect(result).toBeInTheDocument();
+
+    const replaceBtn = screen.getByText('Replace Note');
+    fireEvent.click(replaceBtn);
+
+    expect(handleContent).toHaveBeenCalledWith(
+      'Slip provides a seamless bookmarking and note-taking experience.'
+    );
+  });
+
+  it('executes Fix Grammar & Spelling action', async () => {
+    const handleContent = vi.fn();
+    vi.spyOn(api, 'assistNoteApi').mockResolvedValueOnce({
+      result: '- **Remember**: Fix all lint errors before merging.'
+    });
+
+    render(
+      <NoteEditor
+        title="Todo"
+        onTitleChange={vi.fn()}
+        content="- **Remeber**: Fix all lint erors before mergeing."
+        onContentChange={handleContent}
+        isAIConnected={true}
+      />
+    );
+
+    fireEvent.click(screen.getByTitle(/AI Note Utilities/i));
+    fireEvent.click(screen.getByText('Fix Grammar & Spelling'));
+
+    const result = await screen.findByText('Remember');
+    expect(result).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText('Replace Note'));
+    expect(handleContent).toHaveBeenCalledWith('- **Remember**: Fix all lint errors before merging.');
+  });
+
+  it('opens Rewrite submenu and executes Make Concise', async () => {
+    const handleContent = vi.fn();
+    const spy = vi.spyOn(api, 'assistNoteApi').mockResolvedValueOnce({
+      result: 'Launch delayed to Friday.'
+    });
+
+    render(
+      <NoteEditor
+        title="Status"
+        onTitleChange={vi.fn()}
+        content="At this point in time we have decided that it is best to push the launch to Friday."
+        onContentChange={handleContent}
+        isAIConnected={true}
+      />
+    );
+
+    fireEvent.click(screen.getByTitle(/AI Note Utilities/i));
+    fireEvent.click(screen.getByText('Rewrite Style...'));
+
+    // Submenu options appear
+    expect(screen.getByText('Make Concise')).toBeInTheDocument();
+    expect(screen.getByText('Professional')).toBeInTheDocument();
+    expect(screen.getByText('Casual & Friendly')).toBeInTheDocument();
+    expect(screen.getByText('To Bullet Points')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText('Make Concise'));
+
+    expect(spy).toHaveBeenCalledWith({
+      action: 'rewrite',
+      text: 'At this point in time we have decided that it is best to push the launch to Friday.',
+      title: 'Status',
+      instruction: 'concise'
+    });
+
+    await screen.findByText('Launch delayed to Friday.');
+  });
+
+  it('proposes title and updates note title input on apply', async () => {
+    const handleTitle = vi.fn();
+    vi.spyOn(api, 'assistNoteApi').mockResolvedValueOnce({
+      result: 'API Performance Benchmarks',
+      proposedTitle: 'API Performance Benchmarks'
+    });
+
+    render(
+      <NoteEditor
+        title=""
+        onTitleChange={handleTitle}
+        content="Analysis of response times, memory footprint, and concurrent load tests."
+        onContentChange={vi.fn()}
+        isAIConnected={true}
+      />
+    );
+
+    // Suggest Title link is visible next to Note Title label when content is non-empty and title is blank
+    const suggestLink = screen.getByTitle('Generate a title from your note content');
+    expect(suggestLink).toBeInTheDocument();
+
+    fireEvent.click(suggestLink);
+
+    const result = await screen.findByText('API Performance Benchmarks');
+    expect(result).toBeInTheDocument();
+
+    const applyTitleBtn = screen.getByText('Apply as Title');
+    fireEvent.click(applyTitleBtn);
+
+    expect(handleTitle).toHaveBeenCalledWith('API Performance Benchmarks');
+  });
+
+  it('executes custom instruction prompt on Enter', async () => {
+    const spy = vi.spyOn(api, 'assistNoteApi').mockResolvedValueOnce({
+      result: 'Résumé en français.'
+    });
+
+    render(
+      <NoteEditor
+        title="Summary"
+        onTitleChange={vi.fn()}
+        content="English text here."
+        onContentChange={vi.fn()}
+        isAIConnected={true}
+      />
+    );
+
+    fireEvent.click(screen.getByTitle(/AI Note Utilities/i));
+
+    const input = screen.getByPlaceholderText(/Custom instruction/i);
+    fireEvent.change(input, { target: { value: 'Translate to French' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+
+    expect(spy).toHaveBeenCalledWith({
+      action: 'custom',
+      text: 'English text here.',
+      title: 'Summary',
+      instruction: 'Translate to French'
+    });
+
+    await screen.findByText('Résumé en français.');
   });
 });

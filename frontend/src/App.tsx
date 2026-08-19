@@ -484,6 +484,8 @@ export const App: React.FC = () => {
         onSaveNote={handleSaveNote}
         initialFile={droppedFile}
         availableTags={tags}
+        isAIConnected={aiConfig.isConnected}
+        onOpenAISettings={() => setIsAIOpen(true)}
       />
 
       <AIConnectModal
@@ -501,6 +503,8 @@ export const App: React.FC = () => {
         onClose={() => setEditingBookmark(null)}
         onUpdate={handleUpdateBookmark}
         availableTags={tags}
+        isAIConnected={aiConfig.isConnected}
+        onOpenAISettings={() => setIsAIOpen(true)}
       />
 
       <AddToClipModal

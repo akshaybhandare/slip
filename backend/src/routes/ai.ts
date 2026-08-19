@@ -2,7 +2,14 @@ import { Router, Response } from 'express';
 import { getDb } from '../db';
 import { authenticate, AuthenticatedRequest } from '../middleware/auth';
 import { encryptSecret, maskApiKey } from '../services/aiCrypto';
-import { testProviderConnection, AIProviderId, KNOWN_AI_PROVIDERS, getActiveAIConfig } from '../services/aiService';
+import {
+  testProviderConnection,
+  AIProviderId,
+  KNOWN_AI_PROVIDERS,
+  getActiveAIConfig,
+  assistNote,
+  NoteAssistAction
+} from '../services/aiService';
 
 const router = Router();
 const SETTINGS_KEY_AI_CONFIG = 'ai_config';
@@ -189,6 +196,52 @@ router.delete('/config', authenticate, (req: AuthenticatedRequest, res: Response
   } catch (err: any) {
     console.error('Failed to delete AI configuration:', err);
     return res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+// 5. POST /api/ai/note-assist - Note writing, rephrasing, grammar, rewriting, and proposal utilities
+router.post('/note-assist', authenticate, async (req: AuthenticatedRequest, res: Response) => {
+  const { action, text, title, instruction } = req.body;
+
+  if (!action) {
+    return res.status(400).json({ message: 'Action is required.' });
+  }
+
+  const validActions: NoteAssistAction[] = ['continue', 'rephrase', 'fix_grammar', 'rewrite', 'propose', 'title', 'custom'];
+  if (!validActions.includes(action)) {
+    return res.status(400).json({ message: `Invalid action "${action}". Valid actions are: ${validActions.join(', ')}` });
+  }
+
+  const cleanText = (text || '').trim();
+  const cleanTitle = (title || '').trim();
+  const cleanInstruction = (instruction || '').trim();
+
+  if (!cleanText && !cleanTitle && action !== 'continue') {
+    return res.status(400).json({ message: 'Note text or title is required to assist.' });
+  }
+
+  const activeConfig = getActiveAIConfig();
+  if (!activeConfig || !activeConfig.apiKey) {
+    return res.status(400).json({
+      message: 'AI provider is not connected. Please connect an AI provider in Settings.'
+    });
+  }
+
+  try {
+    const result = await assistNote({
+      action,
+      text: cleanText,
+      title: cleanTitle,
+      instruction: cleanInstruction,
+      config: activeConfig
+    });
+
+    return res.status(200).json(result);
+  } catch (err: any) {
+    console.error('Note assist error:', err);
+    return res.status(500).json({
+      message: err.message || 'Failed to process note assistance request.'
+    });
   }
 });
 

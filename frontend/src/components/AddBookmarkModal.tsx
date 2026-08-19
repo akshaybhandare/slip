@@ -43,6 +43,8 @@ interface AddBookmarkModalProps {
   }) => Promise<void>;
   initialFile?: File | null;
   availableTags?: Tag[];
+  isAIConnected?: boolean;
+  onOpenAISettings?: () => void;
 }
 
 export const AddBookmarkModal: React.FC<AddBookmarkModalProps> = ({
@@ -53,7 +55,9 @@ export const AddBookmarkModal: React.FC<AddBookmarkModalProps> = ({
   onSaveImage,
   onSaveNote,
   initialFile,
-  availableTags = []
+  availableTags = [],
+  isAIConnected = true,
+  onOpenAISettings
 }) => {
   const [mode, setMode] = useState<'url' | 'file' | 'note'>('url');
   const [url, setUrl] = useState('');
@@ -421,6 +425,8 @@ export const AddBookmarkModal: React.FC<AddBookmarkModalProps> = ({
               contentPlaceholder="Start typing your note... Use bullet points, **bold**, *italic*, ~~strikethrough~~, or markdown shortcuts."
               minHeight="150px"
               autoFocus
+              isAIConnected={isAIConnected}
+              onOpenAISettings={onOpenAISettings}
             />
           )}
 

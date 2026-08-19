@@ -578,4 +578,217 @@ describe('AI Backend Encryption, Authorization & Database Persistence', () => {
       expect(res.body[0].matchReason).toContain('Star Wars');
     });
   });
+
+  describe('AI Note Assistance Engine (Writing, Rephrasing, Grammar, Rewriting, Proposing)', () => {
+    it('returns 400 when note assist is requested without AI connected', async () => {
+      const db = getDb();
+      db.prepare('DELETE FROM settings WHERE key = ?').run('ai_config');
+
+      const res = await request(app)
+        .post('/api/ai/note-assist')
+        .set('Authorization', `Bearer ${regularToken}`)
+        .send({
+          action: 'fix_grammar',
+          text: 'This are bad grammer'
+        });
+
+      expect(res.status).toBe(400);
+      expect(res.body.message).toMatch(/AI provider is not connected/i);
+    });
+
+    it('rejects requests with missing action or empty content', async () => {
+      const db = getDb();
+      db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run(
+        'ai_config',
+        JSON.stringify({
+          provider: 'openai',
+          encrypted_api_key: encryptSecret('sk-test-ai-key-1234'),
+          masked_api_key: '••••••••1234',
+          api_url: 'https://api.openai.com/v1',
+          is_connected: true,
+          last_tested_at: new Date().toISOString()
+        })
+      );
+
+      // Missing action
+      const res1 = await request(app)
+        .post('/api/ai/note-assist')
+        .set('Authorization', `Bearer ${regularToken}`)
+        .send({ text: 'Some text' });
+      expect(res1.status).toBe(400);
+      expect(res1.body.message).toMatch(/Action is required/i);
+
+      // Invalid action
+      const res2 = await request(app)
+        .post('/api/ai/note-assist')
+        .set('Authorization', `Bearer ${regularToken}`)
+        .send({ action: 'invalid_action', text: 'Some text' });
+      expect(res2.status).toBe(400);
+      expect(res2.body.message).toMatch(/Invalid action/i);
+
+      // Empty text and title for rephrase
+      const res3 = await request(app)
+        .post('/api/ai/note-assist')
+        .set('Authorization', `Bearer ${regularToken}`)
+        .send({ action: 'rephrase', text: '', title: '' });
+      expect(res3.status).toBe(400);
+      expect(res3.body.message).toMatch(/Note text or title is required/i);
+    });
+
+    it('supports writing / continue action', async () => {
+      jest.spyOn(axios, 'post').mockResolvedValueOnce({
+        data: {
+          choices: [
+            {
+              message: {
+                content: '- Step 3: Configure environment variables\n- Step 4: Run database migrations'
+              }
+            }
+          ]
+        }
+      } as any);
+
+      const res = await request(app)
+        .post('/api/ai/note-assist')
+        .set('Authorization', `Bearer ${regularToken}`)
+        .send({
+          action: 'continue',
+          title: 'Deployment Checklist',
+          text: '- Step 1: Clone repo\n- Step 2: Install dependencies'
+        });
+
+      expect(res.status).toBe(200);
+      expect(res.body.result).toContain('Step 3');
+      expect(res.body.result).toContain('Step 4');
+    });
+
+    it('supports rephrasing action', async () => {
+      jest.spyOn(axios, 'post').mockResolvedValueOnce({
+        data: {
+          choices: [
+            {
+              message: {
+                content: 'Slip enables users to archive links, notes, and documents in a unified workspace.'
+              }
+            }
+          ]
+        }
+      } as any);
+
+      const res = await request(app)
+        .post('/api/ai/note-assist')
+        .set('Authorization', `Bearer ${regularToken}`)
+        .send({
+          action: 'rephrase',
+          text: 'Slip is a tool where people save links and note things down together.'
+        });
+
+      expect(res.status).toBe(200);
+      expect(res.body.result).toContain('Slip enables users to archive links');
+    });
+
+    it('supports grammar fixing action while preserving markdown formatting', async () => {
+      jest.spyOn(axios, 'post').mockResolvedValueOnce({
+        data: {
+          choices: [
+            {
+              message: {
+                content: '- **Meeting Notes**: Discussed the Q3 roadmap with the team.\n- Remember to *review* the PR.'
+              }
+            }
+          ]
+        }
+      } as any);
+
+      const res = await request(app)
+        .post('/api/ai/note-assist')
+        .set('Authorization', `Bearer ${regularToken}`)
+        .send({
+          action: 'fix_grammar',
+          text: '- **Meeting notes**: Discuss Q3 roadmap with team.\n- Remeber to *reivew* the PR.'
+        });
+
+      expect(res.status).toBe(200);
+      expect(res.body.result).toContain('**Meeting Notes**');
+      expect(res.body.result).toContain('*review*');
+    });
+
+    it('supports rewriting with stylistic instructions (concise, professional, bullets)', async () => {
+      jest.spyOn(axios, 'post').mockResolvedValueOnce({
+        data: {
+          choices: [
+            {
+              message: {
+                content: '- Architecture finalized\n- Tests passing at 100%\n- Production deploy scheduled for Monday'
+              }
+            }
+          ]
+        }
+      } as any);
+
+      const res = await request(app)
+        .post('/api/ai/note-assist')
+        .set('Authorization', `Bearer ${regularToken}`)
+        .send({
+          action: 'rewrite',
+          instruction: 'bullets',
+          text: 'We finished the architecture discussion today and all our test suites passed completely. We are ready to ship to production next Monday morning.'
+        });
+
+      expect(res.status).toBe(200);
+      expect(res.body.result).toContain('- Architecture finalized');
+    });
+
+    it('supports proposing ideas, outlines, and title generation', async () => {
+      // 1. Propose outline/ideas
+      jest.spyOn(axios, 'post').mockResolvedValueOnce({
+        data: {
+          choices: [
+            {
+              message: {
+                content: '### Key Discussion Points\n1. Token optimization strategies\n2. Caching layer design\n3. Fallback mechanisms'
+              }
+            }
+          ]
+        }
+      } as any);
+
+      const res1 = await request(app)
+        .post('/api/ai/note-assist')
+        .set('Authorization', `Bearer ${regularToken}`)
+        .send({
+          action: 'propose',
+          instruction: 'outline',
+          title: 'AI Architecture Planning',
+          text: 'Need to plan the AI engine design.'
+        });
+
+      expect(res1.status).toBe(200);
+      expect(res1.body.result).toContain('Key Discussion Points');
+
+      // 2. Propose title
+      jest.spyOn(axios, 'post').mockResolvedValueOnce({
+        data: {
+          choices: [
+            {
+              message: {
+                content: 'LLM Latency & Caching Strategies'
+              }
+            }
+          ]
+        }
+      } as any);
+
+      const res2 = await request(app)
+        .post('/api/ai/note-assist')
+        .set('Authorization', `Bearer ${regularToken}`)
+        .send({
+          action: 'title',
+          text: 'Detailed analysis of cache hits, token latency reduction, and multi-tier prompt caching across models.'
+        });
+
+      expect(res2.status).toBe(200);
+      expect(res2.body.proposedTitle).toBe('LLM Latency & Caching Strategies');
+    });
+  });
 });

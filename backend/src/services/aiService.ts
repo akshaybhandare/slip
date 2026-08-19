@@ -917,3 +917,263 @@ export async function testProviderConnection(params: {
     return { success: false, message: err.message || 'Connection test failed.' };
   }
 }
+
+export type NoteAssistAction =
+  | 'continue'
+  | 'rephrase'
+  | 'fix_grammar'
+  | 'rewrite'
+  | 'propose'
+  | 'title'
+  | 'custom';
+
+export interface NoteAssistParams {
+  action: NoteAssistAction;
+  text: string;
+  title?: string;
+  instruction?: string;
+  config?: { provider: AIProviderId; apiKey: string; apiUrl?: string; model?: string };
+}
+
+export interface NoteAssistResult {
+  result: string;
+  proposedTitle?: string;
+}
+
+export function cleanLLMTextOutput(raw: string): string {
+  if (!raw) return '';
+  let cleaned = raw.trim();
+  // Strip outer markdown code blocks if the model wrapped the entire output
+  if (cleaned.startsWith('```') && cleaned.endsWith('```')) {
+    cleaned = cleaned.replace(/^```[a-zA-Z]*\n?/, '').replace(/\n?```$/, '').trim();
+  }
+  return cleaned;
+}
+
+export async function assistNote(params: NoteAssistParams): Promise<NoteAssistResult> {
+  const activeConfig = params.config || getActiveAIConfig();
+  if (!activeConfig || !activeConfig.apiKey) {
+    throw new Error('AI provider is not configured or connected. Please connect an AI provider in settings.');
+  }
+
+  const { action, text = '', title = '', instruction = '' } = params;
+  const { provider, apiKey, apiUrl } = activeConfig;
+  const model = (activeConfig.model || '').trim() || KNOWN_AI_PROVIDERS[provider]?.defaultModel || 'default';
+
+  let systemPrompt = '';
+  let userPrompt = '';
+
+  switch (action) {
+    case 'continue': {
+      systemPrompt = 'You are an intelligent note-taking and writing assistant for Slip. Your goal is to continue or expand notes with clear, thoughtful markdown text. Preserve existing structure, bullet formatting, and tone. Return ONLY the continuation or expansion text without introductory remarks, explanations, or quotes.';
+      const contextParts: string[] = [];
+      if (title.trim()) contextParts.push(`Note Title: "${title.trim()}"`);
+      if (text.trim()) contextParts.push(`Current Note Content:\n${text.trim()}`);
+      userPrompt = `${contextParts.join('\n\n')}\n\nTask: Continue writing the note naturally. Expand the thoughts or draft the next logical section in clean markdown.`;
+      break;
+    }
+    case 'rephrase': {
+      systemPrompt = 'You are an expert editor and writing coach. Your goal is to rephrase the provided note content to improve clarity, flow, and elegance while preserving the original meaning and markdown structure. Return ONLY the rephrased text without conversational filler, explanations, or quotes.';
+      userPrompt = `Note text to rephrase:\n\n${text.trim()}`;
+      break;
+    }
+    case 'fix_grammar': {
+      systemPrompt = 'You are a meticulous proofreader and editor. Your goal is to correct all spelling, grammar, punctuation, and typographical mistakes in the provided text. Preserve the original voice, markdown formatting (bold, italic, lists, code), and intent. Return ONLY the corrected text without explanations or commentary.';
+      userPrompt = `Note text to proofread and correct:\n\n${text.trim()}`;
+      break;
+    }
+    case 'rewrite': {
+      let styleDesc = 'Improve clarity, structure, and tone.';
+      const lowerInst = instruction.toLowerCase().trim();
+      if (lowerInst.includes('concise') || lowerInst.includes('short')) {
+        styleDesc = 'Make the text concise, punchy, and direct while cutting unnecessary words.';
+      } else if (lowerInst.includes('professional') || lowerInst.includes('formal')) {
+        styleDesc = 'Rewrite with a professional, clear, and articulate tone.';
+      } else if (lowerInst.includes('casual') || lowerInst.includes('friendly')) {
+        styleDesc = 'Rewrite with an engaging, casual, and friendly conversational tone.';
+      } else if (lowerInst.includes('bullet') || lowerInst.includes('list')) {
+        styleDesc = 'Structure and organize the key ideas into a clean bulleted markdown list.';
+      } else if (instruction.trim()) {
+        styleDesc = instruction.trim();
+      }
+
+      systemPrompt = 'You are an expert copywriter and editor. Your goal is to rewrite the provided text according to the specified style or goal. Maintain essential meaning and use clean Markdown formatting. Return ONLY the rewritten text without conversational preamble or explanations.';
+      userPrompt = `Style/Goal: ${styleDesc}\n\nNote text to rewrite:\n\n${text.trim()}`;
+      break;
+    }
+    case 'propose': {
+      let proposeGoal = 'Propose thoughtful next points, related ideas, or action items.';
+      const lowerInst = instruction.toLowerCase().trim();
+      if (lowerInst.includes('idea') || lowerInst.includes('brainstorm')) {
+        proposeGoal = 'Propose creative ideas, related angles, and exploration points.';
+      } else if (lowerInst.includes('outline')) {
+        proposeGoal = 'Propose a structured markdown outline for this note.';
+      } else if (lowerInst.includes('action') || lowerInst.includes('task') || lowerInst.includes('step')) {
+        proposeGoal = 'Propose concrete action items and next steps.';
+      } else if (instruction.trim()) {
+        proposeGoal = instruction.trim();
+      }
+
+      systemPrompt = 'You are a creative brainstorming and strategy partner. Your goal is to propose valuable next points, ideas, outlines, or action items based on the provided note context. Format your response cleanly using Markdown bullet points and bold headers where appropriate. Return ONLY the proposed content without conversational filler.';
+      const contextParts: string[] = [];
+      if (title.trim()) contextParts.push(`Note Title: "${title.trim()}"`);
+      if (text.trim()) contextParts.push(`Note Content:\n${text.trim()}`);
+      userPrompt = `${contextParts.join('\n\n')}\n\nGoal: ${proposeGoal}`;
+      break;
+    }
+    case 'title': {
+      systemPrompt = 'You are an expert editor. Propose a short, clear, and descriptive title for the following note. The title should be at most 8 words and capture the main idea. Return ONLY the proposed title text without quotes, markdown headers (#), or conversational filler.';
+      userPrompt = `Note Content:\n\n${text.trim() || title.trim()}`;
+      break;
+    }
+    case 'custom':
+    default: {
+      systemPrompt = 'You are an AI note writing assistant for Slip. Follow the user instruction on the note content carefully. Return ONLY the resulting markdown text without conversational preamble.';
+      const contextParts: string[] = [];
+      if (instruction.trim()) contextParts.push(`Instruction: ${instruction.trim()}`);
+      if (title.trim()) contextParts.push(`Note Title: "${title.trim()}"`);
+      if (text.trim()) contextParts.push(`Note Content:\n${text.trim()}`);
+      userPrompt = contextParts.join('\n\n');
+      break;
+    }
+  }
+
+  let rawOutput = '';
+
+  try {
+    if (provider === 'openai') {
+      const baseUrl = apiUrl || KNOWN_AI_PROVIDERS.openai.defaultUrl;
+      const res = await axios.post(
+        `${baseUrl}/chat/completions`,
+        {
+          model,
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: userPrompt }
+          ],
+          temperature: 0.3
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${apiKey}`,
+            'Content-Type': 'application/json'
+          },
+          timeout: 25000
+        }
+      );
+      rawOutput = res.data?.choices?.[0]?.message?.content || '';
+    } else if (provider === 'claude') {
+      const baseUrl = apiUrl || KNOWN_AI_PROVIDERS.claude.defaultUrl;
+      const res = await axios.post(
+        `${baseUrl}/messages`,
+        {
+          model,
+          system: systemPrompt,
+          messages: [
+            { role: 'user', content: userPrompt }
+          ],
+          max_tokens: 1500,
+          temperature: 0.3
+        },
+        {
+          headers: {
+            'x-api-key': apiKey,
+            'anthropic-version': '2023-06-01',
+            'content-type': 'application/json'
+          },
+          timeout: 25000
+        }
+      );
+      rawOutput = res.data?.content?.[0]?.text || '';
+    } else if (provider === 'gemini') {
+      const baseUrl = apiUrl || KNOWN_AI_PROVIDERS.gemini.defaultUrl;
+      const cleanModel = model.replace(/^models\//, '');
+      const res = await axios.post(
+        `${baseUrl}/models/${cleanModel}:generateContent?key=${encodeURIComponent(apiKey)}`,
+        {
+          systemInstruction: {
+            parts: [{ text: systemPrompt }]
+          },
+          contents: [
+            {
+              parts: [{ text: userPrompt }]
+            }
+          ],
+          generationConfig: {
+            temperature: 0.3
+          }
+        },
+        {
+          headers: { 'Content-Type': 'application/json' },
+          timeout: 25000
+        }
+      );
+      rawOutput = res.data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    } else {
+      // Custom provider
+      const base = apiUrl?.includes('://') ? apiUrl : `https://${apiUrl || ''}`;
+      const targetUrl = base.endsWith('/chat/completions') || base.includes('/generate')
+        ? base
+        : `${base.replace(/\/+$/, '')}/chat/completions`;
+
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        'HTTP-Referer': 'https://github.com/slip-archive/slip',
+        'X-Title': 'Slip Visual Bookmarks'
+      };
+      if (apiKey) {
+        headers['Authorization'] = `Bearer ${apiKey}`;
+      }
+
+      let res: any;
+      try {
+        res = await axios.post(
+          targetUrl,
+          {
+            model,
+            messages: [
+              { role: 'system', content: systemPrompt },
+              { role: 'user', content: userPrompt }
+            ],
+            max_tokens: 1500,
+            temperature: 0.3
+          },
+          {
+            headers,
+            timeout: 25000
+          }
+        );
+      } catch {
+        // Fallback for models without system prompt support
+        const combinedPrompt = `${systemPrompt}\n\n---\n\n${userPrompt}`;
+        res = await axios.post(
+          targetUrl,
+          {
+            model,
+            messages: [
+              { role: 'user', content: combinedPrompt }
+            ],
+            max_tokens: 1500,
+            temperature: 0.3
+          },
+          {
+            headers,
+            timeout: 25000
+          }
+        );
+      }
+      rawOutput = res.data?.choices?.[0]?.message?.content || res.data?.response || '';
+    }
+  } catch (err: any) {
+    const errorDetail = err.response?.data?.error?.message || err.response?.data?.message || err.message || 'AI request failed';
+    throw new Error(`AI Note Assist Error (${provider} / ${model}): ${errorDetail}`);
+  }
+
+  const cleanedResult = cleanLLMTextOutput(rawOutput);
+  const proposedTitle = action === 'title' ? cleanedResult.replace(/^[#\s"']+|["'\s]+$/g, '').trim() : undefined;
+
+  return {
+    result: cleanedResult,
+    proposedTitle
+  };
+}
