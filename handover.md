@@ -126,12 +126,21 @@ curl -f http://localhost:3000/health
 ### Bookmarks & Content (`/api/bookmarks`)
 * `GET /api/bookmarks` — Lists user bookmarks (supports `?type=article|video|product|image|website` and `?tag=name`).
 * `GET /api/bookmarks/search?q=query` — Full-text search across titles, descriptions, reader text, and tags using SQLite FTS5.
+* `GET /api/bookmarks/search?q=query&smart=true` — Semantic AI Smart Search with LLM relevance scoring and ranking (when AI connected).
 * `POST /api/bookmarks` — Scrapes and archives a new bookmark (`{ url, tags }`).
+* `POST /api/bookmarks/:id/auto-tag` — Triggers AI auto-tagging for a bookmark using existing tag library.
 * `PUT /api/bookmarks/:id` — Updates title, description, category, and tags.
 * `POST /api/bookmarks/:id/rescrape` — Re-scrapes metadata, OpenGraph tags, and cover images for a single bookmark.
 * `POST /api/bookmarks/rescrape-all` — Triggers a global background batch re-scrape for all user bookmarks.
 * `DELETE /api/bookmarks/:id` — Deletes a bookmark and its associated tag links.
 * `GET /api/bookmarks/tags` — Returns user-scoped tags with usage counts.
+
+### AI Integration & Configuration (`/api/ai`)
+* `GET /api/ai/config` — Returns active AI configuration, provider name, model, and connection state.
+* `POST /api/ai/test` — Tests provider API key/endpoint connectivity with live latency check (Admin only).
+* `POST /api/ai/config` — Validates connection, encrypts key via AES-256, and saves configuration in DB (Admin only).
+* `DELETE /api/ai/config` — Disconnects AI provider and removes stored credentials (Admin only).
+* `POST /api/ai/note-assist` — AI writing assistant for notes (supports actions: `continue`, `rephrase`, `fix_grammar`, `rewrite`, `propose`, `title`).
 
 ### Public Shareables (`/api/share`)
 * `POST /api/share/bookmark/:id` — Creates a public, unauthenticated read-only token link.
@@ -151,7 +160,7 @@ curl -f http://localhost:3000/health
 
 ### Backend (`cd backend`)
 ```bash
-# Run unit & integration tests (47 tests across 7 test suites)
+# Run unit & integration tests (90 tests across 8 test suites)
 npm test
 
 # Run development server with hot-reload
@@ -166,7 +175,7 @@ npm start
 
 ### Frontend (`cd frontend`)
 ```bash
-# Run frontend UI tests (6 tests in Vitest)
+# Run frontend UI tests (48 tests in Vitest across 4 test suites)
 npm test
 
 # Run Vite development server

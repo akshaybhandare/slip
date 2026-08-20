@@ -8,8 +8,13 @@ interface MasonryGridProps {
   onShare: (bookmark: Bookmark) => void;
   onEdit: (bookmark: Bookmark) => void;
   onRescrape: (id: number) => Promise<void>;
+  onAutoTag?: (id: number) => Promise<void>;
+  onTogglePin?: (id: number) => Promise<void>;
+  isAIConnected?: boolean;
   onDelete: (id: number) => void;
   onTagClick: (tagName: string) => void;
+  onManageClips?: (bookmark: Bookmark) => void;
+  onRemoveFromClip?: (bookmarkId: number) => void;
 }
 
 export const MasonryGrid: React.FC<MasonryGridProps> = ({
@@ -18,8 +23,13 @@ export const MasonryGrid: React.FC<MasonryGridProps> = ({
   onShare,
   onEdit,
   onRescrape,
+  onAutoTag,
+  onTogglePin,
+  isAIConnected,
   onDelete,
-  onTagClick
+  onTagClick,
+  onManageClips,
+  onRemoveFromClip
 }) => {
   const [columnCount, setColumnCount] = useState(2);
 
@@ -58,8 +68,13 @@ export const MasonryGrid: React.FC<MasonryGridProps> = ({
               onShare={onShare}
               onEdit={onEdit}
               onRescrape={onRescrape}
+              onAutoTag={onAutoTag}
+              onTogglePin={onTogglePin}
+              isAIConnected={isAIConnected}
               onDelete={onDelete}
               onTagClick={onTagClick}
+              onManageClips={onManageClips}
+              onRemoveFromClip={onRemoveFromClip}
             />
           ))}
         </div>

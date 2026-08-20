@@ -407,5 +407,112 @@ describe('Bookmark CRUD & Local Thumbnail Cache Integrations', () => {
       expect(verifyRes.body.content_type).toBe('note');
     });
   });
+
+  describe('Pinning Slips to Top & Pin Limit Enforcement', () => {
+    test('GET /api/bookmarks/pin-config should return configured maxPinnedSlips', async () => {
+      const res = await request(app)
+        .get('/api/bookmarks/pin-config')
+        .set('Cookie', user1Cookie);
+
+      expect(res.status).toBe(200);
+      expect(res.body).toHaveProperty('maxPinnedSlips');
+      expect(typeof res.body.maxPinnedSlips).toBe('number');
+      expect(res.body.maxPinnedSlips).toBeGreaterThan(0);
+    });
+
+    test('PUT /api/bookmarks/:id/pin should pin and unpin bookmark, ordering pinned items to top', async () => {
+      // 1. Create two new bookmarks
+      const b1 = await request(app)
+        .post('/api/bookmarks')
+        .set('Cookie', user1Cookie)
+        .send({ url: 'https://example.com/first', title: 'First Slip' });
+
+      const b2 = await request(app)
+        .post('/api/bookmarks')
+        .set('Cookie', user1Cookie)
+        .send({ url: 'https://example.com/second', title: 'Second Slip' });
+
+      const id1 = b1.body.id;
+      const id2 = b2.body.id;
+
+      // Pin the first bookmark (which is older than second)
+      const pinRes = await request(app)
+        .put(`/api/bookmarks/${id1}/pin`)
+        .set('Cookie', user1Cookie)
+        .send({ pinned: true });
+
+      expect(pinRes.status).toBe(200);
+      expect(pinRes.body.is_pinned).toBe(true);
+
+      // Verify listing: pinned bookmark id1 comes before id2 even though id2 was created later
+      const listRes = await request(app)
+        .get('/api/bookmarks')
+        .set('Cookie', user1Cookie);
+
+      expect(listRes.status).toBe(200);
+      const b1Index = listRes.body.findIndex((b: any) => b.id === id1);
+      const b2Index = listRes.body.findIndex((b: any) => b.id === id2);
+      expect(b1Index).toBeLessThan(b2Index);
+      expect(listRes.body[b1Index].is_pinned).toBe(true);
+
+      // Toggle unpin
+      const unpinRes = await request(app)
+        .put(`/api/bookmarks/${id1}/pin`)
+        .set('Cookie', user1Cookie);
+
+      expect(unpinRes.status).toBe(200);
+      expect(unpinRes.body.is_pinned).toBe(false);
+    });
+
+    test('should strictly enforce max pinned slips limit', async () => {
+      const configRes = await request(app)
+        .get('/api/bookmarks/pin-config')
+        .set('Cookie', user1Cookie);
+      const limit = configRes.body.maxPinnedSlips;
+
+      // Create limit + 1 bookmarks
+      const createdIds: number[] = [];
+      for (let i = 0; i < limit + 1; i++) {
+        const res = await request(app)
+          .post('/api/bookmarks')
+          .set('Cookie', user1Cookie)
+          .send({ url: `https://testpin${i}.org`, title: `Pin Test ${i}` });
+        createdIds.push(res.body.id);
+      }
+
+      // Pin up to limit
+      for (let i = 0; i < limit; i++) {
+        const pinRes = await request(app)
+          .put(`/api/bookmarks/${createdIds[i]}/pin`)
+          .set('Cookie', user1Cookie)
+          .send({ pinned: true });
+        expect(pinRes.status).toBe(200);
+        expect(pinRes.body.is_pinned).toBe(true);
+      }
+
+      // Attempting to pin the (limit + 1)th bookmark should fail with 400
+      const overflowRes = await request(app)
+        .put(`/api/bookmarks/${createdIds[limit]}/pin`)
+        .set('Cookie', user1Cookie)
+        .send({ pinned: true });
+
+      expect(overflowRes.status).toBe(400);
+      expect(overflowRes.body.message).toMatch(/limit/i);
+
+      // Unpin one, then pinning should succeed
+      await request(app)
+        .put(`/api/bookmarks/${createdIds[0]}/pin`)
+        .set('Cookie', user1Cookie)
+        .send({ pinned: false });
+
+      const retryRes = await request(app)
+        .put(`/api/bookmarks/${createdIds[limit]}/pin`)
+        .set('Cookie', user1Cookie)
+        .send({ pinned: true });
+
+      expect(retryRes.status).toBe(200);
+      expect(retryRes.body.is_pinned).toBe(true);
+    });
+  });
 });
 

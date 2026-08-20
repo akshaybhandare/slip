@@ -1,14 +1,41 @@
 import { Router, Response } from 'express';
 import crypto from 'crypto';
 import { getDb } from '../db';
+import { getMaxPinnedSlips } from '../config';
 import { authenticate, AuthenticatedRequest } from '../middleware/auth';
 import { scrapeUrl, ScrapedMetadata, extractPlatformTag } from '../services/scraper';
 import { scrapeQueue } from '../services/queue';
 import { cacheThumbnail, saveUploadedFile, saveUploadedImage } from '../services/thumbnail';
+import { autoTagBookmark, performSmartSearch, getActiveAIConfig } from '../services/aiService';
 
 const router = Router();
 
 router.use(authenticate);
+
+function attachTagsBatch(db: any, bookmarks: any[]): void {
+  if (!bookmarks || bookmarks.length === 0) return;
+  const bookmarkIds = bookmarks.map((b) => b.id);
+  const placeholders = bookmarkIds.map(() => '?').join(',');
+  const allTags = db.prepare(`
+    SELECT bt.bookmark_id, t.id, t.name 
+    FROM tags t
+    JOIN bookmark_tags bt ON t.id = bt.tag_id
+    WHERE bt.bookmark_id IN (${placeholders})
+  `).all(...bookmarkIds) as { bookmark_id: number; id: number; name: string }[];
+
+  const tagMap = new Map<number, { id: number; name: string }[]>();
+  for (const t of allTags) {
+    if (!tagMap.has(t.bookmark_id)) {
+      tagMap.set(t.bookmark_id, []);
+    }
+    tagMap.get(t.bookmark_id)!.push({ id: t.id, name: t.name });
+  }
+
+  for (const b of bookmarks) {
+    b.tags = tagMap.get(b.id) || [];
+    b.is_pinned = Boolean(b.is_pinned);
+  }
+}
 
 async function handleFileUpload(req: AuthenticatedRequest, res: Response) {
   const userId = req.user!.id;
@@ -135,11 +162,12 @@ async function handleFileUpload(req: AuthenticatedRequest, res: Response) {
 
     const createdBookmark = db.prepare(`
       SELECT id, user_id, url, title, description, personal_note, content_type, 
-             image_path, favicon_path, created_at, updated_at
+             image_path, favicon_path, is_pinned, pinned_at, created_at, updated_at
       FROM bookmarks WHERE id = ?
     `).get(bookmarkId) as any;
 
     createdBookmark.tags = tagSet;
+    createdBookmark.is_pinned = Boolean(createdBookmark.is_pinned);
 
     return res.status(201).json(createdBookmark);
   } catch (err: any) {
@@ -224,14 +252,28 @@ async function handleNoteCreation(req: AuthenticatedRequest, res: Response) {
     });
 
     const { bookmarkId, tagSet } = insertTransaction();
+    const finalTagSet = new Set<string>(tagSet);
+
+    // Queue background async auto-tagging for untagged notes (non-blocking)
+    const hasCustomTags = Array.isArray(tags) ? tags.length > 0 : Boolean(tags && String(tags).trim());
+    if (!hasCustomTags) {
+      scrapeQueue.add(async () => {
+        try {
+          await autoTagBookmark({ bookmarkId, userId, force: false });
+        } catch (aiErr) {
+          console.warn('Background AI auto-tag for note failed:', aiErr);
+        }
+      });
+    }
 
     const createdBookmark = db.prepare(`
       SELECT id, user_id, url, title, description, personal_note, content_type, 
-             image_path, favicon_path, created_at, updated_at
+             image_path, favicon_path, is_pinned, pinned_at, created_at, updated_at
       FROM bookmarks WHERE id = ?
     `).get(bookmarkId) as any;
 
-    createdBookmark.tags = tagSet;
+    createdBookmark.tags = Array.from(finalTagSet);
+    createdBookmark.is_pinned = Boolean(createdBookmark.is_pinned);
 
     return res.status(201).json(createdBookmark);
   } catch (err: any) {
@@ -246,7 +288,18 @@ router.post('/upload', handleFileUpload);
 router.post('/note', handleNoteCreation);
 
 
-// 1. Get All Bookmarks (Filtered by user, optional contentType or tag)
+// 0.5 Get Pinned Slips Configuration
+router.get('/pin-config', (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const maxPinnedSlips = getMaxPinnedSlips();
+    res.status(200).json({ maxPinnedSlips });
+  } catch (err) {
+    console.error('Fetch pin config error:', err);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+// 1. Get All Bookmarks (Filtered by user, optional contentType or tag; Pinned slips ordered first)
 router.get('/', (req: AuthenticatedRequest, res: Response) => {
   const userId = req.user!.id;
   const { contentType, tag, limit = 50, offset = 0 } = req.query;
@@ -255,7 +308,7 @@ router.get('/', (req: AuthenticatedRequest, res: Response) => {
     const db = getDb();
     let query = `
       SELECT b.id, b.user_id, b.url, b.title, b.description, b.personal_note, b.content_type, 
-             b.image_path, b.favicon_path, b.created_at, b.updated_at
+             b.image_path, b.favicon_path, b.is_pinned, b.pinned_at, b.created_at, b.updated_at
       FROM bookmarks b
     `;
     const params: any[] = [userId];
@@ -276,22 +329,13 @@ router.get('/', (req: AuthenticatedRequest, res: Response) => {
       params.push(contentType);
     }
 
-    query += ` ORDER BY b.created_at DESC LIMIT ? OFFSET ?`;
+    query += ` ORDER BY b.is_pinned DESC, b.pinned_at DESC, b.created_at DESC LIMIT ? OFFSET ?`;
     params.push(Number(limit), Number(offset));
 
     const bookmarks = db.prepare(query).all(...params) as any[];
 
-    // Attach tags for each bookmark
-    const tagQuery = db.prepare(`
-      SELECT t.id, t.name 
-      FROM tags t
-      JOIN bookmark_tags bt ON t.id = bt.tag_id
-      WHERE bt.bookmark_id = ?
-    `);
-
-    for (const b of bookmarks) {
-      b.tags = tagQuery.all(b.id);
-    }
+    // Attach tags in a single batch query
+    attachTagsBatch(db, bookmarks);
 
     res.status(200).json(bookmarks);
   } catch (err) {
@@ -323,10 +367,10 @@ router.get('/tags', (req: AuthenticatedRequest, res: Response) => {
   }
 });
 
-// 3. Search Bookmarks (Full-Text Search with snippet highlighting and fallback)
-router.get('/search', (req: AuthenticatedRequest, res: Response) => {
+// 3. Search Bookmarks (Full-Text Search + AI Smart Search with fallback)
+router.get('/search', async (req: AuthenticatedRequest, res: Response) => {
   const userId = req.user!.id;
-  const { q, limit = 50, offset = 0 } = req.query;
+  const { q, limit = 50, offset = 0, smart = 'false' } = req.query;
 
   if (!q || typeof q !== 'string' || q.trim() === '') {
     return res.status(200).json([]);
@@ -334,10 +378,32 @@ router.get('/search', (req: AuthenticatedRequest, res: Response) => {
 
   const cleanQuery = q.trim();
   const db = getDb();
+  const isSmart = smart === 'true' || smart === '1';
+
+  // If Smart Search requested
+  if (isSmart) {
+    try {
+      const activeConfig = getActiveAIConfig();
+      if (!activeConfig) {
+        return res.status(400).json({
+          message: 'AI provider is not connected. Please connect an AI provider in settings to use Smart Search.'
+        });
+      }
+      const smartResults = await performSmartSearch({
+        query: cleanQuery,
+        userId,
+        limit: Number(limit)
+      });
+      return res.status(200).json(smartResults);
+    } catch (err: any) {
+      console.error('Smart search error:', err);
+      return res.status(500).json({ message: err.message || 'Smart search failed' });
+    }
+  }
 
   try {
     const terms = cleanQuery
-      .replace(/[^\w\s-]/g, ' ')
+      .replace(/[^\w\s]/g, ' ')
       .split(/\s+/)
       .filter(term => term.length > 0);
 
@@ -349,13 +415,13 @@ router.get('/search', (req: AuthenticatedRequest, res: Response) => {
       try {
         const ftsQuery = `
           SELECT b.id, b.user_id, b.url, b.title, b.description, b.personal_note, b.content_type, 
-                 b.image_path, b.favicon_path, b.created_at, b.updated_at,
+                 b.image_path, b.favicon_path, b.is_pinned, b.pinned_at, b.created_at, b.updated_at,
                  snippet(bookmarks_fts, -1, '<mark>', '</mark>', '...', 25) as snippet,
                  bm25(bookmarks_fts) as rank
           FROM bookmarks_fts
           JOIN bookmarks b ON bookmarks_fts.rowid = b.id
           WHERE bookmarks_fts MATCH ? AND b.user_id = ?
-          ORDER BY rank ASC
+          ORDER BY b.is_pinned DESC, rank ASC
           LIMIT ? OFFSET ?
         `;
         bookmarks = db.prepare(ftsQuery).all(sanitizedTerms, userId, Number(limit), Number(offset)) as any[];
@@ -375,30 +441,51 @@ router.get('/search', (req: AuthenticatedRequest, res: Response) => {
 
       const likeQuery = `
         SELECT b.id, b.user_id, b.url, b.title, b.description, b.personal_note, b.content_type, 
-               b.image_path, b.favicon_path, b.created_at, b.updated_at
+               b.image_path, b.favicon_path, b.is_pinned, b.pinned_at, b.created_at, b.updated_at
         FROM bookmarks b
         WHERE b.user_id = ? AND (${conditions})
-        ORDER BY b.created_at DESC
+        ORDER BY b.is_pinned DESC, b.pinned_at DESC, b.created_at DESC
         LIMIT ? OFFSET ?
       `;
       bookmarks = db.prepare(likeQuery).all(...params) as any[];
     }
 
-    const tagQuery = db.prepare(`
-      SELECT t.id, t.name 
-      FROM tags t
-      JOIN bookmark_tags bt ON t.id = bt.tag_id
-      WHERE bt.bookmark_id = ?
-    `);
-
-    for (const b of bookmarks) {
-      b.tags = tagQuery.all(b.id);
-    }
+    // Attach tags in a single batch query
+    attachTagsBatch(db, bookmarks);
 
     res.status(200).json(bookmarks);
   } catch (err) {
     console.error('Search bookmarks error:', err);
     res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+// Explicit Smart Search endpoint
+router.get('/smart-search', async (req: AuthenticatedRequest, res: Response) => {
+  const userId = req.user!.id;
+  const { q, limit = 50 } = req.query;
+
+  if (!q || typeof q !== 'string' || q.trim() === '') {
+    return res.status(200).json([]);
+  }
+
+  const cleanQuery = q.trim();
+  try {
+    const activeConfig = getActiveAIConfig();
+    if (!activeConfig) {
+      return res.status(400).json({
+        message: 'AI provider is not connected. Please connect an AI provider in settings to use Smart Search.'
+      });
+    }
+    const smartResults = await performSmartSearch({
+      query: cleanQuery,
+      userId,
+      limit: Number(limit)
+    });
+    return res.status(200).json(smartResults);
+  } catch (err: any) {
+    console.error('Smart search error:', err);
+    return res.status(500).json({ message: err.message || 'Smart search failed' });
   }
 });
 
@@ -425,6 +512,7 @@ router.get('/:id', (req: AuthenticatedRequest, res: Response) => {
     `).all(bookmark.id);
 
     bookmark.tags = tags;
+    bookmark.is_pinned = Boolean(bookmark.is_pinned);
     res.status(200).json(bookmark);
   } catch (err) {
     console.error('Fetch bookmark details error:', err);
@@ -544,6 +632,18 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
 
     const newBookmarkId = insertTransaction();
 
+    // Queue background async auto-tagging for untagged bookmarks (non-blocking)
+    const hasCustomTags = Array.isArray(tags) ? tags.length > 0 : Boolean(tags && String(tags).trim());
+    if (!hasCustomTags) {
+      scrapeQueue.add(async () => {
+        try {
+          await autoTagBookmark({ bookmarkId: newBookmarkId, userId, force: false });
+        } catch (aiErr) {
+          console.warn('Background AI auto-tag for bookmark failed:', aiErr);
+        }
+      });
+    }
+
     const createdBookmark = db.prepare(`SELECT * FROM bookmarks WHERE id = ?`).get(newBookmarkId) as any;
     const attachedTags = db.prepare(`
       SELECT t.id, t.name FROM tags t
@@ -564,14 +664,28 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
 router.put('/:id', (req: AuthenticatedRequest, res: Response) => {
   const userId = req.user!.id;
   const { id } = req.params;
-  const { title, description, personalNote, contentType, tags } = req.body;
+  const { title, description, personalNote, contentType, tags, isPinned, is_pinned } = req.body;
 
   try {
     const db = getDb();
 
-    const existing = db.prepare(`SELECT id FROM bookmarks WHERE id = ? AND user_id = ?`).get(id, userId);
+    const existing = db.prepare(`SELECT id, is_pinned FROM bookmarks WHERE id = ? AND user_id = ?`).get(id, userId) as { id: number; is_pinned: number } | undefined;
     if (!existing) {
       return res.status(404).json({ message: 'Bookmark not found or unauthorized' });
+    }
+
+    if (isPinned !== undefined || is_pinned !== undefined) {
+      const wantsPin = isPinned !== undefined ? Boolean(isPinned) : Boolean(is_pinned);
+      if (wantsPin && !existing.is_pinned) {
+        const pinnedCount = db.prepare(`SELECT COUNT(*) as count FROM bookmarks WHERE user_id = ? AND is_pinned = 1 AND id != ?`).get(userId, id) as { count: number };
+        const maxPins = getMaxPinnedSlips();
+        if (pinnedCount.count >= maxPins) {
+          return res.status(400).json({
+            message: `Maximum limit of ${maxPins} pinned slips reached. Please unpin a slip before pinning another.`,
+            maxPinnedSlips: maxPins
+          });
+        }
+      }
     }
 
     const updateTransaction = db.transaction(() => {
@@ -593,6 +707,16 @@ router.put('/:id', (req: AuthenticatedRequest, res: Response) => {
       if (contentType !== undefined) {
         updates.push('content_type = ?');
         params.push(contentType);
+      }
+      if (isPinned !== undefined || is_pinned !== undefined) {
+        const wantsPin = isPinned !== undefined ? Boolean(isPinned) : Boolean(is_pinned);
+        if (wantsPin) {
+          updates.push('is_pinned = 1');
+          updates.push('pinned_at = CURRENT_TIMESTAMP');
+        } else {
+          updates.push('is_pinned = 0');
+          updates.push('pinned_at = NULL');
+        }
       }
 
       params.push(id, userId);
@@ -631,10 +755,67 @@ router.put('/:id', (req: AuthenticatedRequest, res: Response) => {
     `).all(id);
 
     updated.tags = attachedTags;
+    updated.is_pinned = Boolean(updated.is_pinned);
 
     res.status(200).json(updated);
   } catch (err) {
     console.error('Update bookmark error:', err);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+// 5.0 Toggle / Set Pin Status for Bookmark
+router.put('/:id/pin', (req: AuthenticatedRequest, res: Response) => {
+  const userId = req.user!.id;
+  const { id } = req.params;
+  const { pinned } = req.body || {};
+
+  try {
+    const db = getDb();
+    const existing = db.prepare(`SELECT id, is_pinned FROM bookmarks WHERE id = ? AND user_id = ?`).get(id, userId) as { id: number; is_pinned: number } | undefined;
+
+    if (!existing) {
+      return res.status(404).json({ message: 'Bookmark not found or unauthorized' });
+    }
+
+    const targetPinned = typeof pinned === 'boolean' ? pinned : !Boolean(existing.is_pinned);
+    const maxPins = getMaxPinnedSlips();
+
+    if (targetPinned) {
+      const pinnedCount = db.prepare(`SELECT COUNT(*) as count FROM bookmarks WHERE user_id = ? AND is_pinned = 1 AND id != ?`).get(userId, id) as { count: number };
+      if (pinnedCount.count >= maxPins) {
+        return res.status(400).json({
+          message: `Maximum limit of ${maxPins} pinned slips reached. Please unpin a slip before pinning another.`,
+          maxPinnedSlips: maxPins
+        });
+      }
+
+      db.prepare(`
+        UPDATE bookmarks 
+        SET is_pinned = 1, pinned_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP 
+        WHERE id = ? AND user_id = ?
+      `).run(id, userId);
+    } else {
+      db.prepare(`
+        UPDATE bookmarks 
+        SET is_pinned = 0, pinned_at = NULL, updated_at = CURRENT_TIMESTAMP 
+        WHERE id = ? AND user_id = ?
+      `).run(id, userId);
+    }
+
+    const updated = db.prepare(`SELECT * FROM bookmarks WHERE id = ?`).get(id) as any;
+    const attachedTags = db.prepare(`
+      SELECT t.id, t.name FROM tags t
+      JOIN bookmark_tags bt ON t.id = bt.tag_id
+      WHERE bt.bookmark_id = ?
+    `).all(id);
+
+    updated.tags = attachedTags;
+    updated.is_pinned = Boolean(updated.is_pinned);
+
+    res.status(200).json(updated);
+  } catch (err) {
+    console.error('Toggle pin error:', err);
     res.status(500).json({ message: 'Internal server error' });
   }
 });
@@ -843,7 +1024,40 @@ router.post('/:id/rescrape', async (req: AuthenticatedRequest, res: Response) =>
   }
 });
 
-// 8. Global Re-scrape All User Bookmarks
+// 7.5 Auto-tag Bookmark with AI
+router.post('/:id/auto-tag', async (req: AuthenticatedRequest, res: Response) => {
+  const userId = req.user!.id;
+  const { id } = req.params;
+
+  try {
+    const db = getDb();
+    const existing = db.prepare(`SELECT * FROM bookmarks WHERE id = ? AND user_id = ?`).get(id, userId) as any;
+    if (!existing) {
+      return res.status(404).json({ message: 'Bookmark not found or unauthorized' });
+    }
+
+    const result = await autoTagBookmark({
+      bookmarkId: Number(id),
+      userId,
+      force: true
+    });
+
+    const updated = db.prepare(`SELECT * FROM bookmarks WHERE id = ?`).get(id) as any;
+    const attachedTags = db.prepare(`
+      SELECT t.id, t.name FROM tags t
+      JOIN bookmark_tags bt ON t.id = bt.tag_id
+      WHERE bt.bookmark_id = ?
+    `).all(id);
+
+    updated.tags = attachedTags;
+    res.status(200).json(updated);
+  } catch (err: any) {
+    console.error('Auto-tag bookmark error:', err);
+    res.status(500).json({ message: err.message || 'Failed to auto-tag bookmark' });
+  }
+});
+
+// 8. Global Re-scrape All User Bookmarks & AI Auto-tag Untagged Items
 router.post('/rescrape-all', async (req: AuthenticatedRequest, res: Response) => {
   const userId = req.user!.id;
   try {
@@ -857,11 +1071,21 @@ router.post('/rescrape-all', async (req: AuthenticatedRequest, res: Response) =>
         AND content_type NOT IN ('note', 'document', 'image')
     `).all(userId) as any[];
 
-    if (userBookmarks.length === 0) {
-      return res.status(200).json({ message: 'No web bookmarks to rescrape', count: 0 });
+    const untaggedNotes = db.prepare(`
+      SELECT b.id, b.url, b.title, b.description, b.content_type
+      FROM bookmarks b
+      LEFT JOIN bookmark_tags bt ON b.id = bt.bookmark_id
+      LEFT JOIN tags t ON bt.tag_id = t.id AND t.name != 'note'
+      WHERE b.user_id = ? AND b.content_type = 'note'
+      GROUP BY b.id
+      HAVING COUNT(t.id) = 0
+    `).all(userId) as any[];
+
+    if (userBookmarks.length === 0 && untaggedNotes.length === 0) {
+      return res.status(200).json({ message: 'No bookmarks to sync', count: 0 });
     }
 
-    // Queue only web bookmarks into background scrapeQueue
+    // Queue web bookmarks into background scrapeQueue with auto-tagging hook
     for (const b of userBookmarks) {
       scrapeQueue.add(async () => {
         try {
@@ -909,15 +1133,48 @@ router.post('/rescrape-all', async (req: AuthenticatedRequest, res: Response) =>
               INSERT OR IGNORE INTO bookmark_tags (bookmark_id, tag_id) VALUES (?, ?)
             `).run(b.id, tagRecord.id);
           }
+
+          // Hook in auto-tagging for untagged cards
+          try {
+            await autoTagBookmark({
+              bookmarkId: b.id,
+              userId,
+              force: false
+            });
+          } catch (aiErr) {
+            console.warn(`Auto-tag during sync-all failed for bookmark ${b.id}:`, aiErr);
+          }
         } catch (queueErr) {
           console.error(`Failed to rescrape bookmark ID ${b.id}:`, queueErr);
         }
       });
     }
 
+    const aiConfig = getActiveAIConfig();
+
+    // Queue untagged note bookmarks for AI auto-tagging only if AI is connected
+    if (aiConfig) {
+      for (const noteBm of untaggedNotes) {
+        scrapeQueue.add(async () => {
+          try {
+            await autoTagBookmark({
+              bookmarkId: noteBm.id,
+              userId,
+              force: false
+            });
+          } catch (noteErr) {
+            console.warn(`Auto-tag note during sync-all failed for ${noteBm.id}:`, noteErr);
+          }
+        });
+      }
+    }
+
+    const totalCount = userBookmarks.length + (aiConfig ? untaggedNotes.length : 0);
     res.status(202).json({
-      message: `Global re-scrape initiated for ${userBookmarks.length} bookmarks`,
-      count: userBookmarks.length
+      message: aiConfig
+        ? `Global re-scrape and auto-tag initiated for ${totalCount} items`
+        : `Global re-scrape initiated for ${totalCount} items`,
+      count: totalCount
     });
   } catch (err: any) {
     console.error('Global rescrape error:', err);

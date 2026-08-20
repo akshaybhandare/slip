@@ -1,34 +1,52 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Bookmark as BookmarkIcon, Search, Plus, Upload, Download, LogOut, RefreshCw, X, Sun, Moon, Monitor, MoreVertical, UserPlus } from 'lucide-react';
+import { Bookmark as BookmarkIcon, Search, Plus, Upload, Download, LogOut, RefreshCw, X, Sun, Moon, Monitor, MoreVertical, UserPlus, Sparkles, CornerDownLeft, Paperclip } from 'lucide-react';
 import { User } from '../types';
 import { ThemeMode } from '../hooks/useTheme';
 
 interface NavbarProps {
   searchQuery: string;
   onSearchChange: (q: string) => void;
+  onSearchSubmit?: () => void;
+  isSearching?: boolean;
+  isSmartSearch?: boolean;
+  onToggleSmartSearch?: () => void;
   onAddClick: () => void;
   onAddUserClick?: () => void;
   onImportClick: () => void;
   onRescrapeAllClick: () => void;
   isRescrapingAll: boolean;
   onLogoutClick: () => void;
+  onAIClick?: () => void;
+  isAIConnected?: boolean;
+  aiProviderName?: string;
   user: User | null;
   themeMode?: ThemeMode;
   onToggleTheme?: () => void;
+  isClipsView?: boolean;
+  onToggleClipsView?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
   searchQuery,
   onSearchChange,
+  onSearchSubmit,
+  isSearching = false,
+  isSmartSearch = false,
+  onToggleSmartSearch,
   onAddClick,
   onAddUserClick,
   onImportClick,
   onRescrapeAllClick,
   isRescrapingAll,
   onLogoutClick,
+  onAIClick,
+  isAIConnected = false,
+  aiProviderName,
   user,
   themeMode = 'system',
-  onToggleTheme
+  onToggleTheme,
+  isClipsView = false,
+  onToggleClipsView
 }) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -90,6 +108,18 @@ export const Navbar: React.FC<NavbarProps> = ({
 
           {/* Desktop-Only Action Buttons */}
           <div className="nav-desktop-actions">
+            {onToggleClipsView && (
+              <button
+                className={`btn btn-secondary nav-clips-toggle-btn ${isClipsView ? 'active-clips-btn' : ''}`}
+                onClick={onToggleClipsView}
+                title={isClipsView ? 'Return to Main Stream' : 'Browse Clips (Folders)'}
+                aria-label="Clips & Folders"
+              >
+                <Paperclip size={15} className="nav-paperclip-icon" />
+                <span className="btn-text-hide-mobile">{isClipsView ? 'Main Stream' : 'Clips'}</span>
+              </button>
+            )}
+
             <button
               className="btn btn-secondary"
               onClick={onRescrapeAllClick}
@@ -100,6 +130,17 @@ export const Navbar: React.FC<NavbarProps> = ({
               <span className="btn-text-hide-mobile">{isRescrapingAll ? 'Syncing...' : 'Sync All'}</span>
             </button>
 
+            {(isAIConnected || user?.isAdmin) && onAIClick && (
+              <button
+                className="btn btn-secondary"
+                onClick={onAIClick}
+                title={isAIConnected ? `AI Connected (${aiProviderName || 'Active'})` : 'Connect your AI'}
+                aria-label="Connect AI"
+              >
+                <Sparkles size={15} style={{ color: isAIConnected ? 'var(--color-primary)' : undefined }} />
+              </button>
+            )}
+
             <button className="btn btn-secondary" onClick={onImportClick} title="Import HTML Bookmarks">
               <Upload size={15} />
             </button>
@@ -108,7 +149,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               <Download size={15} />
             </a>
 
-            {(user?.isAdmin || user?.id === 1) && onAddUserClick && (
+            {user?.isAdmin && onAddUserClick && (
               <button className="btn btn-secondary" onClick={onAddUserClick} title="Add User">
                 <UserPlus size={15} />
               </button>
@@ -134,6 +175,31 @@ export const Navbar: React.FC<NavbarProps> = ({
 
             {isMenuOpen && (
               <div className="nav-dropdown-menu">
+                {onToggleClipsView && (
+                  <button
+                    className="nav-dropdown-item"
+                    onClick={() => {
+                      setIsMenuOpen(false);
+                      onToggleClipsView();
+                    }}
+                  >
+                    <Paperclip size={15} style={isClipsView ? { color: 'var(--color-primary)' } : undefined} />
+                    <span>{isClipsView ? 'Main Stream' : 'Clips (Folders)'}</span>
+                  </button>
+                )}
+                {(isAIConnected || user?.isAdmin) && onAIClick && (
+                  <button
+                    className="nav-dropdown-item"
+                    onClick={() => {
+                      setIsMenuOpen(false);
+                      onAIClick();
+                    }}
+                  >
+                    <Sparkles size={15} style={{ color: isAIConnected ? 'var(--color-primary)' : undefined }} />
+                    <span>{isAIConnected ? `AI (${aiProviderName || 'Active'}) · Connected ✓` : 'Connect AI'}</span>
+                  </button>
+                )}
+
                 <button
                   className="nav-dropdown-item"
                   onClick={() => {
@@ -167,7 +233,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                   <span>Export HTML Bookmarks</span>
                 </a>
 
-                {(user?.isAdmin || user?.id === 1) && onAddUserClick && (
+                {user?.isAdmin && onAddUserClick && (
                   <button
                     className="nav-dropdown-item"
                     onClick={() => {
@@ -201,14 +267,32 @@ export const Navbar: React.FC<NavbarProps> = ({
         </div>
       </div>
 
-      <div className="search-wrapper">
-        <Search className="search-icon" size={17} />
+      <div className={`search-wrapper ${isAIConnected && isSmartSearch ? 'smart-search-mode' : ''}`}>
+        <Search
+          className={`search-icon ${isAIConnected && isSmartSearch && searchQuery ? 'search-icon-clickable' : ''}`}
+          size={17}
+          onClick={() => {
+            if (isAIConnected && isSmartSearch && onSearchSubmit) {
+              onSearchSubmit();
+            }
+          }}
+        />
         <input
           type="text"
           className="search-input"
-          placeholder="Search your archive & tags..."
+          placeholder={
+            isAIConnected && isSmartSearch
+              ? "Describe what you're looking for (press Enter to search)..."
+              : "Search your archive & tags..."
+          }
           value={searchQuery}
           onChange={(e) => onSearchChange(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              onSearchSubmit?.();
+            }
+          }}
         />
         {searchQuery && (
           <button
@@ -218,6 +302,39 @@ export const Navbar: React.FC<NavbarProps> = ({
             title="Clear search"
           >
             <X size={14} />
+          </button>
+        )}
+        {isAIConnected && isSmartSearch && searchQuery.trim() && onSearchSubmit && (
+          <button
+            type="button"
+            className={`search-enter-btn ${isSearching ? 'loading' : ''}`}
+            onClick={() => !isSearching && onSearchSubmit()}
+            disabled={isSearching}
+            title={isSearching ? 'Searching...' : 'Search with AI (Press Enter)'}
+            aria-label="Search with AI"
+          >
+            {isSearching ? (
+              <RefreshCw size={12} className="spin-slow" />
+            ) : (
+              <CornerDownLeft size={12} />
+            )}
+            <span className="search-enter-text">{isSearching ? 'Thinking...' : 'Search'}</span>
+          </button>
+        )}
+        {isAIConnected && onToggleSmartSearch && (
+          <button
+            type="button"
+            className={`search-smart-btn ${isSmartSearch ? 'active' : ''}`}
+            onClick={onToggleSmartSearch}
+            title={
+              isSmartSearch
+                ? "Smart Search (AI Semantic Matching) is ON — Click for standard search"
+                : "Smart Search (AI Semantic Matching) is OFF — Click to enable"
+            }
+            aria-label="Toggle Smart Search"
+          >
+            <Sparkles size={14} className={isSmartSearch ? 'sparkle-spin' : ''} />
+            <span className="smart-btn-text">Smart</span>
           </button>
         )}
       </div>

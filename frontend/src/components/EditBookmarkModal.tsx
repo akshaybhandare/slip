@@ -9,13 +9,17 @@ interface EditBookmarkModalProps {
   onClose: () => void;
   onUpdate: (id: number, data: { title: string; description: string; personalNote?: string; contentType: string; tags: string[] }) => Promise<void>;
   availableTags?: Tag[];
+  isAIConnected?: boolean;
+  onOpenAISettings?: () => void;
 }
 
 export const EditBookmarkModal: React.FC<EditBookmarkModalProps> = ({
   bookmark,
   onClose,
   onUpdate,
-  availableTags = []
+  availableTags = [],
+  isAIConnected = true,
+  onOpenAISettings
 }) => {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -95,6 +99,8 @@ export const EditBookmarkModal: React.FC<EditBookmarkModalProps> = ({
               contentPlaceholder="Write note content with bullet points, **bold**, *italic*, ~~strikethrough~~..."
               minHeight="160px"
               autoFocus
+              isAIConnected={isAIConnected}
+              onOpenAISettings={onOpenAISettings}
             />
           ) : (
             /* Standard Fields for Web / Image / Doc / Product / Video Bookmarks */

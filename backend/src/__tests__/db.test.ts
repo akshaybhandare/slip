@@ -48,6 +48,8 @@ describe('Database Scaffolding and Schema Initialization', () => {
     expect(tableNames).toContain('shared_tags');
     expect(tableNames).toContain('api_keys');
     expect(tableNames).toContain('bookmarks_fts');
+    expect(tableNames).toContain('clips');
+    expect(tableNames).toContain('clip_bookmarks');
   });
 
   test('should create FTS virtual table triggers', () => {

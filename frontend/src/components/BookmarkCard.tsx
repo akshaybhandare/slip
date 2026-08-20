@@ -10,10 +10,65 @@ import {
   FileText,
   Image as ImageIcon,
   FileCode2,
-  MoreHorizontal
+  MoreHorizontal,
+  Sparkles,
+  Paperclip,
+  Pin,
+  PinOff
 } from 'lucide-react';
 import { Bookmark } from '../types';
 import { renderFormattedNote, renderInlineMarkdown } from '../utils/markdown';
+
+export const SlipPinIcon: React.FC<{ isPinned: boolean; isPinning?: boolean; size?: number }> = ({ isPinned, size = 15 }) => (
+  <svg
+    viewBox="0 0 24 24"
+    width={size}
+    height={size}
+    className={`slip-pin-svg ${isPinned ? 'is-pinned-svg' : 'is-unpinned-svg'}`}
+    fill="none"
+    xmlns="http://www.w3.org/2000/svg"
+  >
+    <defs>
+      <linearGradient id={`pinHeadGrad-${isPinned ? 'pinned' : 'unpinned'}`} x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0%" stopColor={isPinned ? '#ff6042' : '#94a3b8'} />
+        <stop offset="55%" stopColor={isPinned ? '#e42b0c' : '#64748b'} />
+        <stop offset="100%" stopColor={isPinned ? '#a81a00' : '#475569'} />
+      </linearGradient>
+      <linearGradient id={`pinNeedleGrad-${isPinned ? 'pinned' : 'unpinned'}`} x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0%" stopColor={isPinned ? '#e2e8f0' : '#cbd5e1'} />
+        <stop offset="100%" stopColor={isPinned ? '#94a3b8' : '#64748b'} />
+      </linearGradient>
+    </defs>
+    {/* Fine Needle */}
+    <path
+      d="M9.8 14.2 L4 20"
+      stroke={`url(#pinNeedleGrad-${isPinned ? 'pinned' : 'unpinned'})`}
+      strokeWidth="1.8"
+      strokeLinecap="round"
+    />
+    {/* Pin Top Cap / Bevel */}
+    <path
+      d="M19.2 8.8 L15.2 4.8 C14.6 4.2 13.6 4.2 13 4.8 L11.8 6 L18 12.2 L19.2 11 C19.8 10.4 19.8 9.4 19.2 8.8 Z"
+      fill={`url(#pinHeadGrad-${isPinned ? 'pinned' : 'unpinned'})`}
+    />
+    {/* Pin Body Grip Waist */}
+    <path
+      d="M11.8 6 L8.6 9.2 C8.2 9.6 8.1 10.2 8.2 10.7 L8.9 13.1 L6.2 15.8 L8.2 17.8 L10.9 15.1 L13.3 15.8 C13.8 15.9 14.4 15.8 14.8 15.4 L18 12.2 Z"
+      fill={`url(#pinHeadGrad-${isPinned ? 'pinned' : 'unpinned'})`}
+      opacity={isPinned ? 0.96 : 0.88}
+    />
+    {/* Specular Axis Highlight */}
+    <circle
+      cx="13.5"
+      cy="10.5"
+      r="1.2"
+      fill="#ffffff"
+      opacity={isPinned ? 0.9 : 0.6}
+    />
+  </svg>
+);
+
+export const SlipPushpin = SlipPinIcon;
 
 interface BookmarkCardProps {
   bookmark: Bookmark;
@@ -21,8 +76,13 @@ interface BookmarkCardProps {
   onShare: (bookmark: Bookmark) => void;
   onEdit: (bookmark: Bookmark) => void;
   onRescrape: (id: number) => Promise<void>;
+  onAutoTag?: (id: number) => Promise<void>;
+  onTogglePin?: (id: number) => Promise<void>;
+  isAIConnected?: boolean;
   onDelete: (id: number) => void;
   onTagClick: (tagName: string) => void;
+  onManageClips?: (bookmark: Bookmark) => void;
+  onRemoveFromClip?: (bookmarkId: number) => void;
 }
 
 export const BookmarkCard: React.FC<BookmarkCardProps> = ({
@@ -31,12 +91,20 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
   onShare,
   onEdit,
   onRescrape,
+  onAutoTag,
+  onTogglePin,
+  isAIConnected = true,
   onDelete,
-  onTagClick
+  onTagClick,
+  onManageClips,
+  onRemoveFromClip
 }) => {
   const [rescaping, setRescraping] = useState(false);
+  const [autoTagging, setAutoTagging] = useState(false);
+  const [isPinning, setIsPinning] = useState(false);
   const [showNote, setShowNote] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isMatchReasonExpanded, setIsMatchReasonExpanded] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
   // Close card menu when clicking/tapping outside
@@ -54,6 +122,21 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
       document.removeEventListener('touchstart', handleClickOutside);
     };
   }, [isMenuOpen]);
+
+  const isPinned = Boolean(bookmark.is_pinned);
+
+  const handlePinClick = async (e?: React.MouseEvent) => {
+    if (e) {
+      e.stopPropagation();
+    }
+    if (!onTogglePin || isPinning) return;
+    setIsPinning(true);
+    try {
+      await onTogglePin(bookmark.id);
+    } finally {
+      setIsPinning(false);
+    }
+  };
 
   const isNote = bookmark.content_type === 'note' || bookmark.url.startsWith('slip://note/');
   const isDocument = bookmark.content_type === 'document' || bookmark.url.endsWith('.pdf') || (bookmark.image_path && bookmark.image_path.endsWith('.pdf'));
@@ -85,6 +168,16 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
     }
   };
 
+  const handleAutoTagClick = async () => {
+    if (!onAutoTag) return;
+    setAutoTagging(true);
+    try {
+      await onAutoTag(bookmark.id);
+    } finally {
+      setAutoTagging(false);
+    }
+  };
+
   const handleShareClick = () => {
     onShare(bookmark);
   };
@@ -95,12 +188,32 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
     } else if (isArticle) {
       onOpenReader(bookmark);
     } else {
-      window.open(bookmark.url, '_blank');
+      window.open(bookmark.url, '_blank', 'noopener,noreferrer');
     }
   };
 
   return (
-    <article className={`bookmark-card ${isNote ? 'note-bookmark-card' : ''} ${isDocument ? 'doc-bookmark-card' : ''} ${isMenuOpen ? 'menu-active' : ''}`}>
+    <article className={`bookmark-card ${isPinned ? 'is-pinned-card' : ''} ${isNote ? 'note-bookmark-card' : ''} ${isDocument ? 'doc-bookmark-card' : ''} ${isMenuOpen ? 'menu-active' : ''} ${autoTagging ? 'is-auto-tagging' : ''}`}>
+      {/* Refined Minimalist Pin Badge */}
+      {onTogglePin && (
+        <button
+          type="button"
+          className={`slip-pushpin-btn slip-pin-btn ${isPinned ? 'is-pinned' : 'is-unpinned'} ${isPinning ? 'is-pinning' : ''}`}
+          onClick={handlePinClick}
+          title={isPinned ? 'Pinned to top • Click to unpin' : 'Pin slip to top'}
+          aria-label={isPinned ? 'Unpin slip from top' : 'Pin slip to top'}
+        >
+          <SlipPinIcon isPinned={isPinned} isPinning={isPinning} />
+          {isPinned && <span className="slip-pinned-indicator slip-pin-label" title="Pinned to top">Pinned</span>}
+        </button>
+      )}
+
+      {isAIConnected && autoTagging && (
+        <div className="card-ai-progress-bar" title="AI Auto-tagging in progress...">
+          <div className="card-ai-progress-pulse" />
+        </div>
+      )}
+
       {/* 1. Note Card Header Banner */}
       {isNote ? (
         <div
@@ -239,6 +352,39 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
       )}
 
       <div className="card-content">
+        {/* AI Semantic Match Indicator */}
+        {isAIConnected && bookmark.matchReason && (
+          <div
+            className={`card-ai-match-badge ${isMatchReasonExpanded ? 'ai-match-expanded' : ''}`}
+            title={`Semantic Relevance: ${bookmark.matchScore || 0}%\nClick to toggle full explanation`}
+            onClick={(e) => {
+              e.stopPropagation();
+              setIsMatchReasonExpanded(prev => !prev);
+            }}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                e.stopPropagation();
+                setIsMatchReasonExpanded(prev => !prev);
+              }
+            }}
+          >
+            <div className="ai-match-left">
+              <Sparkles size={13} className="ai-match-icon" />
+              <span className="ai-match-text">
+                {bookmark.matchReason}
+              </span>
+            </div>
+            <div className="ai-match-right">
+              {typeof bookmark.matchScore === 'number' && (
+                <span className="ai-match-score">{bookmark.matchScore}%</span>
+              )}
+            </div>
+          </div>
+        )}
+
         {!isNote && !isDocument && bookmark.image_path && (
           <div className="card-header-info">
             {bookmark.favicon_path ? (
@@ -347,9 +493,9 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
           </div>
         )}
 
-        {bookmark.tags && bookmark.tags.length > 0 && (
+        {((bookmark.tags && bookmark.tags.length > 0) || autoTagging) && (
           <div className="card-tags">
-            {bookmark.tags.slice(0, 3).map((t) => (
+            {bookmark.tags && bookmark.tags.slice(0, 3).map((t) => (
               <span
                 key={t.id || t.name}
                 className="tag-pill"
@@ -358,12 +504,18 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
                 #{t.name}
               </span>
             ))}
-            {bookmark.tags.length > 3 && (
+            {bookmark.tags && bookmark.tags.length > 3 && (
               <span
                 className="tag-pill-more"
                 title={bookmark.tags.slice(3).map((t) => `#${t.name}`).join(', ')}
               >
                 +{bookmark.tags.length - 3}
+              </span>
+            )}
+            {isAIConnected && autoTagging && (
+              <span className="tag-pill tag-pill-ai-loading">
+                <Sparkles size={11} className="spin-animation" />
+                <span>Auto-tagging...</span>
               </span>
             )}
           </div>
@@ -427,6 +579,55 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
                     <span>Edit Bookmark</span>
                   </button>
 
+                  {onTogglePin && (
+                    <button
+                      className="card-dropdown-item"
+                      onClick={() => {
+                        setIsMenuOpen(false);
+                        handlePinClick();
+                      }}
+                      disabled={isPinning}
+                    >
+                      {isPinned ? (
+                        <>
+                          <PinOff size={15} style={{ color: 'var(--color-primary)' }} />
+                          <span>Unpin from top</span>
+                        </>
+                      ) : (
+                        <>
+                          <Pin size={15} />
+                          <span>Pin to top</span>
+                        </>
+                      )}
+                    </button>
+                  )}
+
+                  {onManageClips && (
+                    <button
+                      className="card-dropdown-item"
+                      onClick={() => {
+                        setIsMenuOpen(false);
+                        onManageClips(bookmark);
+                      }}
+                    >
+                      <Paperclip size={15} />
+                      <span>Organize in Clip</span>
+                    </button>
+                  )}
+
+                  {onRemoveFromClip && (
+                    <button
+                      className="card-dropdown-item"
+                      onClick={() => {
+                        setIsMenuOpen(false);
+                        onRemoveFromClip(bookmark.id);
+                      }}
+                    >
+                      <Paperclip size={15} style={{ opacity: 0.6 }} />
+                      <span>Unclip from this Stack</span>
+                    </button>
+                  )}
+
                   {!isNote && (
                     <a
                       href={bookmark.url}
@@ -451,6 +652,20 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
                     >
                       <RefreshCw size={15} className={rescaping ? 'spin-animation' : ''} />
                       <span>{rescaping ? 'Re-scraping...' : 'Re-scrape Metadata'}</span>
+                    </button>
+                  )}
+
+                  {isAIConnected && onAutoTag && !isDocument && !isLocalImage && (
+                    <button
+                      className="card-dropdown-item"
+                      onClick={() => {
+                        setIsMenuOpen(false);
+                        handleAutoTagClick();
+                      }}
+                      disabled={autoTagging}
+                    >
+                      <Sparkles size={15} className={autoTagging ? 'spin-animation' : ''} />
+                      <span>{autoTagging ? 'Auto-tagging...' : 'Auto-tag with AI'}</span>
                     </button>
                   )}
 

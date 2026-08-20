@@ -27,10 +27,18 @@ export interface Bookmark {
   image_path?: string | null;
   favicon_path?: string | null;
   reader_html?: string | null;
+  is_pinned?: boolean | number;
+  pinned_at?: string | null;
   created_at: string;
   updated_at: string;
   tags?: Tag[];
   snippet?: string;
+  matchScore?: number;
+  matchReason?: string;
+}
+
+export interface PinConfig {
+  maxPinnedSlips: number;
 }
 
 export interface User {
@@ -44,4 +52,27 @@ export interface UserListItem {
   username: string;
   created_at: string;
   bookmark_count: number;
+}
+
+export interface Clip {
+  id: number;
+  user_id: number;
+  name: string;
+  parent_id: number | null;
+  created_at: string;
+  updated_at: string;
+  item_count?: number;
+  subclip_count?: number;
+}
+
+export interface ClipBreadcrumb {
+  id: number;
+  name: string;
+}
+
+export interface ClipDetail {
+  clip: Clip;
+  breadcrumbs: ClipBreadcrumb[];
+  subclips: Clip[];
+  bookmarks: Bookmark[];
 }

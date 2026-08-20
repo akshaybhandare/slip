@@ -56,6 +56,8 @@ export function initDb(dbPath = getDbPath()): Database.Database {
       raw_text TEXT,
       image_path TEXT,
       favicon_path TEXT,
+      is_pinned INTEGER DEFAULT 0,
+      pinned_at TEXT,
       created_at TEXT DEFAULT (datetime('now')),
       updated_at TEXT DEFAULT (datetime('now')),
       FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
@@ -130,6 +132,30 @@ export function initDb(dbPath = getDbPath()): Database.Database {
       key TEXT PRIMARY KEY,
       value TEXT NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS clips (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
+      name TEXT NOT NULL,
+      parent_id INTEGER,
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now')),
+      FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,
+      FOREIGN KEY(parent_id) REFERENCES clips(id) ON DELETE CASCADE
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_clips_user ON clips(user_id);
+    CREATE INDEX IF NOT EXISTS idx_clips_parent ON clips(parent_id);
+
+    CREATE TABLE IF NOT EXISTS clip_bookmarks (
+      bookmark_id INTEGER PRIMARY KEY,
+      clip_id INTEGER NOT NULL,
+      created_at TEXT DEFAULT (datetime('now')),
+      FOREIGN KEY(clip_id) REFERENCES clips(id) ON DELETE CASCADE,
+      FOREIGN KEY(bookmark_id) REFERENCES bookmarks(id) ON DELETE CASCADE
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_clip_bookmarks_clip ON clip_bookmarks(clip_id);
   `);
 
   // Safe schema migration for existing databases
@@ -137,6 +163,21 @@ export function initDb(dbPath = getDbPath()): Database.Database {
     db.exec(`ALTER TABLE bookmarks ADD COLUMN personal_note TEXT;`);
   } catch {
     // Column already present
+  }
+  try {
+    db.exec(`ALTER TABLE bookmarks ADD COLUMN is_pinned INTEGER DEFAULT 0;`);
+  } catch {
+    // Column already present
+  }
+  try {
+    db.exec(`ALTER TABLE bookmarks ADD COLUMN pinned_at TEXT;`);
+  } catch {
+    // Column already present
+  }
+  try {
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_bookmarks_pinned ON bookmarks(user_id, is_pinned);`);
+  } catch {
+    // Index already present
   }
 
   // Setup FTS5 virtual table

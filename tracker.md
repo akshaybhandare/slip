@@ -106,3 +106,21 @@ For each story:
     *   [x] **Task 11.4**: Build text selection floating toolbar and highlights aggregator sidebar in `ReaderModal.tsx`.
     *   [x] **Task 11.5**: Build sticky note preview drawer and quick editor in `BookmarkCard.tsx` and `EditBookmarkModal.tsx`.
     *   [x] **Task 11.6**: Write comprehensive backend tests and frontend UI tests for notes and highlights.
+
+### Story 12: Smart Search (Semantic Similarity Search Engine)
+*   **Status**: Completed (Code Frozen)
+*   **Tasks**:
+    *   [x] **Task 12.1**: Implement strengthened `SMART_SEARCH_SYSTEM_PROMPT` and `performSmartSearch` in `backend/src/services/aiService.ts` supporting OpenAI, Claude, Gemini, and Custom/OpenRouter/Ollama LLMs.
+    *   [x] **Task 12.2**: Add `GET /api/bookmarks/search?smart=true` and `GET /api/bookmarks/smart-search` REST endpoints with user data isolation, FTS5 candidate pre-filtering, and compound/hyphen query sanitization.
+    *   [x] **Task 12.3**: Build Enter-to-search interaction, responsive loading indicators, and Smart Search toggle button (✨) with dynamic conversational search placeholder in `frontend/src/components/Navbar.tsx`.
+    *   [x] **Task 12.4**: Render AI semantic relevance match badges with percentage score, hover tooltip, and interactive click-to-expand explanation toggle on `frontend/src/components/BookmarkCard.tsx`.
+    *   [x] **Task 12.5**: Add graceful provider error catching with automatic fallback to keyword search and dismissible warning banners in `frontend/src/App.tsx`.
+    *   [x] **Task 12.6**: Write comprehensive backend and frontend test suites (90 backend tests + 45 frontend tests) for natural language semantic queries, data isolation, and UI toggling.
+
+### Story 13: AI Note Assistance Engine
+*   **Status**: Completed
+*   **Tasks**:
+    *   [x] **Task 13.1**: Implement `performNoteAssist` service in `backend/src/services/aiService.ts` and `POST /api/ai/note-assist` route supporting continuation, grammar fixes, rephrasing, custom rewriting, and title proposal.
+    *   [x] **Task 13.2**: Integrate AI assistive actions into `NoteEditor.tsx` with floating action triggers and markdown preview integration.
+    *   [x] **Task 13.3**: Write unit and integration test coverage for note assistance actions in `ai.test.ts` and `markdownAndNote.test.tsx`.
+

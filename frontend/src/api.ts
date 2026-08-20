@@ -1,4 +1,4 @@
-import { Bookmark, ContentType, Tag, User, UserListItem } from './types';
+import { Bookmark, ContentType, Tag, User, UserListItem, Clip, ClipDetail, PinConfig } from './types';
 
 const API_BASE = '/api';
 
@@ -132,6 +132,10 @@ export async function searchBookmarks(query: string): Promise<Bookmark[]> {
   return apiFetch<Bookmark[]>(`/bookmarks/search?q=${encodeURIComponent(query)}`);
 }
 
+export async function smartSearchBookmarks(query: string): Promise<Bookmark[]> {
+  return apiFetch<Bookmark[]>(`/bookmarks/search?q=${encodeURIComponent(query)}&smart=true`);
+}
+
 export async function fetchBookmarkById(id: number): Promise<Bookmark> {
   return apiFetch<Bookmark>(`/bookmarks/${id}`);
 }
@@ -250,6 +254,12 @@ export async function rescrapeBookmark(id: number): Promise<Bookmark> {
   });
 }
 
+export async function autoTagBookmark(id: number): Promise<Bookmark> {
+  return apiFetch<Bookmark>(`/bookmarks/${id}/auto-tag`, {
+    method: 'POST'
+  });
+}
+
 export async function rescrapeAllBookmarks(): Promise<{ message: string; count: number }> {
   return apiFetch<{ message: string; count: number }>('/bookmarks/rescrape-all', {
     method: 'POST'
@@ -259,6 +269,17 @@ export async function rescrapeAllBookmarks(): Promise<{ message: string; count: 
 export async function deleteBookmark(id: number): Promise<{ message: string }> {
   return apiFetch<{ message: string }>(`/bookmarks/${id}`, {
     method: 'DELETE'
+  });
+}
+
+export async function fetchPinConfig(): Promise<PinConfig> {
+  return apiFetch<PinConfig>('/bookmarks/pin-config');
+}
+
+export async function togglePinBookmark(id: number, pinned?: boolean): Promise<Bookmark> {
+  return apiFetch<Bookmark>(`/bookmarks/${id}/pin`, {
+    method: 'PUT',
+    body: JSON.stringify(typeof pinned === 'boolean' ? { pinned } : {})
   });
 }
 
@@ -288,3 +309,141 @@ export async function importBookmarksHtml(html: string): Promise<{ message: stri
     body: JSON.stringify({ html })
   });
 }
+
+// --- AI APIs ---
+
+export interface AIConfigResponse {
+  isConnected: boolean;
+  provider: 'openai' | 'claude' | 'gemini' | 'custom';
+  model?: string;
+  maskedApiKey: string;
+  apiUrl: string;
+  lastTestedAt: string | null;
+  isAdmin: boolean;
+}
+
+export async function fetchAIConfig(): Promise<AIConfigResponse> {
+  return apiFetch<AIConfigResponse>('/ai/config');
+}
+
+export async function testAIConnectionApi(data: {
+  provider: string;
+  apiKey?: string;
+  apiUrl?: string;
+  model?: string;
+}): Promise<{ success: boolean; message: string; latencyMs?: number }> {
+  return apiFetch<{ success: boolean; message: string; latencyMs?: number }>('/ai/test', {
+    method: 'POST',
+    body: JSON.stringify(data)
+  });
+}
+
+export async function saveAIConfigApi(data: {
+  provider: string;
+  apiKey: string;
+  apiUrl?: string;
+  model?: string;
+}): Promise<{ message: string; config: AIConfigResponse; testResult?: any }> {
+  return apiFetch<{ message: string; config: AIConfigResponse; testResult?: any }>('/ai/config', {
+    method: 'POST',
+    body: JSON.stringify(data)
+  });
+}
+
+export async function disconnectAIConfigApi(): Promise<{ message: string; config: AIConfigResponse }> {
+  return apiFetch<{ message: string; config: AIConfigResponse }>('/ai/config', {
+    method: 'DELETE'
+  });
+}
+
+export type NoteAssistAction =
+  | 'continue'
+  | 'rephrase'
+  | 'fix_grammar'
+  | 'rewrite'
+  | 'propose'
+  | 'title'
+  | 'custom';
+
+export interface NoteAssistParams {
+  action: NoteAssistAction;
+  text: string;
+  title?: string;
+  instruction?: string;
+}
+
+export interface NoteAssistResponse {
+  result: string;
+  proposedTitle?: string;
+}
+
+export async function assistNoteApi(params: NoteAssistParams): Promise<NoteAssistResponse> {
+  return apiFetch<NoteAssistResponse>('/ai/note-assist', {
+    method: 'POST',
+    body: JSON.stringify(params)
+  });
+}
+
+// --- Clips (Folders) APIs ---
+
+export async function fetchClips(): Promise<Clip[]> {
+  return apiFetch<Clip[]>('/clips');
+}
+
+export async function fetchClip(id: number): Promise<ClipDetail> {
+  return apiFetch<ClipDetail>(`/clips/${id}`);
+}
+
+export async function createClip(name: string, parentId?: number | null): Promise<Clip> {
+  return apiFetch<Clip>('/clips', {
+    method: 'POST',
+    body: JSON.stringify({ name, parentId: parentId || null })
+  });
+}
+
+export async function updateClip(id: number, data: { name?: string; parentId?: number | null }): Promise<Clip> {
+  return apiFetch<Clip>(`/clips/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(data)
+  });
+}
+
+export async function deleteClip(id: number): Promise<{ message: string }> {
+  return apiFetch<{ message: string }>(`/clips/${id}`, {
+    method: 'DELETE'
+  });
+}
+
+export async function addBookmarkToClip(clipId: number, bookmarkId: number): Promise<{ message: string }> {
+  return apiFetch<{ message: string }>(`/clips/${clipId}/bookmarks`, {
+    method: 'POST',
+    body: JSON.stringify({ bookmarkId })
+  });
+}
+
+export async function removeBookmarkFromClip(clipId: number, bookmarkId: number): Promise<{ message: string }> {
+  return apiFetch<{ message: string }>(`/clips/${clipId}/bookmarks/${bookmarkId}`, {
+    method: 'DELETE'
+  });
+}
+
+export async function fetchBookmarkClips(bookmarkId: number): Promise<Clip[]> {
+  return apiFetch<Clip[]>(`/clips/bookmark/${bookmarkId}`);
+}
+
+export async function setBookmarkClip(bookmarkId: number, clipId: number | null): Promise<{ message: string; clip: Clip | null; clips: Clip[] }> {
+  return apiFetch<{ message: string; clip: Clip | null; clips: Clip[] }>(`/clips/bookmark/${bookmarkId}`, {
+    method: 'PUT',
+    body: JSON.stringify({ clipId })
+  });
+}
+
+export async function setBookmarkClips(bookmarkId: number, clipIds: number[]): Promise<{ message: string; clips: Clip[] }> {
+  return apiFetch<{ message: string; clips: Clip[] }>(`/clips/bookmark/${bookmarkId}`, {
+    method: 'PUT',
+    body: JSON.stringify({ clipIds })
+  });
+}
+
+
+
