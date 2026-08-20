@@ -74,6 +74,7 @@ describe('Clips Organization UI Components', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    localStorage.clear();
   });
 
   describe('ClipsView Component', () => {
@@ -166,6 +167,28 @@ describe('Clips Organization UI Components', () => {
 
       await waitFor(() => {
         expect(api.createClip).toHaveBeenCalledWith('Woodworking', null);
+      });
+    });
+
+    it('restores active clip from localStorage on refresh/mount', async () => {
+      localStorage.setItem('slip_current_clip_id', '10');
+      vi.mocked(api.fetchClip).mockResolvedValue(mockClipDetail);
+
+      render(
+        <ClipsView
+          onBackToFeed={vi.fn()}
+          onOpenReader={vi.fn()}
+          onShare={vi.fn()}
+          onEdit={vi.fn()}
+          onRescrape={vi.fn()}
+          onDeleteBookmark={vi.fn()}
+          onTagClick={vi.fn()}
+          onManageBookmarkClips={vi.fn()}
+        />
+      );
+
+      await waitFor(() => {
+        expect(api.fetchClip).toHaveBeenCalledWith(10);
       });
     });
   });

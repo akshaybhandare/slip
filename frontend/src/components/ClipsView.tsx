@@ -39,11 +39,29 @@ export const ClipsView: React.FC<ClipsViewProps> = ({
   onTagClick,
   onManageBookmarkClips
 }) => {
-  const [currentClipId, setCurrentClipId] = useState<number | null>(null);
+  const [currentClipId, setCurrentClipId] = useState<number | null>(() => {
+    try {
+      const saved = localStorage.getItem('slip_current_clip_id');
+      return saved ? Number(saved) : null;
+    } catch {
+      return null;
+    }
+  });
   const [rootClips, setRootClips] = useState<Clip[]>([]);
   const [currentClipDetail, setCurrentClipDetail] = useState<ClipDetail | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const navigateToClip = (id: number | null) => {
+    setCurrentClipId(id);
+    try {
+      if (id !== null) {
+        localStorage.setItem('slip_current_clip_id', String(id));
+      } else {
+        localStorage.removeItem('slip_current_clip_id');
+      }
+    } catch {}
+  };
 
   // Modals & Forms
   const [isCreateOpen, setIsCreateOpen] = useState(false);
@@ -62,8 +80,16 @@ export const ClipsView: React.FC<ClipsViewProps> = ({
         setRootClips(allClips.filter((c) => !c.parent_id));
         setCurrentClipDetail(null);
       } else {
-        const detail = await fetchClip(currentClipId);
-        setCurrentClipDetail(detail);
+        try {
+          const detail = await fetchClip(currentClipId);
+          setCurrentClipDetail(detail);
+        } catch {
+          // If the clip was deleted or does not exist, safely fall back to root
+          navigateToClip(null);
+          const allClips = await fetchClips();
+          setRootClips(allClips.filter((c) => !c.parent_id));
+          setCurrentClipDetail(null);
+        }
       }
     } catch (err: any) {
       setError(err.message || 'Failed to load clip contents');
@@ -131,7 +157,7 @@ export const ClipsView: React.FC<ClipsViewProps> = ({
         const parentId = currentClipDetail?.breadcrumbs && currentClipDetail.breadcrumbs.length > 1
           ? currentClipDetail.breadcrumbs[currentClipDetail.breadcrumbs.length - 2].id
           : null;
-        setCurrentClipId(parentId);
+        navigateToClip(parentId);
       } else {
         loadClipsData();
       }
@@ -218,7 +244,7 @@ export const ClipsView: React.FC<ClipsViewProps> = ({
             {/* Root Step */}
             <div
               className={`v-crumb-step ${currentClipId === null ? 'active' : 'clickable'}`}
-              onClick={() => setCurrentClipId(null)}
+              onClick={() => navigateToClip(null)}
             >
               <div className="v-crumb-dot-col">
                 <div className={`v-crumb-dot ${currentClipId === null ? 'current' : ''}`} />
@@ -240,7 +266,7 @@ export const ClipsView: React.FC<ClipsViewProps> = ({
                 <div
                   key={crumb.id}
                   className={`v-crumb-step ${isLast ? 'active' : 'clickable'}`}
-                  onClick={() => !isLast && setCurrentClipId(crumb.id)}
+                  onClick={() => !isLast && navigateToClip(crumb.id)}
                 >
                   <div className="v-crumb-dot-col">
                     <div className={`v-crumb-dot ${isLast ? 'current' : ''}`} />
@@ -287,7 +313,7 @@ export const ClipsView: React.FC<ClipsViewProps> = ({
                         <div
                           key={clip.id}
                           className="clip-deck-card"
-                          onClick={() => setCurrentClipId(clip.id)}
+                          onClick={() => navigateToClip(clip.id)}
                         >
                           {/* Top Paperclip Metallic Accent */}
                           <div className="deck-paperclip-pin">
@@ -367,7 +393,7 @@ export const ClipsView: React.FC<ClipsViewProps> = ({
                           <div
                             key={sub.id}
                             className="clip-deck-card sub-deck-card"
-                            onClick={() => setCurrentClipId(sub.id)}
+                            onClick={() => navigateToClip(sub.id)}
                           >
                             <div className="deck-paperclip-pin">
                               <Paperclip size={16} />

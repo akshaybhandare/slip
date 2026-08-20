@@ -161,7 +161,7 @@ describe('Clips Hierarchical Organization Integration Tests', () => {
     expect(res.body.bookmarks[0].tags.some((t: any) => t.name === '3d-printing')).toBe(true);
   });
 
-  test('PUT /api/clips/bookmark/:bookmarkId should assign bookmark exclusively to single clip', async () => {
+  test('PUT /api/clips/bookmark/:bookmarkId should assign bookmark exclusively to single clip and sync clip tags', async () => {
     // Assign bookmark1 to Hobbies
     const res = await request(app)
       .put(`/api/clips/bookmark/${bookmark1Id}`)
@@ -171,6 +171,11 @@ describe('Clips Hierarchical Organization Integration Tests', () => {
     expect(res.status).toBe(200);
     expect(res.body.clip.id).toBe(hobbiesClipId);
     expect(res.body.clips.length).toBe(1);
+
+    // Verify tag 'hobbies' was added to bookmark
+    let bmCheck = await request(app).get('/api/bookmarks').set('Cookie', userCookie);
+    let bm1 = bmCheck.body.find((b: any) => b.id === bookmark1Id);
+    expect(bm1.tags.some((t: any) => t.name === 'hobbies')).toBe(true);
 
     // Re-assigning bookmark1 to printingClipId automatically moves it out of hobbiesClipId
     const moveRes = await request(app)
@@ -182,6 +187,12 @@ describe('Clips Hierarchical Organization Integration Tests', () => {
     expect(moveRes.body.clip.id).toBe(printingClipId);
     expect(moveRes.body.clips.length).toBe(1);
 
+    // Verify tag 'hobbies' was removed and '3d-printing-clip' was added
+    bmCheck = await request(app).get('/api/bookmarks').set('Cookie', userCookie);
+    bm1 = bmCheck.body.find((b: any) => b.id === bookmark1Id);
+    expect(bm1.tags.some((t: any) => t.name === 'hobbies')).toBe(false);
+    expect(bm1.tags.some((t: any) => t.name === '3d-printing-clip')).toBe(true);
+
     const getClips = await request(app)
       .get(`/api/clips/bookmark/${bookmark1Id}`)
       .set('Cookie', userCookie);
@@ -191,7 +202,7 @@ describe('Clips Hierarchical Organization Integration Tests', () => {
     expect(getClips.body[0].id).toBe(printingClipId);
   });
 
-  test('PUT /api/clips/:id should update clip name', async () => {
+  test('PUT /api/clips/:id should update clip name and sync tag names on bookmarks', async () => {
     const res = await request(app)
       .put(`/api/clips/${printingClipId}`)
       .set('Cookie', userCookie)
@@ -199,6 +210,12 @@ describe('Clips Hierarchical Organization Integration Tests', () => {
 
     expect(res.status).toBe(200);
     expect(res.body.name).toBe('3D Printing & CAD');
+
+    // Verify tag was updated on bookmark
+    const bmCheck = await request(app).get('/api/bookmarks').set('Cookie', userCookie);
+    const bm1 = bmCheck.body.find((b: any) => b.id === bookmark1Id);
+    expect(bm1.tags.some((t: any) => t.name === '3d-printing-clip')).toBe(false);
+    expect(bm1.tags.some((t: any) => t.name === '3d printing & cad')).toBe(true);
   });
 
   test('PUT /api/clips/:id should prevent circular nesting', async () => {
@@ -222,7 +239,7 @@ describe('Clips Hierarchical Organization Integration Tests', () => {
     expect(res.body.message).toContain('own parent');
   });
 
-  test('DELETE /api/clips/:id/bookmarks/:bookmarkId should remove bookmark from clip', async () => {
+  test('DELETE /api/clips/:id/bookmarks/:bookmarkId should remove bookmark from clip and remove clip tag', async () => {
     const res = await request(app)
       .delete(`/api/clips/${printingClipId}/bookmarks/${bookmark1Id}`)
       .set('Cookie', userCookie);
@@ -234,6 +251,11 @@ describe('Clips Hierarchical Organization Integration Tests', () => {
       .set('Cookie', userCookie);
 
     expect(check.body.bookmarks.length).toBe(0);
+
+    // Verify tag was removed from bookmark
+    const bmCheck = await request(app).get('/api/bookmarks').set('Cookie', userCookie);
+    const bm1 = bmCheck.body.find((b: any) => b.id === bookmark1Id);
+    expect(bm1.tags.some((t: any) => t.name === '3d printing & cad')).toBe(false);
   });
 
   test('DELETE /api/clips/:id should delete clip and cascade subclips while leaving bookmarks intact', async () => {
