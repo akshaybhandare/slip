@@ -44,10 +44,11 @@ export function authenticate(req: AuthenticatedRequest, res: Response, next: Nex
   }
 
   // 2. Check for cookie session token
-  const cookies = req.headers.cookie;
-  let token: string | null = null;
-  if (cookies) {
-    const tokenCookie = cookies.split(';').map(c => c.trim()).find(c => c.startsWith('token='));
+  const parsedCookies = (req as any).cookies;
+  let token: string | null = parsedCookies?.token || null;
+
+  if (!token && req.headers.cookie) {
+    const tokenCookie = req.headers.cookie.split(';').map(c => c.trim()).find(c => c.startsWith('token='));
     if (tokenCookie) {
       token = tokenCookie.substring(6);
     }

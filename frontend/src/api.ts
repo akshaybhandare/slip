@@ -10,22 +10,13 @@ async function apiFetch<T>(endpoint: string, init?: RequestInit): Promise<T> {
     headers.set('Content-Type', 'application/json');
   }
 
-  // Include Bearer token from localStorage for mobile & cross-origin reliability
-  const token = localStorage.getItem('slip_token');
-  if (token && !headers.has('Authorization')) {
-    headers.set('Authorization', `Bearer ${token}`);
-  }
-
   const res = await fetch(url, {
     ...init,
     headers,
-    credentials: 'include' // Always pass session cookies!
+    credentials: 'include' // Pass secure HttpOnly session cookies automatically
   });
 
   if (!res.ok) {
-    if (res.status === 401) {
-      localStorage.removeItem('slip_token');
-    }
     let errorMessage = `Request failed with status ${res.status}`;
     try {
       const text = await res.text();
@@ -52,25 +43,17 @@ async function apiFetch<T>(endpoint: string, init?: RequestInit): Promise<T> {
 // --- Auth APIs ---
 
 export async function loginUser(username: string, password: string): Promise<{ user: User; token?: string }> {
-  const res = await apiFetch<{ user: User; token?: string }>('/auth/login', {
+  return apiFetch<{ user: User; token?: string }>('/auth/login', {
     method: 'POST',
     body: JSON.stringify({ username, password })
   });
-  if (res.token) {
-    localStorage.setItem('slip_token', res.token);
-  }
-  return res;
 }
 
 export async function registerUser(username: string, password: string): Promise<{ message: string; userId: number; user?: User; token?: string }> {
-  const res = await apiFetch<{ message: string; userId: number; user?: User; token?: string }>('/auth/register', {
+  return apiFetch<{ message: string; userId: number; user?: User; token?: string }>('/auth/register', {
     method: 'POST',
     body: JSON.stringify({ username, password })
   });
-  if (res.token) {
-    localStorage.setItem('slip_token', res.token);
-  }
-  return res;
 }
 
 export async function createAdminUser(username: string, password: string): Promise<{ message: string; user: User }> {
@@ -103,7 +86,6 @@ export async function deleteAdminUser(userId: number): Promise<{
 }
 
 export async function logoutUser(): Promise<{ message: string }> {
-  localStorage.removeItem('slip_token');
   return apiFetch<{ message: string }>('/auth/logout', {
     method: 'POST'
   });

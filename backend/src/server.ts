@@ -1,5 +1,6 @@
 import express from 'express';
 import cors from 'cors';
+import cookieParser from 'cookie-parser';
 import dotenv from 'dotenv';
 import path from 'path';
 import fs from 'fs';
@@ -27,6 +28,8 @@ app.use(cors({
   },
   credentials: true
 }));
+
+app.use(cookieParser());
 
 app.use(express.json({ limit: '50mb' }));
 app.use(express.raw({ type: ['image/*', 'application/pdf', 'application/octet-stream'], limit: '50mb' }));
