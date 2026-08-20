@@ -362,8 +362,8 @@ export const AIConnectModal: React.FC<AIConnectModalProps> = ({
                       setApiKey('');
                       setCustomApiUrl('');
                       setIsEditing(true);
-                      setTestStatus(null);
-                      setTestError(null);
+                      setTestResult(null);
+                      setFormError('');
                     } catch (err: any) {
                       alert(err.message || 'Failed to disconnect AI provider');
                     }
