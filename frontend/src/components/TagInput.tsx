@@ -82,6 +82,10 @@ export const TagInput: React.FC<TagInputProps> = ({ tags, onChange, availableTag
                 key={st.id || st.name}
                 type="button"
                 className="suggested-tag-btn"
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  addTag(st.name);
+                }}
                 onClick={() => addTag(st.name)}
               >
                 <Plus size={11} />

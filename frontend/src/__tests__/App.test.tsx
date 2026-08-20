@@ -150,6 +150,19 @@ describe('Frontend SPA Component Architecture & Mobile UI Interactions', () => {
     // Tag removal button in chip should exist
     expect(screen.getByLabelText('Remove tag database')).toBeInTheDocument();
 
+    // Type partial input "rea" to filter suggestions down to #react
+    const tagInput = screen.getByPlaceholderText(/Add more.../i);
+    fireEvent.change(tagInput, { target: { value: 'rea' } });
+
+    // The suggested button for #react should be visible
+    const reactTagBtn = screen.getByRole('button', { name: /#react/i });
+    fireEvent.mouseDown(reactTagBtn);
+    fireEvent.click(reactTagBtn);
+
+    // Should have added tag 'react' and not the partial text 'rea'
+    expect(screen.getByLabelText('Remove tag react')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Remove tag rea')).not.toBeInTheDocument();
+
     const cancelBtn = screen.getByRole('button', { name: /Cancel/i });
     fireEvent.click(cancelBtn);
 

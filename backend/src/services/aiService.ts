@@ -903,22 +903,47 @@ export async function testProviderConnection(params: {
       }
       return { success: false, message: `Google Gemini returned status ${res.status}.` };
     } else {
-      // Custom provider
-      const targetUrl = trimmedUrl.includes('://') ? trimmedUrl : `https://${trimmedUrl}`;
-      const headers: Record<string, string> = {};
+      // Custom provider (OpenAI-compatible)
+      const base = trimmedUrl.includes('://') ? trimmedUrl : `https://${trimmedUrl}`;
+      const targetUrl = base.endsWith('/chat/completions') || base.includes('/generate')
+        ? base
+        : `${base.replace(/\/+$/, '')}/chat/completions`;
+
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        'HTTP-Referer': 'https://github.com/slip-archive/slip',
+        'X-Title': 'Slip Visual Bookmarks'
+      };
       if (trimmedKey) {
         headers['Authorization'] = `Bearer ${trimmedKey}`;
       }
 
-      const res = await axios.get(targetUrl, {
-        headers,
-        timeout: 8000,
-        validateStatus: () => true
-      });
+      const res = await axios.post(
+        targetUrl,
+        {
+          model: targetModel,
+          messages: [{ role: 'user', content: 'ping' }],
+          max_tokens: 1
+        },
+        {
+          headers,
+          timeout: 8000,
+          validateStatus: () => true
+        }
+      );
 
       const latencyMs = Date.now() - startTime;
-      if (res.status < 500) {
-        return { success: true, message: `Custom endpoint reached with model "${targetModel}" (${res.status} ${res.statusText}, ${latencyMs}ms).`, latencyMs };
+      if (res.status === 200) {
+        return { success: true, message: `Connected to custom model "${targetModel}" successfully (${latencyMs}ms).`, latencyMs };
+      } else if (res.status === 401 || res.status === 403) {
+        return { success: false, message: 'Authentication failed: Invalid API key.' };
+      } else if (res.status === 404) {
+        return { success: false, message: `Model "${targetModel}" or endpoint was not found (404). Please verify the model name and API URL.` };
+      } else if (res.status === 400 || res.status === 422) {
+        const detail = res.data?.error?.message || res.data?.message || 'Invalid model or parameters.';
+        return { success: false, message: `Provider error (${res.status}): ${detail}` };
+      } else if (res.status < 500) {
+        return { success: true, message: `Custom endpoint responded (${res.status} ${res.statusText}, ${latencyMs}ms).`, latencyMs };
       }
       return { success: false, message: `Custom endpoint returned server error ${res.status}.` };
     }
