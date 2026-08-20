@@ -357,10 +357,16 @@ export const AIConnectModal: React.FC<AIConnectModalProps> = ({
                 className="ai-action-link ai-action-danger"
                 onClick={async () => {
                   if (window.confirm('Disconnect AI provider and remove saved key from database?')) {
-                    await onDisconnect();
-                    setApiKey('');
-                    setCustomApiUrl('');
-                    setIsEditing(true);
+                    try {
+                      await onDisconnect();
+                      setApiKey('');
+                      setCustomApiUrl('');
+                      setIsEditing(true);
+                      setTestStatus(null);
+                      setTestError(null);
+                    } catch (err: any) {
+                      alert(err.message || 'Failed to disconnect AI provider');
+                    }
                   }
                 }}
                 title="Disconnect provider"

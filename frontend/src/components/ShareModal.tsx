@@ -59,7 +59,7 @@ export const ShareModal: React.FC<ShareModalProps> = ({ bookmark, onClose }) => 
       document.body.removeChild(link);
       window.URL.revokeObjectURL(blobUrl);
     } catch {
-      window.open(imageUrl, '_blank');
+      window.open(imageUrl, '_blank', 'noopener,noreferrer');
     } finally {
       setDownloading(false);
     }
@@ -81,7 +81,7 @@ export const ShareModal: React.FC<ShareModalProps> = ({ bookmark, onClose }) => 
       document.body.removeChild(link);
       window.URL.revokeObjectURL(blobUrl);
     } catch {
-      window.open(pdfUrl, '_blank');
+      window.open(pdfUrl, '_blank', 'noopener,noreferrer');
     } finally {
       setDownloading(false);
     }

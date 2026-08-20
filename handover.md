@@ -140,6 +140,7 @@ curl -f http://localhost:3000/health
 * `POST /api/ai/test` — Tests provider API key/endpoint connectivity with live latency check (Admin only).
 * `POST /api/ai/config` — Validates connection, encrypts key via AES-256, and saves configuration in DB (Admin only).
 * `DELETE /api/ai/config` — Disconnects AI provider and removes stored credentials (Admin only).
+* `POST /api/ai/note-assist` — AI writing assistant for notes (supports actions: `continue`, `rephrase`, `fix_grammar`, `rewrite`, `propose`, `title`).
 
 ### Public Shareables (`/api/share`)
 * `POST /api/share/bookmark/:id` — Creates a public, unauthenticated read-only token link.

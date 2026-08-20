@@ -5,9 +5,22 @@ const ALGORITHM = 'aes-256-gcm';
 const IV_LENGTH = 16;
 const TAG_LENGTH = 16;
 
+let cachedKey: Buffer | null = null;
+let lastSecret: string | null = null;
+
 function getEncryptionKey(): Buffer {
   const secret = getJwtSecret();
-  return crypto.scryptSync(secret, 'slip_ai_key_salt_v1', 32);
+  if (cachedKey && lastSecret === secret) {
+    return cachedKey;
+  }
+  cachedKey = crypto.scryptSync(secret, 'slip_ai_key_salt_v1', 32);
+  lastSecret = secret;
+  return cachedKey;
+}
+
+export function clearEncryptionKeyCache(): void {
+  cachedKey = null;
+  lastSecret = null;
 }
 
 export function encryptSecret(plaintext: string): string {

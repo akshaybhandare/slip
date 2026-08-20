@@ -101,7 +101,7 @@ export function useAIConfig(user?: { id: number; username: string; isAdmin?: boo
       maskedApiKey: '',
       apiUrl: '',
       isConnected: false,
-      isAdmin: user?.isAdmin || user?.id === 1
+      isAdmin: Boolean(user?.isAdmin)
     };
     setAiConfig(resetConfig);
     clearAIConfig();

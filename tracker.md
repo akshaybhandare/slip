@@ -117,3 +117,10 @@ For each story:
     *   [x] **Task 12.5**: Add graceful provider error catching with automatic fallback to keyword search and dismissible warning banners in `frontend/src/App.tsx`.
     *   [x] **Task 12.6**: Write comprehensive backend and frontend test suites (90 backend tests + 45 frontend tests) for natural language semantic queries, data isolation, and UI toggling.
 
+### Story 13: AI Note Assistance Engine
+*   **Status**: Completed
+*   **Tasks**:
+    *   [x] **Task 13.1**: Implement `performNoteAssist` service in `backend/src/services/aiService.ts` and `POST /api/ai/note-assist` route supporting continuation, grammar fixes, rephrasing, custom rewriting, and title proposal.
+    *   [x] **Task 13.2**: Integrate AI assistive actions into `NoteEditor.tsx` with floating action triggers and markdown preview integration.
+    *   [x] **Task 13.3**: Write unit and integration test coverage for note assistance actions in `ai.test.ts` and `markdownAndNote.test.tsx`.
+

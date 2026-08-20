@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Bookmark, ContentType, Tag, User } from './types';
 import {
   fetchBookmarks,
@@ -65,8 +65,21 @@ export const App: React.FC = () => {
   useEffect(() => {
     if (!aiConfig.isConnected) {
       setIsSmartSearch(false);
+      try {
+        localStorage.setItem('slip_smart_search', 'false');
+      } catch {}
     }
   }, [aiConfig.isConnected]);
+
+  const rescrapeIntervalRef = useRef<any>(null);
+
+  useEffect(() => {
+    return () => {
+      if (rescrapeIntervalRef.current) {
+        clearInterval(rescrapeIntervalRef.current);
+      }
+    };
+  }, []);
 
   const [maxPinnedSlips, setMaxPinnedSlips] = useState<number>(5);
 
@@ -325,13 +338,19 @@ export const App: React.FC = () => {
   const handleRescrapeAll = async () => {
     setIsRescrapingAll(true);
     try {
-      const res = await rescrapeAllBookmarks();
+      await rescrapeAllBookmarks();
       // Poll a few times to show fresh data
+      if (rescrapeIntervalRef.current) {
+        clearInterval(rescrapeIntervalRef.current);
+      }
       let checks = 0;
-      const interval = setInterval(() => {
+      rescrapeIntervalRef.current = setInterval(() => {
         loadData();
         checks++;
-        if (checks > 4) clearInterval(interval);
+        if (checks > 4) {
+          clearInterval(rescrapeIntervalRef.current);
+          rescrapeIntervalRef.current = null;
+        }
       }, 2500);
     } catch (err: any) {
       alert(err.message || 'Failed to start global re-scrape');
@@ -554,7 +573,7 @@ export const App: React.FC = () => {
         isOpen={isAIOpen}
         onClose={() => setIsAIOpen(false)}
         aiConfig={aiConfig}
-        isAdmin={Boolean(user?.isAdmin || user?.id === 1)}
+        isAdmin={Boolean(user?.isAdmin)}
         onConnect={connectAI}
         onDisconnect={disconnectAI}
         onTestConnection={testAIConnection}

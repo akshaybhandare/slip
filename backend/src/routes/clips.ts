@@ -267,16 +267,28 @@ router.get('/:id', (req: AuthenticatedRequest, res: Response) => {
       ORDER BY cb.created_at DESC, b.created_at DESC
     `).all(id, userId) as any[];
 
-    // Attach tags to bookmarks
-    const tagQuery = db.prepare(`
-      SELECT t.id, t.name 
-      FROM tags t
-      JOIN bookmark_tags bt ON t.id = bt.tag_id
-      WHERE bt.bookmark_id = ?
-    `);
+    // Attach tags to bookmarks in a single batch query
+    if (bookmarks.length > 0) {
+      const bookmarkIds = bookmarks.map((b) => b.id);
+      const placeholders = bookmarkIds.map(() => '?').join(',');
+      const allTags = db.prepare(`
+        SELECT bt.bookmark_id, t.id, t.name 
+        FROM tags t
+        JOIN bookmark_tags bt ON t.id = bt.tag_id
+        WHERE bt.bookmark_id IN (${placeholders})
+      `).all(...bookmarkIds) as { bookmark_id: number; id: number; name: string }[];
 
-    for (const b of bookmarks) {
-      b.tags = tagQuery.all(b.id);
+      const tagMap = new Map<number, { id: number; name: string }[]>();
+      for (const t of allTags) {
+        if (!tagMap.has(t.bookmark_id)) {
+          tagMap.set(t.bookmark_id, []);
+        }
+        tagMap.get(t.bookmark_id)!.push({ id: t.id, name: t.name });
+      }
+
+      for (const b of bookmarks) {
+        b.tags = tagMap.get(b.id) || [];
+      }
     }
 
     res.status(200).json({

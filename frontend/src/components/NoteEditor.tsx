@@ -82,7 +82,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
     if (!textarea) return;
     const start = textarea.selectionStart;
     const end = textarea.selectionEnd;
-    const text = start !== end ? content.slice(start, end) : '';
+    const text = start !== end ? textarea.value.slice(start, end) : '';
     setSelection({ start, end, text });
   };
 

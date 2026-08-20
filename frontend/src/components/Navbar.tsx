@@ -130,7 +130,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               <span className="btn-text-hide-mobile">{isRescrapingAll ? 'Syncing...' : 'Sync All'}</span>
             </button>
 
-            {(isAIConnected || user?.isAdmin || user?.id === 1) && onAIClick && (
+            {(isAIConnected || user?.isAdmin) && onAIClick && (
               <button
                 className="btn btn-secondary"
                 onClick={onAIClick}
@@ -149,7 +149,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               <Download size={15} />
             </a>
 
-            {(user?.isAdmin || user?.id === 1) && onAddUserClick && (
+            {user?.isAdmin && onAddUserClick && (
               <button className="btn btn-secondary" onClick={onAddUserClick} title="Add User">
                 <UserPlus size={15} />
               </button>
@@ -187,7 +187,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                     <span>{isClipsView ? 'Main Stream' : 'Clips (Folders)'}</span>
                   </button>
                 )}
-                {(isAIConnected || user?.isAdmin || user?.id === 1) && onAIClick && (
+                {(isAIConnected || user?.isAdmin) && onAIClick && (
                   <button
                     className="nav-dropdown-item"
                     onClick={() => {
@@ -233,7 +233,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                   <span>Export HTML Bookmarks</span>
                 </a>
 
-                {(user?.isAdmin || user?.id === 1) && onAddUserClick && (
+                {user?.isAdmin && onAddUserClick && (
                   <button
                     className="nav-dropdown-item"
                     onClick={() => {

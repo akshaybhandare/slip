@@ -188,7 +188,7 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
     } else if (isArticle) {
       onOpenReader(bookmark);
     } else {
-      window.open(bookmark.url, '_blank');
+      window.open(bookmark.url, '_blank', 'noopener,noreferrer');
     }
   };
 

@@ -140,13 +140,21 @@ export function normalizeTag(tag: string): string {
 
 export function parseAndSanitizeTags(rawText: string): { tags: string[]; newTags: string[] } {
   let parsed: any = {};
-  const cleaned = (rawText || '').replace(/```(?:json)?|```/g, '').trim();
-  try {
-    parsed = JSON.parse(cleaned);
-  } catch {
-    const match = cleaned.match(/\{[\s\S]*\}/);
-    if (match) {
-      try { parsed = JSON.parse(match[0]); } catch {}
+  if (rawText) {
+    const trimmed = rawText.trim();
+    try {
+      parsed = JSON.parse(trimmed);
+    } catch {
+      // Strip outer markdown fences only
+      const fenced = trimmed.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
+      try {
+        parsed = JSON.parse(fenced);
+      } catch {
+        const match = trimmed.match(/\{[\s\S]*\}/);
+        if (match) {
+          try { parsed = JSON.parse(match[0]); } catch {}
+        }
+      }
     }
   }
 
@@ -749,13 +757,20 @@ export async function performSmartSearch(params: {
 
   // 3. Parse JSON output
   let parsed: any = {};
-  const cleaned = (rawOutput || '').replace(/```(?:json)?|```/g, '').trim();
-  try {
-    parsed = JSON.parse(cleaned);
-  } catch {
-    const match = cleaned.match(/\{[\s\S]*\}/);
-    if (match) {
-      try { parsed = JSON.parse(match[0]); } catch {}
+  if (rawOutput) {
+    const trimmed = rawOutput.trim();
+    try {
+      parsed = JSON.parse(trimmed);
+    } catch {
+      const fenced = trimmed.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
+      try {
+        parsed = JSON.parse(fenced);
+      } catch {
+        const match = trimmed.match(/\{[\s\S]*\}/);
+        if (match) {
+          try { parsed = JSON.parse(match[0]); } catch {}
+        }
+      }
     }
   }
 

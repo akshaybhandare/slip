@@ -12,6 +12,31 @@ const router = Router();
 
 router.use(authenticate);
 
+function attachTagsBatch(db: any, bookmarks: any[]): void {
+  if (!bookmarks || bookmarks.length === 0) return;
+  const bookmarkIds = bookmarks.map((b) => b.id);
+  const placeholders = bookmarkIds.map(() => '?').join(',');
+  const allTags = db.prepare(`
+    SELECT bt.bookmark_id, t.id, t.name 
+    FROM tags t
+    JOIN bookmark_tags bt ON t.id = bt.tag_id
+    WHERE bt.bookmark_id IN (${placeholders})
+  `).all(...bookmarkIds) as { bookmark_id: number; id: number; name: string }[];
+
+  const tagMap = new Map<number, { id: number; name: string }[]>();
+  for (const t of allTags) {
+    if (!tagMap.has(t.bookmark_id)) {
+      tagMap.set(t.bookmark_id, []);
+    }
+    tagMap.get(t.bookmark_id)!.push({ id: t.id, name: t.name });
+  }
+
+  for (const b of bookmarks) {
+    b.tags = tagMap.get(b.id) || [];
+    b.is_pinned = Boolean(b.is_pinned);
+  }
+}
+
 async function handleFileUpload(req: AuthenticatedRequest, res: Response) {
   const userId = req.user!.id;
 
@@ -309,18 +334,8 @@ router.get('/', (req: AuthenticatedRequest, res: Response) => {
 
     const bookmarks = db.prepare(query).all(...params) as any[];
 
-    // Attach tags for each bookmark
-    const tagQuery = db.prepare(`
-      SELECT t.id, t.name 
-      FROM tags t
-      JOIN bookmark_tags bt ON t.id = bt.tag_id
-      WHERE bt.bookmark_id = ?
-    `);
-
-    for (const b of bookmarks) {
-      b.tags = tagQuery.all(b.id);
-      b.is_pinned = Boolean(b.is_pinned);
-    }
+    // Attach tags in a single batch query
+    attachTagsBatch(db, bookmarks);
 
     res.status(200).json(bookmarks);
   } catch (err) {
@@ -435,17 +450,8 @@ router.get('/search', async (req: AuthenticatedRequest, res: Response) => {
       bookmarks = db.prepare(likeQuery).all(...params) as any[];
     }
 
-    const tagQuery = db.prepare(`
-      SELECT t.id, t.name 
-      FROM tags t
-      JOIN bookmark_tags bt ON t.id = bt.tag_id
-      WHERE bt.bookmark_id = ?
-    `);
-
-    for (const b of bookmarks) {
-      b.tags = tagQuery.all(b.id);
-      b.is_pinned = Boolean(b.is_pinned);
-    }
+    // Attach tags in a single batch query
+    attachTagsBatch(db, bookmarks);
 
     res.status(200).json(bookmarks);
   } catch (err) {
