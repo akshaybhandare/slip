@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Bookmark, ContentType, Tag, User } from './types';
+import { Bookmark, ContentType, Tag, User, ClipRecommendationItem } from './types';
 import {
   fetchBookmarks,
   searchBookmarks,
@@ -19,7 +19,9 @@ import {
   fetchPinConfig,
   togglePinBookmark,
   logoutUser,
-  getMe
+  getMe,
+  recommendClip,
+  setBookmarkClip
 } from './api';
 import { Navbar } from './components/Navbar';
 import { FilterTabs } from './components/FilterTabs';
@@ -35,6 +37,7 @@ import { AddUserModal } from './components/AddUserModal';
 import { AIConnectModal } from './components/AIConnectModal';
 import { ClipsView } from './components/ClipsView';
 import { AddToClipModal } from './components/AddToClipModal';
+import { PutWhereItBelongsToast } from './components/PutWhereItBelongsToast';
 import { BookmarkPlus, Plus, Sparkles, RotateCcw, X } from 'lucide-react';
 import { useTheme } from './hooks/useTheme';
 import { useAIConfig } from './hooks/useAIConfig';
@@ -152,6 +155,11 @@ export const App: React.FC = () => {
   const [readerBookmark, setReaderBookmark] = useState<Bookmark | null>(null);
   const [shareTargetBookmark, setShareTargetBookmark] = useState<Bookmark | null>(null);
   const [editingBookmark, setEditingBookmark] = useState<Bookmark | null>(null);
+  const [autoClipQueue, setAutoClipQueue] = useState<Array<{
+    bookmark: Bookmark;
+    recommendations: ClipRecommendationItem[];
+    isManual?: boolean;
+  }>>([]);
 
   const handleToggleSmartSearch = useCallback(() => {
     if (!aiConfig.isConnected) {
@@ -303,9 +311,69 @@ export const App: React.FC = () => {
     setNeedsAuth(true);
   };
 
-  const handleSaveBookmark = async (data: { url: string; tags: string[] }) => {
-    await createBookmark(data);
+  const triggerClipRecommendation = useCallback(async (bookmark: Bookmark, isManual: boolean = false) => {
+    if (!aiConfig.isConnected) {
+      if (isManual) {
+        setManagingClipsBookmark(bookmark);
+      }
+      return;
+    }
+
+    try {
+      const res = await recommendClip(bookmark.id);
+      if (res.recommendations && res.recommendations.length > 0) {
+        setAutoClipQueue((prev) => [
+          ...prev.filter((item) => item.bookmark.id !== bookmark.id),
+          {
+            bookmark,
+            recommendations: res.recommendations,
+            isManual
+          }
+        ]);
+      } else if (isManual) {
+        setAutoClipQueue((prev) => [
+          ...prev.filter((item) => item.bookmark.id !== bookmark.id),
+          {
+            bookmark,
+            recommendations: [],
+            isManual: true
+          }
+        ]);
+      }
+    } catch (err: any) {
+      if (isManual) {
+        setAutoClipQueue((prev) => [
+          ...prev.filter((item) => item.bookmark.id !== bookmark.id),
+          {
+            bookmark,
+            recommendations: [],
+            isManual: true
+          }
+        ]);
+      }
+    }
+  }, [aiConfig.isConnected]);
+
+  const handleMoveToRecommendedClip = async (bookmarkId: number, clipId: number, _clipPath: string) => {
+    await setBookmarkClip(bookmarkId, clipId);
     loadData();
+    setAutoClipQueue((prev) => prev.filter((item) => item.bookmark.id !== bookmarkId));
+  };
+
+  const handleDismissAutoClip = () => {
+    setAutoClipQueue((prev) => prev.slice(1));
+  };
+
+  const handleChooseAnotherClip = (bookmark: Bookmark) => {
+    setManagingClipsBookmark(bookmark);
+  };
+
+  const handleSaveBookmark = async (data: { url: string; tags: string[] }) => {
+    const created = await createBookmark(data);
+    loadData();
+    if (aiConfig.isConnected && created && created.id) {
+      triggerClipRecommendation(created, false);
+    }
   };
 
   const handleSaveFileBookmark = async (data: {
@@ -318,8 +386,11 @@ export const App: React.FC = () => {
     personalNote?: string;
     tags?: string[];
   }) => {
-    await uploadFileBookmark(data);
+    const created = await uploadFileBookmark(data);
     loadData();
+    if (aiConfig.isConnected && created && created.id) {
+      triggerClipRecommendation(created, false);
+    }
   };
 
   const handleSaveImageBookmark = handleSaveFileBookmark;
@@ -329,8 +400,11 @@ export const App: React.FC = () => {
     content: string;
     tags?: string[];
   }) => {
-    await createNoteBookmark(data);
+    const created = await createNoteBookmark(data);
     loadData();
+    if (aiConfig.isConnected && created && created.id) {
+      triggerClipRecommendation(created, false);
+    }
   };
 
   const handleUpdateBookmark = async (
@@ -541,6 +615,7 @@ export const App: React.FC = () => {
             handleSetClipsView(false);
           }}
           onManageBookmarkClips={setManagingClipsBookmark}
+          onRecommendClip={triggerClipRecommendation}
           initialViewRecycleClip={isDirectRecycleOpen}
           onRecycleCountChange={setRecycleCount}
           onRecycleClipViewChange={setIsDirectRecycleOpen}
@@ -616,6 +691,7 @@ export const App: React.FC = () => {
               onDelete={handleDeleteBookmark}
               onTagClick={(tagName) => setSelectedTag(tagName)}
               onManageClips={setManagingClipsBookmark}
+              onRecommendClip={triggerClipRecommendation}
             />
           ) : (
             <div className="empty-state">
@@ -687,7 +763,13 @@ export const App: React.FC = () => {
       <AddToClipModal
         bookmark={managingClipsBookmark}
         onClose={() => setManagingClipsBookmark(null)}
-        onSuccess={() => loadData()}
+        onSuccess={() => {
+          if (managingClipsBookmark) {
+            setAutoClipQueue((prev) => prev.filter((item) => item.bookmark.id !== managingClipsBookmark.id));
+          }
+          setManagingClipsBookmark(null);
+          loadData();
+        }}
       />
 
       <ReaderModal
@@ -742,6 +824,21 @@ export const App: React.FC = () => {
           </div>
           <div className="undo-toast-progress" />
         </div>
+      )}
+
+      {/* AI Auto-Clip Recommendation Toast Notification (FIFO Queue) */}
+      {autoClipQueue.length > 0 && (
+        <PutWhereItBelongsToast
+          key={autoClipQueue[0].bookmark.id}
+          bookmark={autoClipQueue[0].bookmark}
+          recommendations={autoClipQueue[0].recommendations}
+          queueIndex={1}
+          queueTotal={autoClipQueue.length}
+          onMoveToClip={handleMoveToRecommendedClip}
+          onChooseAnother={handleChooseAnotherClip}
+          onDismiss={handleDismissAutoClip}
+          isManualTrigger={autoClipQueue[0].isManual}
+        />
       )}
     </div>
   );

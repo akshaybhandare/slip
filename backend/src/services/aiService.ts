@@ -104,6 +104,41 @@ Output valid JSON ONLY matching this exact schema without any markdown formattin
   ]
 }`;
 
+export const RECOMMEND_CLIP_SYSTEM_PROMPT = `You are an intelligent organization and categorization assistant for Slip visual bookmarks.
+
+Your mission is: "Put this where it belongs".
+Given a target Slip (note, web link, image, PDF document, or product) and a list of existing Candidate Clips (folders/collections) in the user's workspace, determine the single best existing Clip (or top 2-3 plausible choices if multiple apply) where the Slip should be placed.
+
+### CRITICAL RULES:
+1. ONLY recommend existing Clips provided in the candidates list.
+2. NEVER invent a new Clip name or propose restructuring the user's Clip hierarchy.
+3. PREFER the most specific sub-clip when appropriate, respecting the user's hierarchy and vocabulary.
+4. Base recommendations on concrete evidence:
+   - Sibling/neighboring slips already residing inside the clip.
+   - Matching tags, keywords, domain, product names, or topic overlap.
+   - Hierarchy names and parent context.
+5. Provide a concise, clear 1-sentence evidence explanation for each recommendation:
+   - Example: "Based on 4 similar Slips · matching supplier, PLA"
+   - Example: "Matches 3 3D printing notes and tags #bambulab, #filament"
+   - Example: "Contains related GitHub repositories and matches web development context"
+6. Score each recommendation with a confidence percentage (0 to 100).
+   - 80-100: Very strong direct match (clear topic/tag/sibling match).
+   - 50-79: Moderate/plausible match.
+   - <50: Weak match. Do NOT include clips with confidence < 50.
+7. If no candidate clip is a good match, return an empty array: {"recommendations": []}.
+8. Return AT MOST 3 recommendations, sorted by confidence descending.
+
+### Output JSON Format (ONLY JSON):
+{
+  "recommendations": [
+    {
+      "clipId": 12,
+      "confidence": 92,
+      "reason": "Based on 4 similar Slips · matching supplier, PLA"
+    }
+  ]
+}`;
+
 export function getActiveAIConfig(): { provider: AIProviderId; apiKey: string; apiUrl: string; model: string } | null {
   try {
     const db = getDb();
@@ -1217,3 +1252,407 @@ export async function assistNote(params: NoteAssistParams): Promise<NoteAssistRe
     proposedTitle
   };
 }
+
+export interface ClipRecommendationItem {
+  clipId: number;
+  name: string;
+  breadcrumbs: string[];
+  path: string;
+  confidence: number;
+  reason: string;
+}
+
+export interface ClipRecommendationResult {
+  bookmarkId: number;
+  recommendations: ClipRecommendationItem[];
+}
+
+export async function recommendClipForBookmark(params: {
+  bookmarkId: number | bigint;
+  userId: number;
+  config?: { provider: AIProviderId; apiKey: string; apiUrl?: string; model?: string };
+}): Promise<ClipRecommendationResult> {
+  const { bookmarkId, userId } = params;
+  const numericId = Number(bookmarkId);
+  const db = getDb();
+
+  const activeConfig = params.config || getActiveAIConfig();
+  if (!activeConfig || !activeConfig.apiKey) {
+    throw new Error('AI provider is not connected. Please connect an AI provider in Settings.');
+  }
+
+  // 1. Fetch target bookmark
+  const bookmark = db.prepare(`
+    SELECT id, user_id, url, title, description, personal_note, content_type, raw_text
+    FROM bookmarks
+    WHERE id = ? AND user_id = ? AND deleted_at IS NULL
+  `).get(numericId, userId) as any;
+
+  if (!bookmark) {
+    throw new Error('Bookmark not found');
+  }
+
+  // Fetch tags for target bookmark
+  const targetTagRows = db.prepare(`
+    SELECT t.name FROM tags t
+    JOIN bookmark_tags bt ON t.id = bt.tag_id
+    WHERE bt.bookmark_id = ?
+  `).all(numericId) as { name: string }[];
+  const targetTags = targetTagRows.map(t => t.name.toLowerCase());
+
+  // Fetch current clip (if any)
+  const currentClipRow = db.prepare(`
+    SELECT clip_id FROM clip_bookmarks WHERE bookmark_id = ?
+  `).get(numericId) as { clip_id: number } | undefined;
+  const currentClipId = currentClipRow ? currentClipRow.clip_id : null;
+
+  // 2. Fetch all active clips for user
+  const allClips = db.prepare(`
+    SELECT id, name, parent_id
+    FROM clips
+    WHERE user_id = ? AND deleted_at IS NULL
+    ORDER BY name COLLATE NOCASE ASC
+  `).all(userId) as { id: number; name: string; parent_id: number | null }[];
+
+  if (allClips.length === 0) {
+    return { bookmarkId: numericId, recommendations: [] };
+  }
+
+  // Map clips by ID for quick breadcrumb resolution
+  const clipMap = new Map<number, { id: number; name: string; parent_id: number | null }>();
+  for (const c of allClips) {
+    clipMap.set(c.id, c);
+  }
+
+  function getBreadcrumbsForClip(clipId: number): { names: string[]; path: string } {
+    const names: string[] = [];
+    let curr: number | null = clipId;
+    const visited = new Set<number>();
+    while (curr !== null && !visited.has(curr)) {
+      visited.add(curr);
+      const node = clipMap.get(curr);
+      if (!node) break;
+      names.unshift(node.name);
+      curr = node.parent_id;
+    }
+    return { names, path: names.join(' → ') };
+  }
+
+  // Collect candidate clips with summary data
+  interface CandidateClipMeta {
+    id: number;
+    name: string;
+    breadcrumbs: string[];
+    path: string;
+    itemCount: number;
+    tags: string[];
+    sampleTitles: string[];
+    heuristicScore: number;
+  }
+
+  const candidateList: CandidateClipMeta[] = [];
+
+  const targetTokens = new Set<string>();
+  const addTokens = (str?: string) => {
+    if (!str) return;
+    const words = str.toLowerCase().replace(/[^\w\s-]/g, ' ').split(/\s+/).filter(w => w.length > 2);
+    for (const w of words) targetTokens.add(w);
+  };
+  addTokens(bookmark.title);
+  addTokens(bookmark.description);
+  addTokens(bookmark.personal_note);
+  addTokens(bookmark.url);
+  for (const t of targetTags) addTokens(t);
+
+  for (const c of allClips) {
+    const { names, path } = getBreadcrumbsForClip(c.id);
+
+    // Get sample slips in clip
+    const sampleSlips = db.prepare(`
+      SELECT b.title, b.content_type FROM clip_bookmarks cb
+      JOIN bookmarks b ON cb.bookmark_id = b.id
+      WHERE cb.clip_id = ? AND b.deleted_at IS NULL
+      ORDER BY b.created_at DESC
+      LIMIT 5
+    `).all(c.id) as { title: string; content_type: string }[];
+
+    // Get total items in clip
+    const countRow = db.prepare(`
+      SELECT COUNT(*) as count FROM clip_bookmarks cb
+      JOIN bookmarks b ON cb.bookmark_id = b.id
+      WHERE cb.clip_id = ? AND b.deleted_at IS NULL
+    `).get(c.id) as { count: number };
+    const itemCount = countRow?.count || 0;
+
+    // Get tags in this clip
+    const clipTagRows = db.prepare(`
+      SELECT DISTINCT t.name FROM clip_bookmarks cb
+      JOIN bookmark_tags bt ON cb.bookmark_id = bt.bookmark_id
+      JOIN tags t ON bt.tag_id = t.id
+      WHERE cb.clip_id = ?
+      LIMIT 10
+    `).all(c.id) as { name: string }[];
+    const clipTags = clipTagRows.map(t => t.name.toLowerCase());
+
+    // Calculate heuristic score
+    let score = 0;
+    // Tag matches
+    for (const t of targetTags) {
+      if (clipTags.includes(t)) score += 15;
+    }
+    // Clip name / breadcrumb tokens match target tokens
+    for (const crumb of names) {
+      const crumbLower = crumb.toLowerCase();
+      if (targetTokens.has(crumbLower)) score += 12;
+      const crumbWords = crumbLower.split(/[\s-_]+/);
+      for (const cw of crumbWords) {
+        if (cw.length > 2 && targetTokens.has(cw)) score += 8;
+      }
+    }
+    // Sample slip titles overlap with target tokens
+    for (const s of sampleSlips) {
+      const sWords = s.title.toLowerCase().split(/[\s-_]+/);
+      for (const sw of sWords) {
+        if (sw.length > 3 && targetTokens.has(sw)) score += 4;
+      }
+    }
+
+    candidateList.push({
+      id: c.id,
+      name: c.name,
+      breadcrumbs: names,
+      path,
+      itemCount,
+      tags: clipTags,
+      sampleTitles: sampleSlips.map(s => s.title),
+      heuristicScore: score
+    });
+  }
+
+  // Sort by heuristic score descending, and cap to top 15 candidate clips
+  candidateList.sort((a, b) => b.heuristicScore - a.heuristicScore);
+  const topCandidates = candidateList.slice(0, 15);
+
+  // Build target slip summary text
+  const targetSlipParts: string[] = [];
+  targetSlipParts.push(`Title: ${bookmark.title || 'Untitled'}`);
+  targetSlipParts.push(`Type: ${bookmark.content_type || 'note'}`);
+  if (bookmark.url && !bookmark.url.startsWith('slip://')) {
+    targetSlipParts.push(`URL: ${bookmark.url}`);
+  }
+  if (bookmark.description) {
+    targetSlipParts.push(`Description: ${bookmark.description}`);
+  }
+  if (bookmark.personal_note) {
+    targetSlipParts.push(`Personal Note: ${bookmark.personal_note}`);
+  }
+  if (targetTags.length > 0) {
+    targetSlipParts.push(`Tags: ${targetTags.join(', ')}`);
+  }
+  if (bookmark.raw_text && bookmark.raw_text !== bookmark.title && bookmark.raw_text !== bookmark.description) {
+    targetSlipParts.push(`Content Excerpt: ${bookmark.raw_text.slice(0, 1000)}`);
+  }
+  if (currentClipId && clipMap.has(currentClipId)) {
+    const curPath = getBreadcrumbsForClip(currentClipId).path;
+    targetSlipParts.push(`Current Clip: ${curPath} (Clip ID: ${currentClipId})`);
+  }
+
+  // Build candidate clips text
+  const candidateDescriptions = topCandidates.map((cand, idx) => {
+    const samplesStr = cand.sampleTitles.length > 0 ? `Sample Slips: "${cand.sampleTitles.join('", "')}"` : 'No slips yet';
+    const tagsStr = cand.tags.length > 0 ? `Tags: [${cand.tags.join(', ')}]` : 'No tags';
+    return `${idx + 1}. [Clip ID: ${cand.id}] Hierarchy: "${cand.path}" | ${samplesStr} | ${tagsStr} | Total Slips: ${cand.itemCount}`;
+  }).join('\n');
+
+  const userPrompt = `Target Slip to Organize:\n${targetSlipParts.join('\n')}\n\nCandidate Existing Clips in Workspace:\n${candidateDescriptions}`;
+
+  // Call LLM
+  const { provider, apiKey, apiUrl } = activeConfig;
+  const model = (activeConfig.model || '').trim() || KNOWN_AI_PROVIDERS[provider]?.defaultModel || 'default';
+
+  let rawOutput = '';
+  try {
+    if (provider === 'openai') {
+      const baseUrl = apiUrl || KNOWN_AI_PROVIDERS.openai.defaultUrl;
+      const res = await axios.post(
+        `${baseUrl}/chat/completions`,
+        {
+          model,
+          messages: [
+            { role: 'system', content: RECOMMEND_CLIP_SYSTEM_PROMPT },
+            { role: 'user', content: userPrompt }
+          ],
+          response_format: { type: 'json_object' },
+          temperature: 0.1
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${apiKey}`,
+            'Content-Type': 'application/json'
+          },
+          timeout: 20000
+        }
+      );
+      rawOutput = res.data?.choices?.[0]?.message?.content || '';
+    } else if (provider === 'claude') {
+      const baseUrl = apiUrl || KNOWN_AI_PROVIDERS.claude.defaultUrl;
+      const res = await axios.post(
+        `${baseUrl}/messages`,
+        {
+          model,
+          system: RECOMMEND_CLIP_SYSTEM_PROMPT,
+          messages: [
+            { role: 'user', content: userPrompt }
+          ],
+          max_tokens: 1000,
+          temperature: 0.1
+        },
+        {
+          headers: {
+            'x-api-key': apiKey,
+            'anthropic-version': '2023-06-01',
+            'content-type': 'application/json'
+          },
+          timeout: 20000
+        }
+      );
+      rawOutput = res.data?.content?.[0]?.text || '';
+    } else if (provider === 'gemini') {
+      const baseUrl = apiUrl || KNOWN_AI_PROVIDERS.gemini.defaultUrl;
+      const cleanModel = model.replace(/^models\//, '');
+      const res = await axios.post(
+        `${baseUrl}/models/${cleanModel}:generateContent?key=${encodeURIComponent(apiKey)}`,
+        {
+          systemInstruction: {
+            parts: [{ text: RECOMMEND_CLIP_SYSTEM_PROMPT }]
+          },
+          contents: [
+            {
+              parts: [{ text: userPrompt }]
+            }
+          ],
+          generationConfig: {
+            responseMimeType: 'application/json',
+            temperature: 0.1
+          }
+        },
+        {
+          headers: { 'Content-Type': 'application/json' },
+          timeout: 20000
+        }
+      );
+      rawOutput = res.data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    } else {
+      // Custom provider
+      const base = apiUrl?.includes('://') ? apiUrl : `https://${apiUrl || ''}`;
+      const targetUrl = base.endsWith('/chat/completions') || base.includes('/generate')
+        ? base
+        : `${base.replace(/\/+$/, '')}/chat/completions`;
+
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        'HTTP-Referer': 'https://github.com/slip-archive/slip',
+        'X-Title': 'Slip Visual Bookmarks'
+      };
+      if (apiKey) {
+        headers['Authorization'] = `Bearer ${apiKey}`;
+      }
+
+      let res: any;
+      try {
+        res = await axios.post(
+          targetUrl,
+          {
+            model,
+            messages: [
+              { role: 'system', content: RECOMMEND_CLIP_SYSTEM_PROMPT },
+              { role: 'user', content: userPrompt }
+            ],
+            max_tokens: 1000,
+            temperature: 0.1
+          },
+          {
+            headers,
+            timeout: 20000
+          }
+        );
+      } catch {
+        const combinedPrompt = `${RECOMMEND_CLIP_SYSTEM_PROMPT}\n\n---\n\n${userPrompt}`;
+        res = await axios.post(
+          targetUrl,
+          {
+            model,
+            messages: [
+              { role: 'user', content: combinedPrompt }
+            ],
+            max_tokens: 1000,
+            temperature: 0.1
+          },
+          {
+            headers,
+            timeout: 20000
+          }
+        );
+      }
+      rawOutput = res.data?.choices?.[0]?.message?.content || res.data?.response || '';
+    }
+  } catch (err: any) {
+    const errorDetail = err.response?.data?.error?.message || err.response?.data?.message || err.message || 'AI recommendation request failed';
+    throw new Error(`AI Recommendation Error (${provider} / ${model}): ${errorDetail}`);
+  }
+
+  // Parse JSON response
+  let parsed: any = {};
+  if (rawOutput) {
+    const trimmed = rawOutput.trim();
+    try {
+      parsed = JSON.parse(trimmed);
+    } catch {
+      const fenced = trimmed.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
+      try {
+        parsed = JSON.parse(fenced);
+      } catch {
+        const match = trimmed.match(/\{[\s\S]*\}/);
+        if (match) {
+          try { parsed = JSON.parse(match[0]); } catch {}
+        }
+      }
+    }
+  }
+
+  const rawRecs = Array.isArray(parsed.recommendations) ? parsed.recommendations : [];
+  const validRecommendations: ClipRecommendationItem[] = [];
+
+  for (const item of rawRecs) {
+    const targetClipId = Number(item.clipId || item.id);
+    if (!targetClipId || !clipMap.has(targetClipId)) {
+      continue;
+    }
+    const confidence = typeof item.confidence === 'number' ? Math.round(Math.min(100, Math.max(0, item.confidence))) : 75;
+    if (confidence < 50) {
+      continue; // Filter low confidence matches
+    }
+    const clipInfo = clipMap.get(targetClipId)!;
+    const { names, path } = getBreadcrumbsForClip(targetClipId);
+    const reason = (item.reason || item.explanation || 'Matches related context in this clip.').trim();
+
+    validRecommendations.push({
+      clipId: targetClipId,
+      name: clipInfo.name,
+      breadcrumbs: names,
+      path,
+      confidence,
+      reason
+    });
+  }
+
+  // Sort by confidence descending and take top 3
+  validRecommendations.sort((a, b) => b.confidence - a.confidence);
+  const finalRecs = validRecommendations.slice(0, 3);
+
+  return {
+    bookmarkId: numericId,
+    recommendations: finalRecs
+  };
+}
+

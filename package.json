@@ -1,0 +1,17 @@
+{
+  "name": "slip-root",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Slip visual bookmark archive root workspace",
+  "scripts": {
+    "dev": "./dev.sh start",
+    "start": "./dev.sh start",
+    "stop": "./dev.sh stop",
+    "restart": "./dev.sh restart",
+    "status": "./dev.sh status",
+    "logs": "./dev.sh logs",
+    "test:backend": "cd backend && npm test",
+    "test:frontend": "cd frontend && npm test",
+    "test": "npm run test:backend && npm run test:frontend"
+  }
+}

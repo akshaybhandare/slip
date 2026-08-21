@@ -40,6 +40,7 @@ interface ClipsViewProps {
   onDeleteBookmark: (id: number) => void;
   onTagClick: (tagName: string) => void;
   onManageBookmarkClips: (bookmark: Bookmark) => void;
+  onRecommendClip?: (bookmark: Bookmark) => Promise<void> | void;
   initialViewRecycleClip?: boolean;
   onRecycleCountChange?: (count: number) => void;
   onRecycleClipViewChange?: (isViewing: boolean) => void;
@@ -57,6 +58,7 @@ export const ClipsView: React.FC<ClipsViewProps> = ({
   onDeleteBookmark,
   onTagClick,
   onManageBookmarkClips,
+  onRecommendClip,
   initialViewRecycleClip = false,
   onRecycleCountChange,
   onRecycleClipViewChange
@@ -874,6 +876,7 @@ export const ClipsView: React.FC<ClipsViewProps> = ({
                         onDelete={handleDeleteBookmarkInClip}
                         onTagClick={onTagClick}
                         onManageClips={onManageBookmarkClips}
+                        onRecommendClip={onRecommendClip}
                         onRemoveFromClip={handleRemoveBookmarkFromCurrentClip}
                       />
                     ) : (

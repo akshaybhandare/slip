@@ -79,3 +79,18 @@ export interface ClipDetail {
   subclips: Clip[];
   bookmarks: Bookmark[];
 }
+
+export interface ClipRecommendationItem {
+  clipId: number;
+  name: string;
+  breadcrumbs: string[];
+  path: string;
+  confidence: number;
+  reason: string;
+}
+
+export interface ClipRecommendationResult {
+  bookmarkId: number;
+  recommendations: ClipRecommendationItem[];
+}
+

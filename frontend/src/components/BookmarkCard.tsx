@@ -83,6 +83,7 @@ interface BookmarkCardProps {
   onDelete?: (id: number) => void;
   onTagClick?: (tagName: string) => void;
   onManageClips?: (bookmark: Bookmark) => void;
+  onRecommendClip?: (bookmark: Bookmark) => Promise<void> | void;
   onRemoveFromClip?: (bookmarkId: number) => void;
   isRecycleBin?: boolean;
   onRestore?: (id: number) => void;
@@ -101,6 +102,7 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
   onDelete,
   onTagClick,
   onManageClips,
+  onRecommendClip,
   onRemoveFromClip,
   isRecycleBin = false,
   onRestore,
@@ -108,6 +110,7 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
 }) => {
   const [rescaping, setRescraping] = useState(false);
   const [autoTagging, setAutoTagging] = useState(false);
+  const [isRecommendingClip, setIsRecommendingClip] = useState(false);
   const [isPinning, setIsPinning] = useState(false);
   const [showNote, setShowNote] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -186,6 +189,16 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
     }
   };
 
+  const handleRecommendClipClick = async () => {
+    if (!onRecommendClip) return;
+    setIsRecommendingClip(true);
+    try {
+      await onRecommendClip(bookmark);
+    } finally {
+      setIsRecommendingClip(false);
+    }
+  };
+
   const handleShareClick = () => {
     if (onShare) onShare(bookmark);
   };
@@ -216,8 +229,8 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
         </button>
       )}
 
-      {isAIConnected && autoTagging && (
-        <div className="card-ai-progress-bar" title="AI Auto-tagging in progress...">
+      {isAIConnected && (autoTagging || isRecommendingClip) && (
+        <div className="card-ai-progress-bar" title={isRecommendingClip ? "AI Suggesting Clip..." : "AI Auto-tagging in progress..."}>
           <div className="card-ai-progress-pulse" />
         </div>
       )}
@@ -655,6 +668,20 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
                         >
                           <Paperclip size={15} />
                           <span>Organize in Clip</span>
+                        </button>
+                      )}
+
+                      {isAIConnected && onRecommendClip && (
+                        <button
+                          className="card-dropdown-item"
+                          onClick={() => {
+                            setIsMenuOpen(false);
+                            handleRecommendClipClick();
+                          }}
+                          disabled={isRecommendingClip}
+                        >
+                          <Sparkles size={15} className={isRecommendingClip ? 'spin-animation' : ''} />
+                          <span>{isRecommendingClip ? 'Suggesting Clip...' : 'Suggest Clip with AI'}</span>
                         </button>
                       )}
 
