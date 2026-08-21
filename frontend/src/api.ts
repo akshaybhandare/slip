@@ -1,4 +1,15 @@
-import { Bookmark, ContentType, Tag, User, UserListItem, Clip, ClipDetail, PinConfig } from './types';
+import {
+  Bookmark,
+  ContentType,
+  Tag,
+  User,
+  UserListItem,
+  Clip,
+  ClipDetail,
+  PinConfig,
+  ClipRecommendationResult,
+  ClipRecommendationItem
+} from './types';
 
 const API_BASE = '/api';
 
@@ -464,6 +475,14 @@ export async function setBookmarkClips(bookmarkId: number, clipIds: number[]): P
     body: JSON.stringify({ clipIds })
   });
 }
+
+export async function recommendClip(bookmarkId: number): Promise<ClipRecommendationResult> {
+  return apiFetch<ClipRecommendationResult>('/clips/recommend', {
+    method: 'POST',
+    body: JSON.stringify({ bookmarkId })
+  });
+}
+
 
 
 

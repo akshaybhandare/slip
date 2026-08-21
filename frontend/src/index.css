@@ -3943,5 +3943,250 @@ body {
   flex-shrink: 0;
 }
 
+/* ==========================================================================
+   Put This Where It Belongs - AI Clip Recommendation Toast
+   ========================================================================== */
+
+.put-where-toast-wrapper {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 950;
+  max-width: 520px;
+  width: calc(100% - 32px);
+  pointer-events: none;
+}
+
+.put-where-toast-container {
+  pointer-events: auto;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.18), 0 3px 8px rgba(0, 0, 0, 0.08);
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  position: relative;
+  transition: var(--transition);
+}
+
+.put-where-toast-container.toast-success-state {
+  border-color: rgba(34, 197, 94, 0.4);
+  background: var(--color-surface);
+}
+
+.put-where-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.put-where-title-badge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--color-primary);
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.auto-clip-queue-badge {
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--color-primary);
+  background: rgba(228, 43, 12, 0.12);
+  border: 1px solid rgba(228, 43, 12, 0.25);
+  padding: 1px 6px;
+  border-radius: var(--radius-full);
+  letter-spacing: 0.02em;
+  margin-left: 2px;
+}
+
+.put-where-title-badge .sparkle-icon {
+  animation: pulse-glow 2s infinite ease-in-out;
+}
+
+.put-where-header-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.put-where-confidence {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-muted);
+  background: var(--color-tertiary);
+  padding: 2px 7px;
+  border-radius: var(--radius-full);
+}
+
+.put-where-close-btn {
+  background: transparent;
+  border: none;
+  color: var(--color-muted);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: var(--transition);
+}
+
+.put-where-close-btn:hover {
+  color: var(--color-on-surface);
+  background: var(--color-tertiary);
+}
+
+.put-where-target-summary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.put-where-target-title {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+.put-where-destination-box {
+  background: var(--color-tertiary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 10px 12px;
+}
+
+.put-where-dest-path {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--color-on-surface);
+}
+
+.dest-clip-icon {
+  color: var(--color-primary);
+  flex-shrink: 0;
+}
+
+.dest-path-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.put-where-evidence {
+  font-size: 12px;
+  color: var(--color-muted);
+  margin-top: 4px;
+  line-height: 1.4;
+}
+
+.put-where-alternatives-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  flex-wrap: wrap;
+}
+
+.alt-label {
+  color: var(--color-muted);
+  font-size: 11.5px;
+}
+
+.alt-pills {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.alt-clip-pill {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-full);
+  padding: 2px 8px;
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--color-on-surface);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  transition: var(--transition);
+}
+
+.alt-clip-pill:hover {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+
+.alt-pill-score {
+  font-size: 10px;
+  color: var(--color-muted);
+}
+
+.put-where-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 2px;
+}
+
+.put-where-actions-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.put-where-actions-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.put-where-choose-btn {
+  font-size: 12.5px;
+}
+
+.put-where-dismiss-btn {
+  font-size: 12.5px;
+  color: var(--color-muted);
+}
+
+.put-where-move-btn {
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.put-where-success-msg {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #16a34a;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 4px 0;
+}
+
+.put-where-no-match-text {
+  font-size: 13px;
+  color: var(--color-muted);
+  margin: 0;
+}
+
+
 
 

@@ -1,6 +1,7 @@
 import { Router, Response } from 'express';
 import { getDb } from '../db';
 import { authenticate, AuthenticatedRequest } from '../middleware/auth';
+import { recommendClipForBookmark, getActiveAIConfig } from '../services/aiService';
 
 const router = Router();
 
@@ -303,6 +304,36 @@ router.put('/bookmark/:bookmarkId', (req: AuthenticatedRequest, res: Response) =
   } catch (err) {
     console.error('Sync bookmark clips error:', err);
     res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+// 4.1 POST /api/clips/recommend - Recommend existing clip for a slip using AI ("Put this where it belongs")
+router.post('/recommend', async (req: AuthenticatedRequest, res: Response) => {
+  const userId = req.user!.id;
+  const { bookmarkId } = req.body;
+
+  if (!bookmarkId) {
+    return res.status(400).json({ message: 'bookmarkId is required' });
+  }
+
+  const activeConfig = getActiveAIConfig();
+  if (!activeConfig || !activeConfig.apiKey) {
+    return res.status(400).json({ message: 'AI provider is not connected. Please connect an AI provider in Settings.' });
+  }
+
+  try {
+    const result = await recommendClipForBookmark({
+      bookmarkId: Number(bookmarkId),
+      userId,
+      config: activeConfig
+    });
+
+    return res.status(200).json(result);
+  } catch (err: any) {
+    console.error('Clip recommendation error:', err);
+    return res.status(err.message === 'Bookmark not found' ? 404 : 500).json({
+      message: err.message || 'Failed to recommend clip'
+    });
   }
 });
 
