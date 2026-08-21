@@ -222,15 +222,59 @@ Refactor `:root` tokens to support `[data-theme="dark"]` and `@media (prefers-co
 
 #### 2. Theme Provider & Hook (`frontend/src/hooks/useTheme.ts`)
 * Stores preference in `localStorage.getItem('slip_theme')` (`'light' | 'dark' | 'system'`).
-* Listens to `window.matchMedia('(prefers-color-scheme: dark)')` change events for seamless system switching.
-* Sets `<html data-theme="...">` and updates meta tag `<meta name="theme-color" content="...">` dynamically so the iOS status bar matches the active theme.
+---
+
+## 4. Recycle Clip (Recycle Bin, Safe Restore & Empty Bin)
+
+### 🎯 Motivation & Value
+Accidental deletion creates anxiety. In a knowledge archive, deleting a slip shouldn't immediately vanish content from reality without recourse. The **Recycle Clip** provides a non-destructive soft-delete safety net where deleted slips can be instantly undone via a quick toast notification, safely restored back to their original Clip & Tags, or permanently eradicated through a safe confirmation modal.
 
 ---
 
-## 4. Implementation Sequence & Timeline
+### 📱 User Experience (UX) Walkthrough
+1. **Move to Recycle Clip**:
+   * On any slip card, clicking the dropdown and selecting **"Move to Recycle Clip"** removes the card from active feeds, searches, and clip views.
+2. **Instant Undo Toast**:
+   * A 6-second floating toast notification appears at the bottom-right: *"Slip moved to Recycle Clip"* with a 1-click **"Undo"** button that immediately restores the slip without navigating away.
+3. **Specialized Recycle Clip in Clips View**:
+   * In the **Clips** view, a dedicated **"Recycle Clip"** tile shows the count of trashed slips.
+   * Clicking it opens the **Recycle Clip** manager, with:
+     * A header displaying trashed slip count and an **"Empty Recycle Clip"** button.
+     * Trashed slip cards with direct **"Restore Slip"** and **"Delete Permanently"** actions.
+4. **Safe Empty Confirmation Modal**:
+   * Clicking "Empty Recycle Clip" triggers a modal confirming the exact number of slips that will be permanently eradicated, preventing accidental bulk data loss.
+
+---
+
+### 🛠️ Technical Implementation Plan
+
+#### 1. Database Schema Additions (`backend/src/db.ts`)
+```sql
+ALTER TABLE bookmarks ADD COLUMN deleted_at TEXT;
+CREATE INDEX IF NOT EXISTS idx_bookmarks_deleted ON bookmarks(user_id, deleted_at);
+```
+
+#### 2. Backend REST Endpoints (`backend/src/routes/bookmarks.ts` & `backend/src/routes/clips.ts`)
+* `DELETE /api/bookmarks/:id`: Soft deletes slip (`deleted_at = datetime('now')`, `is_pinned = 0`).
+* `GET /api/bookmarks/recycle-clip`: Retrieves all soft-deleted slips for current user.
+* `POST /api/bookmarks/:id/restore`: Restores soft-deleted slip (`deleted_at = NULL`).
+* `DELETE /api/bookmarks/:id/permanent`: Hard deletes bookmark and removes cached assets.
+* `POST /api/bookmarks/recycle-clip/empty`: Hard deletes all soft-deleted bookmarks for the user.
+* Active queries filter `WHERE b.deleted_at IS NULL`.
+
+#### 3. Frontend Integration
+* **`BookmarkCard.tsx`**: Updated dropdown with "Move to Recycle Clip" and Recycle mode actions ("Restore Slip", "Delete Permanently").
+* **`ClipsView.tsx`**: Special "Recycle Clip" tile and management view.
+* **`App.tsx`**: Instant Undo Toast and Safe Empty Confirmation Modal.
+
+---
+
+## 5. Implementation Sequence & Timeline
 
 | Phase | Feature | Key Deliverables | Est. Effort |
 | :--- | :--- | :--- | :--- |
 | **Phase 1** | **Dark Mode & OLED Theme** | CSS design tokens, 3-state toggle component, iOS status bar meta updater. | 1 Sprint |
 | **Phase 2** | **Browser Extension & iOS Shortcut** | Chrome/Firefox MV3 extension bundle, popup HUD, options config page, iOS shortcut template. | 1-2 Sprints |
 | **Phase 3** | **Highlights & Sticky Notes** | Database migration, FTS5 triggers update, Reader Mode text selection toolbar, card note preview. | 2 Sprints |
+| **Phase 4** | **Recycle Clip (Recycle Bin)** | Soft delete schema migration, restore/empty endpoints, Recycle Clip UI, Instant Undo Toast, Safe Empty modal. | 1 Sprint |
+

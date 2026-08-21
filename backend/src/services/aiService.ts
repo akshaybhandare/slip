@@ -505,12 +505,12 @@ export async function performSmartSearch(params: {
   const candidateIds = new Set<number>();
   
   // Check total bookmarks for user
-  const countRow = db.prepare('SELECT COUNT(*) as count FROM bookmarks WHERE user_id = ?').get(userId) as { count: number };
+  const countRow = db.prepare('SELECT COUNT(*) as count FROM bookmarks WHERE user_id = ? AND deleted_at IS NULL').get(userId) as { count: number };
   const totalCount = countRow?.count || 0;
 
   if (totalCount <= 120) {
     // If library <= 120 bookmarks, include all user bookmarks directly for 100% semantic coverage
-    const allRows = db.prepare('SELECT id FROM bookmarks WHERE user_id = ? ORDER BY created_at DESC').all(userId) as { id: number }[];
+    const allRows = db.prepare('SELECT id FROM bookmarks WHERE user_id = ? AND deleted_at IS NULL ORDER BY created_at DESC').all(userId) as { id: number }[];
     for (const r of allRows) {
       candidateIds.add(r.id);
     }
@@ -522,7 +522,7 @@ export async function performSmartSearch(params: {
       try {
         const ftsMatches = db.prepare(`
           SELECT rowid FROM bookmarks_fts 
-          WHERE bookmarks_fts MATCH ? AND rowid IN (SELECT id FROM bookmarks WHERE user_id = ?)
+          WHERE bookmarks_fts MATCH ? AND rowid IN (SELECT id FROM bookmarks WHERE user_id = ? AND deleted_at IS NULL)
           ORDER BY bm25(bookmarks_fts) ASC
           LIMIT 40
         `).all(ftsOrQuery, userId) as { rowid: number }[];
@@ -544,7 +544,7 @@ export async function performSmartSearch(params: {
           FROM bookmark_tags bt
           JOIN tags t ON bt.tag_id = t.id
           JOIN bookmarks b ON bt.bookmark_id = b.id
-          WHERE b.user_id = ? AND (${tagConditions})
+          WHERE b.user_id = ? AND b.deleted_at IS NULL AND (${tagConditions})
           LIMIT 25
         `).all(...tagParams) as { bookmark_id: number }[];
         for (const tm of tagMatches) {
@@ -558,7 +558,7 @@ export async function performSmartSearch(params: {
     // Always include top recent bookmarks
     const recentRows = db.prepare(`
       SELECT id FROM bookmarks 
-      WHERE user_id = ? 
+      WHERE user_id = ? AND deleted_at IS NULL
       ORDER BY created_at DESC 
       LIMIT 30
     `).all(userId) as { id: number }[];
@@ -579,7 +579,7 @@ export async function performSmartSearch(params: {
     SELECT b.id, b.title, b.description, b.personal_note, b.content_type, b.url,
            substr(b.raw_text, 1, 600) as content_snippet
     FROM bookmarks b
-    WHERE b.id IN (${candidatePlaceholders}) AND b.user_id = ?
+    WHERE b.id IN (${candidatePlaceholders}) AND b.user_id = ? AND b.deleted_at IS NULL
     ORDER BY b.created_at DESC
   `).all(...candidateIdList, userId) as any[];
 
@@ -801,7 +801,7 @@ export async function performSmartSearch(params: {
     SELECT b.id, b.user_id, b.url, b.title, b.description, b.personal_note, b.content_type,
            b.image_path, b.favicon_path, b.created_at, b.updated_at
     FROM bookmarks b
-    WHERE b.id IN (${placeholders}) AND b.user_id = ?
+    WHERE b.id IN (${placeholders}) AND b.user_id = ? AND b.deleted_at IS NULL
   `).all(...matchedIds, userId) as any[];
 
   const fullTagQuery = db.prepare(`

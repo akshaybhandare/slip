@@ -58,6 +58,7 @@ export function initDb(dbPath = getDbPath()): Database.Database {
       favicon_path TEXT,
       is_pinned INTEGER DEFAULT 0,
       pinned_at TEXT,
+      deleted_at TEXT,
       created_at TEXT DEFAULT (datetime('now')),
       updated_at TEXT DEFAULT (datetime('now')),
       FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
@@ -138,6 +139,7 @@ export function initDb(dbPath = getDbPath()): Database.Database {
       user_id INTEGER NOT NULL,
       name TEXT NOT NULL,
       parent_id INTEGER,
+      deleted_at TEXT,
       created_at TEXT DEFAULT (datetime('now')),
       updated_at TEXT DEFAULT (datetime('now')),
       FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,
@@ -176,6 +178,26 @@ export function initDb(dbPath = getDbPath()): Database.Database {
   }
   try {
     db.exec(`CREATE INDEX IF NOT EXISTS idx_bookmarks_pinned ON bookmarks(user_id, is_pinned);`);
+  } catch {
+    // Index already present
+  }
+  try {
+    db.exec(`ALTER TABLE bookmarks ADD COLUMN deleted_at TEXT;`);
+  } catch {
+    // Column already present
+  }
+  try {
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_bookmarks_deleted ON bookmarks(user_id, deleted_at);`);
+  } catch {
+    // Index already present
+  }
+  try {
+    db.exec(`ALTER TABLE clips ADD COLUMN deleted_at TEXT;`);
+  } catch {
+    // Column already present
+  }
+  try {
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_clips_deleted ON clips(user_id, deleted_at);`);
   } catch {
     // Index already present
   }

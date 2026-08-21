@@ -20,7 +20,7 @@ function isDescendant(db: any, potentialDescendantId: number, ancestorId: number
     }
     visited.add(currentId);
 
-    const row = db.prepare('SELECT parent_id FROM clips WHERE id = ?').get(currentId) as { parent_id: number | null } | undefined;
+    const row = db.prepare('SELECT parent_id FROM clips WHERE id = ? AND deleted_at IS NULL').get(currentId) as { parent_id: number | null } | undefined;
     if (!row || row.parent_id === null || row.parent_id === undefined) {
       break;
     }
@@ -28,6 +28,25 @@ function isDescendant(db: any, potentialDescendantId: number, ancestorId: number
   }
 
   return false;
+}
+
+// Helper: Collect target clip ID and all active recursive descendant IDs
+function getDescendantClipIds(db: any, rootClipId: number, userId: number): number[] {
+  const allClipIds = [rootClipId];
+  const queue = [rootClipId];
+  const visited = new Set<number>([rootClipId]);
+  while (queue.length > 0) {
+    const curr = queue.shift()!;
+    const children = db.prepare('SELECT id FROM clips WHERE parent_id = ? AND user_id = ? AND deleted_at IS NULL').all(curr, userId) as { id: number }[];
+    for (const ch of children) {
+      if (!visited.has(ch.id)) {
+        visited.add(ch.id);
+        allClipIds.push(ch.id);
+        queue.push(ch.id);
+      }
+    }
+  }
+  return allClipIds;
 }
 
 // Helper: Build breadcrumbs from root down to current clip
@@ -40,7 +59,7 @@ function getBreadcrumbs(db: any, clipId: number, userId: number): { id: number; 
     if (visited.has(currentId)) break;
     visited.add(currentId);
 
-    const row = db.prepare('SELECT id, name, parent_id FROM clips WHERE id = ? AND user_id = ?').get(currentId, userId) as { id: number; name: string; parent_id: number | null } | undefined;
+    const row = db.prepare('SELECT id, name, parent_id FROM clips WHERE id = ? AND user_id = ? AND deleted_at IS NULL').get(currentId, userId) as { id: number; name: string; parent_id: number | null } | undefined;
     if (!row) break;
 
     crumbs.unshift({ id: row.id, name: row.name });
@@ -78,7 +97,7 @@ function removeTagFromBookmark(db: any, bookmarkId: number, rawTagName: string) 
   }
 }
 
-// 1. GET /api/clips - List all clips for current user
+// 1. GET /api/clips - List all active clips for current user
 router.get('/', (req: AuthenticatedRequest, res: Response) => {
   const userId = req.user!.id;
 
@@ -92,16 +111,45 @@ router.get('/', (req: AuthenticatedRequest, res: Response) => {
         c.parent_id, 
         c.created_at, 
         c.updated_at,
-        (SELECT COUNT(*) FROM clip_bookmarks cb WHERE cb.clip_id = c.id) AS item_count,
-        (SELECT COUNT(*) FROM clips sub WHERE sub.parent_id = c.id AND sub.user_id = c.user_id) AS subclip_count
+        (SELECT COUNT(*) FROM clip_bookmarks cb JOIN bookmarks b ON cb.bookmark_id = b.id WHERE cb.clip_id = c.id AND b.deleted_at IS NULL) AS item_count,
+        (SELECT COUNT(*) FROM clips sub WHERE sub.parent_id = c.id AND sub.user_id = c.user_id AND sub.deleted_at IS NULL) AS subclip_count
       FROM clips c
-      WHERE c.user_id = ?
+      WHERE c.user_id = ? AND c.deleted_at IS NULL
       ORDER BY c.name COLLATE NOCASE ASC
     `).all(userId);
 
     res.status(200).json(clips);
   } catch (err) {
     console.error('Fetch clips error:', err);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+// 1.1 GET /api/clips/recycle-clip - List soft-deleted clips
+router.get('/recycle-clip', (req: AuthenticatedRequest, res: Response) => {
+  const userId = req.user!.id;
+
+  try {
+    const db = getDb();
+    const trashedClips = db.prepare(`
+      SELECT 
+        c.id, 
+        c.user_id, 
+        c.name, 
+        c.parent_id, 
+        c.deleted_at,
+        c.created_at, 
+        c.updated_at,
+        (SELECT COUNT(*) FROM clip_bookmarks cb JOIN bookmarks b ON cb.bookmark_id = b.id WHERE cb.clip_id = c.id AND b.deleted_at IS NULL) AS item_count,
+        (SELECT COUNT(*) FROM clips sub WHERE sub.parent_id = c.id AND sub.user_id = c.user_id) AS subclip_count
+      FROM clips c
+      WHERE c.user_id = ? AND c.deleted_at IS NOT NULL
+      ORDER BY c.deleted_at DESC
+    `).all(userId);
+
+    res.status(200).json(trashedClips);
+  } catch (err) {
+    console.error('Fetch recycle clips error:', err);
     res.status(500).json({ message: 'Internal server error' });
   }
 });
@@ -124,7 +172,7 @@ router.post('/', (req: AuthenticatedRequest, res: Response) => {
 
     // If parent_id provided, verify it exists and belongs to user
     if (targetParentId !== null && targetParentId !== undefined) {
-      const parent = db.prepare('SELECT id FROM clips WHERE id = ? AND user_id = ?').get(targetParentId, userId);
+      const parent = db.prepare('SELECT id FROM clips WHERE id = ? AND user_id = ? AND deleted_at IS NULL').get(targetParentId, userId);
       if (!parent) {
         return res.status(404).json({ message: 'Parent clip not found' });
       }
@@ -166,7 +214,7 @@ router.get('/bookmark/:bookmarkId', (req: AuthenticatedRequest, res: Response) =
 
   try {
     const db = getDb();
-    const bookmark = db.prepare('SELECT id FROM bookmarks WHERE id = ? AND user_id = ?').get(bookmarkId, userId);
+    const bookmark = db.prepare('SELECT id FROM bookmarks WHERE id = ? AND user_id = ? AND deleted_at IS NULL').get(bookmarkId, userId);
     if (!bookmark) {
       return res.status(404).json({ message: 'Bookmark not found' });
     }
@@ -175,7 +223,7 @@ router.get('/bookmark/:bookmarkId', (req: AuthenticatedRequest, res: Response) =
       SELECT c.id, c.name, c.parent_id
       FROM clips c
       JOIN clip_bookmarks cb ON c.id = cb.clip_id
-      WHERE cb.bookmark_id = ? AND c.user_id = ?
+      WHERE cb.bookmark_id = ? AND c.user_id = ? AND c.deleted_at IS NULL
     `).get(bookmarkId, userId) as { id: number; name: string; parent_id: number | null } | undefined;
 
     const clipsList = clip ? [clip] : [];
@@ -206,7 +254,7 @@ router.put('/bookmark/:bookmarkId', (req: AuthenticatedRequest, res: Response) =
 
   try {
     const db = getDb();
-    const bookmark = db.prepare('SELECT id FROM bookmarks WHERE id = ? AND user_id = ?').get(bookmarkId, userId);
+    const bookmark = db.prepare('SELECT id FROM bookmarks WHERE id = ? AND user_id = ? AND deleted_at IS NULL').get(bookmarkId, userId);
     if (!bookmark) {
       return res.status(404).json({ message: 'Bookmark not found' });
     }
@@ -232,7 +280,7 @@ router.put('/bookmark/:bookmarkId', (req: AuthenticatedRequest, res: Response) =
 
       // If a valid clipId is specified, ensure it belongs to the user and assign it
       if (targetClipId) {
-        const clip = db.prepare('SELECT id, name FROM clips WHERE id = ? AND user_id = ?').get(targetClipId, userId) as { id: number; name: string } | undefined;
+        const clip = db.prepare('SELECT id, name FROM clips WHERE id = ? AND user_id = ? AND deleted_at IS NULL').get(targetClipId, userId) as { id: number; name: string } | undefined;
         if (clip) {
           db.prepare('INSERT INTO clip_bookmarks (clip_id, bookmark_id) VALUES (?, ?)').run(targetClipId, bookmarkId);
           addTagToBookmark(db, Number(bookmarkId), clip.name);
@@ -246,7 +294,7 @@ router.put('/bookmark/:bookmarkId', (req: AuthenticatedRequest, res: Response) =
       SELECT c.id, c.name, c.parent_id
       FROM clips c
       JOIN clip_bookmarks cb ON c.id = cb.clip_id
-      WHERE cb.bookmark_id = ? AND c.user_id = ?
+      WHERE cb.bookmark_id = ? AND c.user_id = ? AND c.deleted_at IS NULL
     `).get(bookmarkId, userId) as { id: number; name: string; parent_id: number | null } | undefined;
 
     const clipsList = updatedClip ? [updatedClip] : [];
@@ -273,10 +321,10 @@ router.get('/:id', (req: AuthenticatedRequest, res: Response) => {
         c.parent_id, 
         c.created_at, 
         c.updated_at,
-        (SELECT COUNT(*) FROM clip_bookmarks cb WHERE cb.clip_id = c.id) AS item_count,
-        (SELECT COUNT(*) FROM clips sub WHERE sub.parent_id = c.id AND sub.user_id = c.user_id) AS subclip_count
+        (SELECT COUNT(*) FROM clip_bookmarks cb JOIN bookmarks b ON cb.bookmark_id = b.id WHERE cb.clip_id = c.id AND b.deleted_at IS NULL) AS item_count,
+        (SELECT COUNT(*) FROM clips sub WHERE sub.parent_id = c.id AND sub.user_id = c.user_id AND sub.deleted_at IS NULL) AS subclip_count
       FROM clips c
-      WHERE c.id = ? AND c.user_id = ?
+      WHERE c.id = ? AND c.user_id = ? AND c.deleted_at IS NULL
     `).get(id, userId);
 
     if (!clip) {
@@ -293,10 +341,10 @@ router.get('/:id', (req: AuthenticatedRequest, res: Response) => {
         c.parent_id, 
         c.created_at, 
         c.updated_at,
-        (SELECT COUNT(*) FROM clip_bookmarks cb WHERE cb.clip_id = c.id) AS item_count,
-        (SELECT COUNT(*) FROM clips sub WHERE sub.parent_id = c.id AND sub.user_id = c.user_id) AS subclip_count
+        (SELECT COUNT(*) FROM clip_bookmarks cb JOIN bookmarks b ON cb.bookmark_id = b.id WHERE cb.clip_id = c.id AND b.deleted_at IS NULL) AS item_count,
+        (SELECT COUNT(*) FROM clips sub WHERE sub.parent_id = c.id AND sub.user_id = c.user_id AND sub.deleted_at IS NULL) AS subclip_count
       FROM clips c
-      WHERE c.parent_id = ? AND c.user_id = ?
+      WHERE c.parent_id = ? AND c.user_id = ? AND c.deleted_at IS NULL
       ORDER BY c.name COLLATE NOCASE ASC
     `).all(id, userId);
 
@@ -304,7 +352,7 @@ router.get('/:id', (req: AuthenticatedRequest, res: Response) => {
       SELECT b.*
       FROM bookmarks b
       JOIN clip_bookmarks cb ON b.id = cb.bookmark_id
-      WHERE cb.clip_id = ? AND b.user_id = ?
+      WHERE cb.clip_id = ? AND b.user_id = ? AND b.deleted_at IS NULL
       ORDER BY cb.created_at DESC, b.created_at DESC
     `).all(id, userId) as any[];
 
@@ -353,7 +401,7 @@ router.put('/:id', (req: AuthenticatedRequest, res: Response) => {
 
   try {
     const db = getDb();
-    const existing = db.prepare('SELECT id, name, parent_id FROM clips WHERE id = ? AND user_id = ?').get(clipId, userId) as { id: number; name: string; parent_id: number | null } | undefined;
+    const existing = db.prepare('SELECT id, name, parent_id FROM clips WHERE id = ? AND user_id = ? AND deleted_at IS NULL').get(clipId, userId) as { id: number; name: string; parent_id: number | null } | undefined;
 
     if (!existing) {
       return res.status(404).json({ message: 'Clip not found' });
@@ -377,8 +425,8 @@ router.put('/:id', (req: AuthenticatedRequest, res: Response) => {
         if (targetPid === clipId) {
           return res.status(400).json({ message: 'A clip cannot be its own parent' });
         }
-        // Verify parent belongs to user
-        const parentClip = db.prepare('SELECT id FROM clips WHERE id = ? AND user_id = ?').get(targetPid, userId);
+        // Verify parent belongs to user and is active
+        const parentClip = db.prepare('SELECT id FROM clips WHERE id = ? AND user_id = ? AND deleted_at IS NULL').get(targetPid, userId);
         if (!parentClip) {
           return res.status(404).json({ message: 'Parent clip not found' });
         }
@@ -417,7 +465,7 @@ router.put('/:id', (req: AuthenticatedRequest, res: Response) => {
         c.created_at, 
         c.updated_at,
         (SELECT COUNT(*) FROM clip_bookmarks cb WHERE cb.clip_id = c.id) AS item_count,
-        (SELECT COUNT(*) FROM clips sub WHERE sub.parent_id = c.id AND sub.user_id = c.user_id) AS subclip_count
+        (SELECT COUNT(*) FROM clips sub WHERE sub.parent_id = c.id AND sub.user_id = c.user_id AND sub.deleted_at IS NULL) AS subclip_count
       FROM clips c
       WHERE c.id = ?
     `).get(clipId);
@@ -429,50 +477,218 @@ router.put('/:id', (req: AuthenticatedRequest, res: Response) => {
   }
 });
 
-// 7. DELETE /api/clips/:id - Delete a clip
+// 7. DELETE /api/clips/:id - Soft delete a clip (with include_children option)
 router.delete('/:id', (req: AuthenticatedRequest, res: Response) => {
   const userId = req.user!.id;
   const { id } = req.params;
+  const clipId = Number(id);
+
+  // Read include_children option (default true)
+  const rawInclude = req.query.include_children ?? req.body?.include_children ?? req.body?.includeChildren;
+  const includeChildren = rawInclude === undefined ? true : (rawInclude === true || rawInclude === 'true' || rawInclude === '1');
 
   try {
     const db = getDb();
-    const clip = db.prepare('SELECT id FROM clips WHERE id = ? AND user_id = ?').get(id, userId);
+    const clip = db.prepare('SELECT id, name, parent_id FROM clips WHERE id = ? AND user_id = ? AND deleted_at IS NULL').get(clipId, userId) as { id: number; name: string; parent_id: number | null } | undefined;
 
     if (!clip) {
       return res.status(404).json({ message: 'Clip not found' });
     }
 
-    // Collect all clip IDs (this clip + all descendants)
-    const allClipIds = [Number(id)];
-    const queue = [Number(id)];
-    while (queue.length > 0) {
-      const curr = queue.shift()!;
-      const children = db.prepare('SELECT id FROM clips WHERE parent_id = ? AND user_id = ?').all(curr, userId) as { id: number }[];
-      for (const ch of children) {
-        allClipIds.push(ch.id);
-        queue.push(ch.id);
+    const softDeleteTx = db.transaction(() => {
+      if (includeChildren) {
+        // Collect target clip + all recursive descendants
+        const targetIds = getDescendantClipIds(db, clipId, userId);
+        const placeholders = targetIds.map(() => '?').join(',');
+
+        // Soft delete slips within these clips
+        db.prepare(`
+          UPDATE bookmarks 
+          SET deleted_at = datetime('now'), updated_at = datetime('now')
+          WHERE id IN (
+            SELECT bookmark_id FROM clip_bookmarks WHERE clip_id IN (${placeholders})
+          ) AND user_id = ? AND deleted_at IS NULL
+        `).run(...targetIds, userId);
+
+        // Untag bookmarks for all soft-deleted clips
+        const clips = db.prepare(`SELECT id, name FROM clips WHERE id IN (${placeholders}) AND user_id = ?`).all(...targetIds, userId) as { id: number; name: string }[];
+        for (const c of clips) {
+          const cleanName = c.name.trim().toLowerCase().replace(/^#/, '');
+          if (cleanName) {
+            const tagRecord = db.prepare('SELECT id FROM tags WHERE name = ?').get(cleanName) as { id: number } | undefined;
+            if (tagRecord) {
+              db.prepare(`
+                DELETE FROM bookmark_tags 
+                WHERE tag_id = ? 
+                AND bookmark_id IN (SELECT bookmark_id FROM clip_bookmarks WHERE clip_id = ?)
+              `).run(tagRecord.id, c.id);
+            }
+          }
+        }
+
+        // Soft delete all target clips
+        db.prepare(`
+          UPDATE clips 
+          SET deleted_at = datetime('now'), updated_at = datetime('now')
+          WHERE id IN (${placeholders}) AND user_id = ?
+        `).run(...targetIds, userId);
+      } else {
+        // Promote direct children up to this clip's parent
+        db.prepare(`
+          UPDATE clips 
+          SET parent_id = ?, updated_at = datetime('now')
+          WHERE parent_id = ? AND user_id = ? AND deleted_at IS NULL
+        `).run(clip.parent_id, clipId, userId);
+
+        // Untag bookmarks for this clip
+        const cleanName = clip.name.trim().toLowerCase().replace(/^#/, '');
+        if (cleanName) {
+          const tagRecord = db.prepare('SELECT id FROM tags WHERE name = ?').get(cleanName) as { id: number } | undefined;
+          if (tagRecord) {
+            db.prepare(`
+              DELETE FROM bookmark_tags 
+              WHERE tag_id = ? 
+              AND bookmark_id IN (SELECT bookmark_id FROM clip_bookmarks WHERE clip_id = ?)
+            `).run(tagRecord.id, clipId);
+          }
+        }
+
+        // Soft delete only this clip
+        db.prepare(`
+          UPDATE clips 
+          SET deleted_at = datetime('now'), updated_at = datetime('now')
+          WHERE id = ? AND user_id = ?
+        `).run(clipId, userId);
       }
+    });
+
+    softDeleteTx();
+
+    res.status(200).json({ message: 'Clip moved to Recycle Clip successfully', id: clipId, includedChildren: includeChildren });
+  } catch (err) {
+    console.error('Delete clip error:', err);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+// 7.1 POST /api/clips/:id/restore - Restore a soft-deleted clip
+router.post('/:id/restore', (req: AuthenticatedRequest, res: Response) => {
+  const userId = req.user!.id;
+  const { id } = req.params;
+  const clipId = Number(id);
+
+  try {
+    const db = getDb();
+    const clip = db.prepare('SELECT id, name, parent_id FROM clips WHERE id = ? AND user_id = ? AND deleted_at IS NOT NULL').get(clipId, userId) as { id: number; name: string; parent_id: number | null } | undefined;
+
+    if (!clip) {
+      return res.status(404).json({ message: 'Trashed clip not found' });
     }
 
-    const deleteClipTx = db.transaction(() => {
-      for (const cId of allClipIds) {
-        const c = db.prepare('SELECT name FROM clips WHERE id = ? AND user_id = ?').get(cId, userId) as { name: string } | undefined;
-        if (c) {
-          const clippedBookmarks = db.prepare('SELECT bookmark_id FROM clip_bookmarks WHERE clip_id = ?').all(cId) as { bookmark_id: number }[];
-          for (const cb of clippedBookmarks) {
-            removeTagFromBookmark(db, cb.bookmark_id, c.name);
+    const restoreTx = db.transaction(() => {
+      // Check if parent clip is still active; if not or deleted, reset parent_id to null (root)
+      let targetParentId = clip.parent_id;
+      if (targetParentId !== null) {
+        const parent = db.prepare('SELECT id FROM clips WHERE id = ? AND user_id = ? AND deleted_at IS NULL').get(targetParentId, userId);
+        if (!parent) {
+          targetParentId = null;
+        }
+      }
+
+      // Collect this clip and all its recursive descendant clips
+      const targetIds = [clipId];
+      const queue = [clipId];
+      const visited = new Set<number>([clipId]);
+      while (queue.length > 0) {
+        const curr = queue.shift()!;
+        const children = db.prepare('SELECT id FROM clips WHERE parent_id = ? AND user_id = ?').all(curr, userId) as { id: number }[];
+        for (const ch of children) {
+          if (!visited.has(ch.id)) {
+            visited.add(ch.id);
+            targetIds.push(ch.id);
+            queue.push(ch.id);
           }
         }
       }
-      // Deleting the clip will cascade delete subclips and clip_bookmarks via FOREIGN KEY constraints
-      db.prepare('DELETE FROM clips WHERE id = ? AND user_id = ?').run(id, userId);
+      const placeholders = targetIds.map(() => '?').join(',');
+
+      // Restore clip
+      db.prepare(`
+        UPDATE clips 
+        SET deleted_at = NULL, parent_id = ?, updated_at = datetime('now')
+        WHERE id = ? AND user_id = ?
+      `).run(targetParentId, clipId, userId);
+
+      // Restore descendant clips if any were deleted
+      db.prepare(`
+        UPDATE clips 
+        SET deleted_at = NULL, updated_at = datetime('now')
+        WHERE id IN (${placeholders}) AND user_id = ? AND deleted_at IS NOT NULL
+      `).run(...targetIds, userId);
+
+      // Restore any soft-deleted bookmarks that belong to these clips
+      db.prepare(`
+        UPDATE bookmarks
+        SET deleted_at = NULL, updated_at = datetime('now')
+        WHERE id IN (
+          SELECT bookmark_id FROM clip_bookmarks WHERE clip_id IN (${placeholders})
+        ) AND user_id = ? AND deleted_at IS NOT NULL
+      `).run(...targetIds, userId);
+
+      // Re-apply tags to all bookmarks in these clips
+      for (const cId of targetIds) {
+        const c = db.prepare('SELECT name FROM clips WHERE id = ?').get(cId) as { name: string } | undefined;
+        if (c) {
+          const clippedBookmarks = db.prepare('SELECT bookmark_id FROM clip_bookmarks WHERE clip_id = ?').all(cId) as { bookmark_id: number }[];
+          for (const cb of clippedBookmarks) {
+            addTagToBookmark(db, cb.bookmark_id, c.name);
+          }
+        }
+      }
     });
 
-    deleteClipTx();
+    restoreTx();
 
-    res.status(200).json({ message: 'Clip deleted successfully' });
+    const restoredClip = db.prepare(`
+      SELECT 
+        c.id, 
+        c.user_id, 
+        c.name, 
+        c.parent_id, 
+        c.created_at, 
+        c.updated_at,
+        (SELECT COUNT(*) FROM clip_bookmarks cb JOIN bookmarks b ON cb.bookmark_id = b.id WHERE cb.clip_id = c.id AND b.deleted_at IS NULL) AS item_count,
+        (SELECT COUNT(*) FROM clips sub WHERE sub.parent_id = c.id AND sub.user_id = c.user_id AND sub.deleted_at IS NULL) AS subclip_count
+      FROM clips c
+      WHERE c.id = ?
+    `).get(clipId);
+
+    res.status(200).json({ message: 'Clip restored successfully', clip: restoredClip });
   } catch (err) {
-    console.error('Delete clip error:', err);
+    console.error('Restore clip error:', err);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+// 7.2 DELETE /api/clips/:id/permanent - Permanently hard delete a clip
+router.delete('/:id/permanent', (req: AuthenticatedRequest, res: Response) => {
+  const userId = req.user!.id;
+  const { id } = req.params;
+  const clipId = Number(id);
+
+  try {
+    const db = getDb();
+    const clip = db.prepare('SELECT id FROM clips WHERE id = ? AND user_id = ?').get(clipId, userId);
+
+    if (!clip) {
+      return res.status(404).json({ message: 'Clip not found' });
+    }
+
+    db.prepare('DELETE FROM clips WHERE id = ? AND user_id = ?').run(clipId, userId);
+
+    res.status(200).json({ message: 'Clip permanently deleted' });
+  } catch (err) {
+    console.error('Permanent delete clip error:', err);
     res.status(500).json({ message: 'Internal server error' });
   }
 });
@@ -487,7 +703,7 @@ router.post('/:id/bookmarks', (req: AuthenticatedRequest, res: Response) => {
 
   try {
     const db = getDb();
-    const clip = db.prepare('SELECT id, name FROM clips WHERE id = ? AND user_id = ?').get(clipId, userId) as { id: number; name: string } | undefined;
+    const clip = db.prepare('SELECT id, name FROM clips WHERE id = ? AND user_id = ? AND deleted_at IS NULL').get(clipId, userId) as { id: number; name: string } | undefined;
     if (!clip) {
       return res.status(404).json({ message: 'Clip not found' });
     }
@@ -516,8 +732,8 @@ router.post('/:id/bookmarks', (req: AuthenticatedRequest, res: Response) => {
         ON CONFLICT(bookmark_id) DO UPDATE SET clip_id = excluded.clip_id
       `);
       for (const bId of targetIds) {
-        // Ensure bookmark belongs to user
-        const b = db.prepare('SELECT id FROM bookmarks WHERE id = ? AND user_id = ?').get(bId, userId);
+        // Ensure bookmark belongs to user and is not deleted
+        const b = db.prepare('SELECT id FROM bookmarks WHERE id = ? AND user_id = ? AND deleted_at IS NULL').get(bId, userId);
         if (b) {
           const oldClip = db.prepare(`
             SELECT c.id, c.name 
@@ -552,7 +768,7 @@ router.delete('/:id/bookmarks/:bookmarkId', (req: AuthenticatedRequest, res: Res
 
   try {
     const db = getDb();
-    const clip = db.prepare('SELECT id, name FROM clips WHERE id = ? AND user_id = ?').get(id, userId) as { id: number; name: string } | undefined;
+    const clip = db.prepare('SELECT id, name FROM clips WHERE id = ? AND user_id = ? AND deleted_at IS NULL').get(id, userId) as { id: number; name: string } | undefined;
     if (!clip) {
       return res.status(404).json({ message: 'Clip not found' });
     }

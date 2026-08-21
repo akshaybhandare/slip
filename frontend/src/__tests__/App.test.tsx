@@ -43,7 +43,14 @@ vi.mock('../api', () => ({
   removeBookmarkFromClip: vi.fn(),
   fetchBookmarkClips: vi.fn().mockResolvedValue([]),
   setBookmarkClip: vi.fn().mockResolvedValue({ message: 'Success', clip: null, clips: [] }),
-  setBookmarkClips: vi.fn().mockResolvedValue({ message: 'Success', clips: [] })
+  setBookmarkClips: vi.fn().mockResolvedValue({ message: 'Success', clips: [] }),
+  fetchRecycleClip: vi.fn().mockResolvedValue([]),
+  fetchRecycleClips: vi.fn().mockResolvedValue([]),
+  restoreClip: vi.fn().mockResolvedValue({ message: 'Clip restored', clip: {} }),
+  permanentlyDeleteClip: vi.fn().mockResolvedValue({ message: 'Clip permanently deleted' }),
+  restoreBookmark: vi.fn().mockResolvedValue({ message: 'Bookmark restored successfully', bookmark: {} }),
+  permanentlyDeleteBookmark: vi.fn().mockResolvedValue({ message: 'Bookmark permanently deleted' }),
+  emptyRecycleClip: vi.fn().mockResolvedValue({ message: 'Recycle clip emptied', deletedCount: 0 })
 }));
 
 describe('Frontend SPA Component Architecture & Mobile UI Interactions', () => {

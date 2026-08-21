@@ -258,14 +258,20 @@ describe('Clips Hierarchical Organization Integration Tests', () => {
     expect(bm1.tags.some((t: any) => t.name === '3d printing & cad')).toBe(false);
   });
 
-  test('DELETE /api/clips/:id should delete clip and cascade subclips while leaving bookmarks intact', async () => {
+  test('DELETE /api/clips/:id should soft delete clip, subclips, and slips within', async () => {
+    // Attach bookmark1 to printingClipId first
+    await request(app)
+      .post(`/api/clips/${printingClipId}/bookmarks`)
+      .set('Cookie', userCookie)
+      .send({ bookmarkId: bookmark1Id });
+
     const deleteRes = await request(app)
       .delete(`/api/clips/${hobbiesClipId}`)
       .set('Cookie', userCookie);
 
     expect(deleteRes.status).toBe(200);
 
-    // Hobbies and its subclips should be gone
+    // Hobbies and its subclips should be hidden from active clips
     const checkClips = await request(app)
       .get('/api/clips')
       .set('Cookie', userCookie);
@@ -273,12 +279,90 @@ describe('Clips Hierarchical Organization Integration Tests', () => {
     expect(checkClips.body.some((c: any) => c.id === hobbiesClipId)).toBe(false);
     expect(checkClips.body.some((c: any) => c.id === printingClipId)).toBe(false);
 
-    // The bookmark itself must still exist in main bookmarks!
-    const checkBookmark = await request(app)
+    // The bookmark inside should now be in the recycle bin
+    const activeBookmarks = await request(app)
+      .get('/api/bookmarks')
+      .set('Cookie', userCookie);
+    expect(activeBookmarks.body.some((b: any) => b.id === bookmark1Id)).toBe(false);
+
+    const trashedBookmarks = await request(app)
+      .get('/api/bookmarks/recycle-clip')
+      .set('Cookie', userCookie);
+    expect(trashedBookmarks.body.some((b: any) => b.id === bookmark1Id)).toBe(true);
+
+    // GET /api/clips/recycle-clip should list the soft-deleted clips
+    const recycleRes = await request(app)
+      .get('/api/clips/recycle-clip')
+      .set('Cookie', userCookie);
+
+    expect(recycleRes.status).toBe(200);
+    expect(recycleRes.body.some((c: any) => c.id === hobbiesClipId)).toBe(true);
+    expect(recycleRes.body.some((c: any) => c.id === printingClipId)).toBe(true);
+  });
+
+  test('POST /api/clips/:id/restore should restore a soft-deleted clip and its slips', async () => {
+    const restoreRes = await request(app)
+      .post(`/api/clips/${hobbiesClipId}/restore`)
+      .set('Cookie', userCookie);
+
+    expect(restoreRes.status).toBe(200);
+    expect(restoreRes.body.clip.id).toBe(hobbiesClipId);
+
+    // Now Hobbies should be back in active clips
+    const checkClips = await request(app)
+      .get('/api/clips')
+      .set('Cookie', userCookie);
+
+    expect(checkClips.body.some((c: any) => c.id === hobbiesClipId)).toBe(true);
+
+    // Slips should also be restored to active bookmarks
+    const checkBookmarks = await request(app)
       .get('/api/bookmarks')
       .set('Cookie', userCookie);
 
-    expect(checkBookmark.body.some((b: any) => b.id === bookmark1Id)).toBe(true);
+    expect(checkBookmarks.body.some((b: any) => b.id === bookmark1Id)).toBe(true);
+  });
+
+  test('DELETE /api/clips/:id with include_children=false should promote direct children to parent', async () => {
+    // Create Parent -> Child -> Grandchild
+    const p = await request(app).post('/api/clips').set('Cookie', userCookie).send({ name: 'Parent Clip' });
+    const c = await request(app).post('/api/clips').set('Cookie', userCookie).send({ name: 'Child Clip', parentId: p.body.id });
+    const gc = await request(app).post('/api/clips').set('Cookie', userCookie).send({ name: 'Grandchild Clip', parentId: c.body.id });
+
+    const parentId = p.body.id;
+    const childId = c.body.id;
+    const grandChildId = gc.body.id;
+
+    // Delete Child without children
+    const delChild = await request(app)
+      .delete(`/api/clips/${childId}?include_children=false`)
+      .set('Cookie', userCookie);
+
+    expect(delChild.status).toBe(200);
+
+    // Grandchild should now have parentId = Parent Clip
+    const gcDetail = await request(app)
+      .get(`/api/clips/${grandChildId}`)
+      .set('Cookie', userCookie);
+
+    expect(gcDetail.status).toBe(200);
+    expect(gcDetail.body.clip.parent_id).toBe(parentId);
+  });
+
+  test('DELETE /api/clips/:id/permanent and empty recycle clip', async () => {
+    const tempClip = await request(app).post('/api/clips').set('Cookie', userCookie).send({ name: 'To Permanent Delete' });
+    const tempId = tempClip.body.id;
+
+    // Soft delete it first
+    await request(app).delete(`/api/clips/${tempId}`).set('Cookie', userCookie);
+
+    // Hard permanent delete
+    const permRes = await request(app).delete(`/api/clips/${tempId}/permanent`).set('Cookie', userCookie);
+    expect(permRes.status).toBe(200);
+
+    // Check recycle clips - should be completely gone
+    const recCheck = await request(app).get('/api/clips/recycle-clip').set('Cookie', userCookie);
+    expect(recCheck.body.some((c: any) => c.id === tempId)).toBe(false);
   });
 
   test('Security: user cannot access other user clips', async () => {

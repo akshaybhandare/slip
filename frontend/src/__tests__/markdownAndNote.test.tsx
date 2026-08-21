@@ -291,7 +291,7 @@ describe('EditBookmarkModal Note vs Non-Note fields', () => {
 
     // Dropdown is initially closed
     expect(screen.queryByText('Edit Bookmark')).not.toBeInTheDocument();
-    expect(screen.queryByText('Delete Bookmark')).not.toBeInTheDocument();
+    expect(screen.queryByText('Move to Recycle Clip')).not.toBeInTheDocument();
 
     // Click More actions button
     fireEvent.click(moreBtn);
@@ -299,7 +299,7 @@ describe('EditBookmarkModal Note vs Non-Note fields', () => {
     // Dropdown items now appear
     expect(screen.getByText('Edit Bookmark')).toBeInTheDocument();
     expect(screen.getByText('Open in new tab')).toBeInTheDocument();
-    expect(screen.getByText('Delete Bookmark')).toBeInTheDocument();
+    expect(screen.getByText('Move to Recycle Clip')).toBeInTheDocument();
 
     // Click Edit Bookmark from menu
     fireEvent.click(screen.getByText('Edit Bookmark'));

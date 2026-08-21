@@ -175,7 +175,7 @@ export async function uploadFileBookmark(data: {
   });
 }
 
-export const uploadImageBookmark = uploadFileBookmark;
+
 
 export async function createNoteBookmark(data: {
   title?: string;
@@ -251,6 +251,28 @@ export async function rescrapeAllBookmarks(): Promise<{ message: string; count: 
 export async function deleteBookmark(id: number): Promise<{ message: string }> {
   return apiFetch<{ message: string }>(`/bookmarks/${id}`, {
     method: 'DELETE'
+  });
+}
+
+export async function fetchRecycleClip(): Promise<Bookmark[]> {
+  return apiFetch<Bookmark[]>('/bookmarks/recycle-clip');
+}
+
+export async function restoreBookmark(id: number): Promise<{ message: string; bookmark: Bookmark }> {
+  return apiFetch<{ message: string; bookmark: Bookmark }>(`/bookmarks/${id}/restore`, {
+    method: 'POST'
+  });
+}
+
+export async function permanentlyDeleteBookmark(id: number): Promise<{ message: string }> {
+  return apiFetch<{ message: string }>(`/bookmarks/${id}/permanent`, {
+    method: 'DELETE'
+  });
+}
+
+export async function emptyRecycleClip(): Promise<{ message: string; deletedCount: number }> {
+  return apiFetch<{ message: string; deletedCount: number }>('/bookmarks/recycle-clip/empty', {
+    method: 'POST'
   });
 }
 
@@ -390,8 +412,24 @@ export async function updateClip(id: number, data: { name?: string; parentId?: n
   });
 }
 
-export async function deleteClip(id: number): Promise<{ message: string }> {
-  return apiFetch<{ message: string }>(`/clips/${id}`, {
+export async function deleteClip(id: number, includeChildren: boolean = true): Promise<{ message: string; id: number; includedChildren: boolean }> {
+  return apiFetch<{ message: string; id: number; includedChildren: boolean }>(`/clips/${id}?include_children=${includeChildren}`, {
+    method: 'DELETE'
+  });
+}
+
+export async function fetchRecycleClips(): Promise<Clip[]> {
+  return apiFetch<Clip[]>('/clips/recycle-clip');
+}
+
+export async function restoreClip(id: number): Promise<{ message: string; clip: Clip }> {
+  return apiFetch<{ message: string; clip: Clip }>(`/clips/${id}/restore`, {
+    method: 'POST'
+  });
+}
+
+export async function permanentlyDeleteClip(id: number): Promise<{ message: string }> {
+  return apiFetch<{ message: string }>(`/clips/${id}/permanent`, {
     method: 'DELETE'
   });
 }

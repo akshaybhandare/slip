@@ -171,19 +171,106 @@ describe('Bookmark CRUD & Local Thumbnail Cache Integrations', () => {
     expect(response.body.message).toMatch(/Invalid or unsafe filename/);
   });
 
-  test('DELETE /api/bookmarks/:id should delete bookmark and clear tags', async () => {
+  test('DELETE /api/bookmarks/:id should move bookmark to Recycle Clip', async () => {
     const response = await request(app)
       .delete(`/api/bookmarks/${createdBookmarkId}`)
       .set('Cookie', user1Cookie);
 
     expect(response.status).toBe(200);
-    expect(response.body.message).toBe('Bookmark deleted successfully');
+    expect(response.body.message).toMatch(/Recycle Clip/i);
 
     const verifyGet = await request(app)
       .get(`/api/bookmarks/${createdBookmarkId}`)
       .set('Cookie', user1Cookie);
 
     expect(verifyGet.status).toBe(404);
+  });
+
+  describe('Story 14: Recycle Clip (Recycling Bin, Restore & Safe Empty)', () => {
+    let trashedBookmarkId: number;
+
+    test('GET /api/bookmarks/recycle-clip should list trashed bookmarks with origin details', async () => {
+      const res = await request(app)
+        .get('/api/bookmarks/recycle-clip')
+        .set('Cookie', user1Cookie);
+
+      expect(res.status).toBe(200);
+      expect(Array.isArray(res.body)).toBe(true);
+      expect(res.body.length).toBeGreaterThanOrEqual(1);
+      const found = res.body.find((b: any) => b.id === createdBookmarkId);
+      expect(found).toBeDefined();
+      expect(found.deleted_at).toBeDefined();
+      trashedBookmarkId = found.id;
+    });
+
+    test('POST /api/bookmarks/:id/restore should restore bookmark back to active collection', async () => {
+      const restoreRes = await request(app)
+        .post(`/api/bookmarks/${trashedBookmarkId}/restore`)
+        .set('Cookie', user1Cookie);
+
+      expect(restoreRes.status).toBe(200);
+      expect(restoreRes.body.message).toMatch(/restored/i);
+      expect(restoreRes.body.bookmark).toBeDefined();
+      expect(restoreRes.body.bookmark.id).toBe(trashedBookmarkId);
+
+      // Verify active GET /api/bookmarks/:id works again
+      const verifyActive = await request(app)
+        .get(`/api/bookmarks/${trashedBookmarkId}`)
+        .set('Cookie', user1Cookie);
+
+      expect(verifyActive.status).toBe(200);
+      expect(verifyActive.body.id).toBe(trashedBookmarkId);
+    });
+
+    test('DELETE /api/bookmarks/:id/permanent should permanently hard delete a trashed bookmark', async () => {
+      // First move to recycle clip
+      await request(app)
+        .delete(`/api/bookmarks/${trashedBookmarkId}`)
+        .set('Cookie', user1Cookie);
+
+      // Permanent delete
+      const permRes = await request(app)
+        .delete(`/api/bookmarks/${trashedBookmarkId}/permanent`)
+        .set('Cookie', user1Cookie);
+
+      expect(permRes.status).toBe(200);
+      expect(permRes.body.message).toMatch(/permanently deleted/i);
+
+      // Verify not in recycle clip
+      const trashRes = await request(app)
+        .get('/api/bookmarks/recycle-clip')
+        .set('Cookie', user1Cookie);
+      const found = trashRes.body.find((b: any) => b.id === trashedBookmarkId);
+      expect(found).toBeUndefined();
+    });
+
+    test('POST /api/bookmarks/recycle-clip/empty should permanently empty all trashed items', async () => {
+      // Create and delete 2 bookmarks
+      const b1 = await request(app).post('/api/bookmarks').set('Cookie', user1Cookie).send({
+        url: 'https://example.com/item1',
+        title: 'Trash Item 1'
+      });
+      const b2 = await request(app).post('/api/bookmarks').set('Cookie', user1Cookie).send({
+        url: 'https://example.com/item2',
+        title: 'Trash Item 2'
+      });
+
+      await request(app).delete(`/api/bookmarks/${b1.body.id}`).set('Cookie', user1Cookie);
+      await request(app).delete(`/api/bookmarks/${b2.body.id}`).set('Cookie', user1Cookie);
+
+      const emptyRes = await request(app)
+        .post('/api/bookmarks/recycle-clip/empty')
+        .set('Cookie', user1Cookie);
+
+      expect(emptyRes.status).toBe(200);
+      expect(emptyRes.body.deletedCount).toBeGreaterThanOrEqual(2);
+
+      const trashCheck = await request(app)
+        .get('/api/bookmarks/recycle-clip')
+        .set('Cookie', user1Cookie);
+
+      expect(trashCheck.body.length).toBe(0);
+    });
   });
 
   describe('Local Image Bookmark Uploads & Shortcut API', () => {

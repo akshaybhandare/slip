@@ -15,7 +15,7 @@ router.post('/bookmark/:id', authenticate, (req: AuthenticatedRequest, res: Resp
   try {
     const db = getDb();
     
-    const bookmark = db.prepare('SELECT id FROM bookmarks WHERE id = ? AND user_id = ?').get(id, userId);
+    const bookmark = db.prepare('SELECT id FROM bookmarks WHERE id = ? AND user_id = ? AND deleted_at IS NULL').get(id, userId);
     if (!bookmark) {
       return res.status(404).json({ message: 'Bookmark not found or unauthorized' });
     }
@@ -132,7 +132,7 @@ router.get('/public/bookmark/:token', (req: Request, res: Response) => {
     const bookmark = db.prepare(`
       SELECT id, url, title, description, content_type, 
              image_path, favicon_path, reader_html, created_at
-      FROM bookmarks WHERE id = ?
+      FROM bookmarks WHERE id = ? AND deleted_at IS NULL
     `).get(link.bookmark_id) as any;
 
     if (!bookmark) {
@@ -176,7 +176,7 @@ router.get('/public/tag/:token', (req: Request, res: Response) => {
              b.image_path, b.favicon_path, b.created_at
       FROM bookmarks b
       JOIN bookmark_tags bt ON b.id = bt.bookmark_id
-      WHERE bt.tag_id = ? AND b.user_id = ?
+      WHERE bt.tag_id = ? AND b.user_id = ? AND b.deleted_at IS NULL
       ORDER BY b.created_at DESC
     `).all(sharedTag.tag_id, sharedTag.user_id) as any[];
 

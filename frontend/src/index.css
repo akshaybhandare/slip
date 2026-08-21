@@ -3623,3 +3623,325 @@ body {
   }
 }
 
+/* ==========================================================================
+   Story 14: Recycle Clip & Undo Toast System
+   ========================================================================== */
+
+/* 1. Floating Instant Undo Toast */
+.undo-toast {
+  position: fixed;
+  bottom: 28px;
+  right: 28px;
+  max-width: 440px;
+  width: calc(100vw - 48px);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  box-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.2), 0 4px 10px -2px rgba(0, 0, 0, 0.1);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  z-index: 1000;
+  animation: undoToastSlideUp 0.28s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes undoToastSlideUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.undo-toast-content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  gap: 12px;
+}
+
+.undo-toast-text {
+  font-size: 13.5px;
+  color: var(--color-secondary);
+  line-height: 1.4;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+
+.undo-toast-text strong {
+  color: var(--color-on-surface);
+}
+
+.undo-toast-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.btn-undo-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--color-primary);
+  color: #ffffff;
+  border: none;
+  padding: 6px 12px;
+  border-radius: var(--radius-md);
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+
+.btn-undo-action:hover {
+  opacity: 0.9;
+  transform: translateY(-1px);
+}
+
+.undo-toast-close {
+  background: none;
+  border: none;
+  color: var(--color-muted);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.15s ease;
+}
+
+.undo-toast-close:hover {
+  color: var(--color-secondary);
+}
+
+/* Linear 6s countdown bar */
+.undo-toast-progress {
+  height: 3px;
+  background: var(--color-primary);
+  width: 100%;
+  animation: undoCountdown 6s linear forwards;
+}
+
+@keyframes undoCountdown {
+  from {
+    width: 100%;
+  }
+  to {
+    width: 0%;
+  }
+}
+
+/* 2. Subtle Recycle Clip Navbar, Spine & Footer Elements */
+.nav-recycle-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: var(--transition);
+}
+
+.nav-recycle-btn:hover {
+  color: var(--color-on-surface);
+}
+
+.nav-recycle-btn.active-recycle-btn {
+  background: var(--color-tertiary);
+  border-color: var(--color-border);
+  color: var(--color-primary);
+}
+
+.nav-badge-dot {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #ef4444;
+  box-shadow: 0 0 0 2px var(--color-surface);
+  pointer-events: none;
+}
+
+/* Left Spine Dedicated Utility Section (eliminates tree padding anomaly) */
+.spine-utility-section {
+  margin-top: 20px;
+  padding-top: 12px;
+  border-top: 1px solid var(--color-border);
+}
+
+.spine-utility-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-muted);
+  transition: var(--transition);
+  text-align: left;
+  user-select: none;
+}
+
+.spine-utility-btn:hover {
+  background: var(--color-tertiary);
+  color: var(--color-on-surface);
+}
+
+.spine-utility-btn.active {
+  background: var(--color-tertiary);
+  border-color: var(--color-border);
+  color: var(--color-primary);
+  font-weight: 600;
+}
+
+.spine-utility-icon-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.spine-utility-icon {
+  color: var(--color-muted);
+  transition: color 0.15s ease;
+}
+
+.spine-utility-btn:hover .spine-utility-icon,
+.spine-utility-btn.active .spine-utility-icon {
+  color: var(--color-on-surface);
+}
+
+.spine-utility-badge {
+  font-size: 11px;
+  font-weight: 500;
+  padding: 1px 6px;
+  border-radius: 10px;
+  background: var(--color-tertiary);
+  color: var(--color-muted);
+  border: 1px solid var(--color-border);
+}
+
+/* Subtle, non-intrusive Recycle link at root of Clips deck */
+.clips-subtle-recycle-footer {
+  margin-top: 36px;
+  padding-top: 16px;
+  border-top: 1px dashed var(--color-border);
+  display: flex;
+  justify-content: center;
+}
+
+.subtle-recycle-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--color-muted);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  transition: var(--transition);
+}
+
+.subtle-recycle-link:hover {
+  color: var(--color-secondary);
+  background: var(--color-tertiary);
+}
+
+.btn-recycle-restore {
+  transition: all 0.15s ease;
+}
+
+.btn-recycle-restore:hover {
+  border-color: var(--color-primary) !important;
+  color: var(--color-primary) !important;
+}
+
+.btn-recycle-delete-perm:hover {
+  background: rgba(239, 68, 68, 0.1) !important;
+  border-color: #ef4444 !important;
+}
+
+/* Deleted Clips in Recycle Clip View */
+.deleted-clips-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.deleted-clip-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
+  transition: var(--transition);
+}
+
+.deleted-clip-card:hover {
+  border-color: var(--color-muted);
+}
+
+.deleted-clip-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.deleted-clip-icon-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-sm);
+  background: var(--color-tertiary);
+  flex-shrink: 0;
+}
+
+.deleted-clip-info {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.deleted-clip-name {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--color-on-surface);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 140px;
+}
+
+.deleted-clip-sub {
+  font-size: 11.5px;
+  color: var(--color-muted);
+}
+
+.deleted-clip-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+
+
