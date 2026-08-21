@@ -45,3 +45,11 @@ Thumbs.db
 .vscode/
 *.swp
 *.swo
+
+# Internal Development Docs
+prd.md
+architecture.md
+tracker.md
+todo.md
+PLANNING.md
+handover.md
