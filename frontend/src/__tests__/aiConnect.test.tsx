@@ -43,7 +43,9 @@ vi.mock('../api', () => ({
   testAIConnectionApi: vi.fn(),
   disconnectAIConfigApi: vi.fn(),
   fetchPinConfig: vi.fn().mockResolvedValue({ maxPinnedSlips: 5 }),
-  togglePinBookmark: vi.fn()
+  togglePinBookmark: vi.fn(),
+  fetchRecycleClip: vi.fn().mockResolvedValue([]),
+  fetchRecycleClips: vi.fn().mockResolvedValue([])
 }));
 
 describe('AI Config Module & Helpers', () => {

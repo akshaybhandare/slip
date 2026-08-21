@@ -15,6 +15,9 @@ interface MasonryGridProps {
   onTagClick: (tagName: string) => void;
   onManageClips?: (bookmark: Bookmark) => void;
   onRemoveFromClip?: (bookmarkId: number) => void;
+  isRecycleBin?: boolean;
+  onRestore?: (id: number) => void;
+  onPermanentDelete?: (id: number) => void;
 }
 
 export const MasonryGrid: React.FC<MasonryGridProps> = ({
@@ -29,7 +32,10 @@ export const MasonryGrid: React.FC<MasonryGridProps> = ({
   onDelete,
   onTagClick,
   onManageClips,
-  onRemoveFromClip
+  onRemoveFromClip,
+  isRecycleBin = false,
+  onRestore,
+  onPermanentDelete
 }) => {
   const [columnCount, setColumnCount] = useState(2);
 
@@ -75,6 +81,9 @@ export const MasonryGrid: React.FC<MasonryGridProps> = ({
               onTagClick={onTagClick}
               onManageClips={onManageClips}
               onRemoveFromClip={onRemoveFromClip}
+              isRecycleBin={isRecycleBin}
+              onRestore={onRestore}
+              onPermanentDelete={onPermanentDelete}
             />
           ))}
         </div>

@@ -26,6 +26,7 @@
 * **⚡ Instant FTS5 Search**: Full-text indexing across bookmark titles, descriptions, reader text, domain names, and tags.
 * **✨ Semantic Smart Search**: Natural language conceptual search that understands conversational queries, synonyms, parent franchises, and troubleshooting intents with relevance scores and explanations.
 * **📁 Clips (Hierarchical Folders)**: Organize cards into nested collections and sub-clips (e.g. `Hobbies` > `3D Printing` > Slips). Hidden by default with zero visual intrusion into the main stream.
+* **♻️ Recycle Clip (Soft Delete & Instant Restore)**: Accidental deletion protection with a non-destructive Recycle Clip, 6-second Instant Undo floating toast, optimistic zero-wait deletion/restoration, sub-clip promotion/cascade options, and safe permanent purge confirmations.
 * **🏷️ AI Auto-Tagging**: Intelligently assigns tags on save, re-scrape, or card menus while strictly reusing and prioritizing your existing tag vocabulary.
 * **🤖 Bring Your Own AI (BYO-AI)**: Seamlessly connect OpenAI, Anthropic Claude, Google Gemini, or local models (Ollama, Together, OpenRouter) with AES-256 encrypted database storage.
 * **🛡️ Zero-AI Disconnected Fallback**: All AI options, buttons, badges, and operations are strictly gated. When no AI provider is connected, Slip functions as classic, lightweight Slip without any AI clutter or hints.
@@ -165,13 +166,13 @@ npm run dev
 
 ## 🧪 Testing
 
-Slip has complete test coverage across both frontend and backend suites (138 tests total):
+Slip has complete test coverage across both frontend and backend suites (192 tests total):
 
 ```bash
-# Run backend test suite (90 tests across 8 test suites: SQLite, FTS5, Auth, Scraper, Queue, Netscape IO, AI Service, Crypto)
+# Run backend test suite (120 tests across 9 test suites: SQLite, FTS5, Auth, Scraper, Queue, Netscape IO, AI Service, Crypto, Clips & Soft Delete)
 cd backend && npm test
 
-# Run frontend UI tests (48 tests in Vitest: TagInput, Responsive Masonry, Mobile FAB, Sync, AI Connection, Disconnected Fallback)
+# Run frontend UI tests (72 tests in Vitest: TagInput, Responsive Masonry, Mobile FAB, Sync, AI Connection, Recycle Clip & Soft Delete, Note Assist)
 cd frontend && npm test
 ```
 

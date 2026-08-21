@@ -6,11 +6,13 @@ import {
   smartSearchBookmarks,
   fetchTags,
   createBookmark,
-  uploadImageBookmark,
   uploadFileBookmark,
   createNoteBookmark,
   updateBookmark,
   deleteBookmark,
+  restoreBookmark,
+  fetchRecycleClip,
+  fetchRecycleClips,
   rescrapeBookmark,
   autoTagBookmark,
   rescrapeAllBookmarks,
@@ -33,7 +35,7 @@ import { AddUserModal } from './components/AddUserModal';
 import { AIConnectModal } from './components/AIConnectModal';
 import { ClipsView } from './components/ClipsView';
 import { AddToClipModal } from './components/AddToClipModal';
-import { BookmarkPlus, Plus, Sparkles } from 'lucide-react';
+import { BookmarkPlus, Plus, Sparkles, RotateCcw, X } from 'lucide-react';
 import { useTheme } from './hooks/useTheme';
 import { useAIConfig } from './hooks/useAIConfig';
 import { AI_PROVIDERS } from './config/aiConfig';
@@ -107,9 +109,14 @@ export const App: React.FC = () => {
       return false;
     }
   });
+  const [isDirectRecycleOpen, setIsDirectRecycleOpen] = useState<boolean>(false);
+  const [recycleCount, setRecycleCount] = useState<number>(0);
 
   const handleSetClipsView = useCallback((val: boolean) => {
     setIsClipsView(val);
+    if (!val) {
+      setIsDirectRecycleOpen(false);
+    }
     try {
       localStorage.setItem('slip_clips_view', String(val));
     } catch {}
@@ -118,11 +125,22 @@ export const App: React.FC = () => {
   const handleToggleClipsView = useCallback(() => {
     setIsClipsView((prev) => {
       const next = !prev;
+      if (!next) {
+        setIsDirectRecycleOpen(false);
+      }
       try {
         localStorage.setItem('slip_clips_view', String(next));
       } catch {}
       return next;
     });
+  }, []);
+
+  const handleOpenRecycleClip = useCallback(() => {
+    setIsClipsView(true);
+    setIsDirectRecycleOpen(true);
+    try {
+      localStorage.setItem('slip_clips_view', 'true');
+    } catch {}
   }, []);
 
   const [managingClipsBookmark, setManagingClipsBookmark] = useState<Bookmark | null>(null);
@@ -254,6 +272,15 @@ export const App: React.FC = () => {
 
     return () => clearTimeout(debounceTimer);
   }, [searchQuery, effectiveSmartSearch, loadData]);
+
+  // When closing clips view or returning to feed, refresh main feed data immediately
+  const prevIsClipsViewRef = useRef(isClipsView);
+  useEffect(() => {
+    if (prevIsClipsViewRef.current && !isClipsView) {
+      loadData();
+    }
+    prevIsClipsViewRef.current = isClipsView;
+  }, [isClipsView, loadData]);
 
   const handleSearchSubmit = useCallback(() => {
     loadData(searchQuery, effectiveSmartSearch);
@@ -394,14 +421,77 @@ export const App: React.FC = () => {
     }
   };
 
+  const [undoToast, setUndoToast] = useState<{ id: number; title: string; bookmark: Bookmark } | null>(null);
+  const undoTimerRef = useRef<any>(null);
+  useEffect(() => {
+    return () => {
+      if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+    };
+  }, []); // Fetch recycle count when session loads
+  useEffect(() => {
+    if (user) {
+      Promise.all([
+        fetchRecycleClip().catch(() => []),
+        fetchRecycleClips().catch(() => [])
+      ])
+        .then(([trashedSlips, trashedClips]) => {
+          setRecycleCount(trashedSlips.length + trashedClips.length);
+        })
+        .catch(() => {});
+    }
+  }, [user]);
+
   const handleDeleteBookmark = async (id: number) => {
-    if (!window.confirm('Are you sure you want to delete this bookmark?')) return;
+    const target = bookmarks.find((b) => b.id === id);
     try {
       await deleteBookmark(id);
       setBookmarks((prev) => prev.filter((b) => b.id !== id));
+      setRecycleCount((prev) => prev + 1);
+      fetchTags().then(setTags).catch(() => {});
+
+      if (target) {
+        if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+        setUndoToast({
+          id,
+          title: target.title || 'Slip',
+          bookmark: target
+        });
+        undoTimerRef.current = setTimeout(() => {
+          setUndoToast(null);
+        }, 6000);
+      }
+    } catch (err: any) {
+      alert(err.message || 'Failed to move slip to Recycle Clip');
+    }
+  };
+
+  const handleUndoDelete = async () => {
+    if (!undoToast) return;
+    const { id, bookmark } = undoToast;
+    if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+    setUndoToast(null);
+
+    try {
+      await restoreBookmark(id);
+      setRecycleCount((prev) => Math.max(0, prev - 1));
+      setBookmarks((prev) => {
+        const restored = { ...bookmark, deleted_at: null };
+        const updated = [restored, ...prev.filter((b) => b.id !== id)];
+        return updated.sort((a, b) => {
+          const aPin = a.is_pinned ? 1 : 0;
+          const bPin = b.is_pinned ? 1 : 0;
+          if (aPin !== bPin) return bPin - aPin;
+          if (aPin && bPin) {
+            const aPinnedTime = a.pinned_at ? new Date(a.pinned_at).getTime() : 0;
+            const bPinnedTime = b.pinned_at ? new Date(b.pinned_at).getTime() : 0;
+            if (aPinnedTime !== bPinnedTime) return bPinnedTime - aPinnedTime;
+          }
+          return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+        });
+      });
       fetchTags().then(setTags).catch(() => {});
     } catch (err: any) {
-      alert(err.message || 'Failed to delete bookmark');
+      alert(err.message || 'Failed to undo deletion');
     }
   };
 
@@ -430,6 +520,9 @@ export const App: React.FC = () => {
         onToggleTheme={toggleTheme}
         isClipsView={isClipsView}
         onToggleClipsView={handleToggleClipsView}
+        onOpenRecycleClip={handleOpenRecycleClip}
+        recycleCount={recycleCount}
+        isRecycleClipActive={isClipsView && isDirectRecycleOpen}
       />
 
       {isClipsView ? (
@@ -448,6 +541,9 @@ export const App: React.FC = () => {
             handleSetClipsView(false);
           }}
           onManageBookmarkClips={setManagingClipsBookmark}
+          initialViewRecycleClip={isDirectRecycleOpen}
+          onRecycleCountChange={setRecycleCount}
+          onRecycleClipViewChange={setIsDirectRecycleOpen}
         />
       ) : (
         <>
@@ -614,6 +710,39 @@ export const App: React.FC = () => {
         isOpen={isAddUserOpen}
         onClose={() => setIsAddUserOpen(false)}
       />
+
+      {/* 6-Second Instant Undo Toast Notification */}
+      {undoToast && (
+        <div className="undo-toast" role="status" aria-live="polite">
+          <div className="undo-toast-content">
+            <span className="undo-toast-text">
+              Moved <strong>"{undoToast.title}"</strong> to Recycle Clip
+            </span>
+            <div className="undo-toast-actions">
+              <button
+                type="button"
+                className="btn-undo-action"
+                onClick={handleUndoDelete}
+              >
+                <RotateCcw size={13} />
+                <span>Undo</span>
+              </button>
+              <button
+                type="button"
+                className="undo-toast-close"
+                onClick={() => {
+                  if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+                  setUndoToast(null);
+                }}
+                aria-label="Dismiss"
+              >
+                <X size={14} />
+              </button>
+            </div>
+          </div>
+          <div className="undo-toast-progress" />
+        </div>
+      )}
     </div>
   );
 };

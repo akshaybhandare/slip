@@ -15,7 +15,14 @@ vi.mock('../api', () => ({
   removeBookmarkFromClip: vi.fn(),
   fetchBookmarkClips: vi.fn(),
   setBookmarkClip: vi.fn(),
-  setBookmarkClips: vi.fn()
+  setBookmarkClips: vi.fn(),
+  fetchRecycleClip: vi.fn().mockResolvedValue([]),
+  fetchRecycleClips: vi.fn().mockResolvedValue([]),
+  restoreClip: vi.fn().mockResolvedValue({ message: 'Clip restored', clip: {} }),
+  permanentlyDeleteClip: vi.fn().mockResolvedValue({ message: 'Clip permanently deleted' }),
+  restoreBookmark: vi.fn().mockResolvedValue({ message: 'Bookmark restored successfully', bookmark: {} }),
+  permanentlyDeleteBookmark: vi.fn().mockResolvedValue({ message: 'Bookmark permanently deleted' }),
+  emptyRecycleClip: vi.fn().mockResolvedValue({ message: 'Recycle clip emptied', deletedCount: 0 })
 }));
 
 describe('Clips Organization UI Components', () => {

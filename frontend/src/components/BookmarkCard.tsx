@@ -14,7 +14,8 @@ import {
   Sparkles,
   Paperclip,
   Pin,
-  PinOff
+  PinOff,
+  RotateCcw
 } from 'lucide-react';
 import { Bookmark } from '../types';
 import { renderFormattedNote, renderInlineMarkdown } from '../utils/markdown';
@@ -72,17 +73,20 @@ export const SlipPushpin = SlipPinIcon;
 
 interface BookmarkCardProps {
   bookmark: Bookmark;
-  onOpenReader: (bookmark: Bookmark) => void;
-  onShare: (bookmark: Bookmark) => void;
-  onEdit: (bookmark: Bookmark) => void;
-  onRescrape: (id: number) => Promise<void>;
+  onOpenReader?: (bookmark: Bookmark) => void;
+  onShare?: (bookmark: Bookmark) => void;
+  onEdit?: (bookmark: Bookmark) => void;
+  onRescrape?: (id: number) => Promise<void>;
   onAutoTag?: (id: number) => Promise<void>;
   onTogglePin?: (id: number) => Promise<void>;
   isAIConnected?: boolean;
-  onDelete: (id: number) => void;
-  onTagClick: (tagName: string) => void;
+  onDelete?: (id: number) => void;
+  onTagClick?: (tagName: string) => void;
   onManageClips?: (bookmark: Bookmark) => void;
   onRemoveFromClip?: (bookmarkId: number) => void;
+  isRecycleBin?: boolean;
+  onRestore?: (id: number) => void;
+  onPermanentDelete?: (id: number) => void;
 }
 
 export const BookmarkCard: React.FC<BookmarkCardProps> = ({
@@ -97,7 +101,10 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
   onDelete,
   onTagClick,
   onManageClips,
-  onRemoveFromClip
+  onRemoveFromClip,
+  isRecycleBin = false,
+  onRestore,
+  onPermanentDelete
 }) => {
   const [rescaping, setRescraping] = useState(false);
   const [autoTagging, setAutoTagging] = useState(false);
@@ -160,6 +167,7 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
   const isArticle = !isNote && (bookmark.content_type === 'article' || (bookmark.reader_html && bookmark.reader_html.length > 0));
 
   const handleRescrapeClick = async () => {
+    if (!onRescrape) return;
     setRescraping(true);
     try {
       await onRescrape(bookmark.id);
@@ -179,14 +187,14 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
   };
 
   const handleShareClick = () => {
-    onShare(bookmark);
+    if (onShare) onShare(bookmark);
   };
 
   const handleCardMediaClick = () => {
     if (isNote) {
-      onOpenReader(bookmark);
+      if (onOpenReader) onOpenReader(bookmark);
     } else if (isArticle) {
-      onOpenReader(bookmark);
+      if (onOpenReader) onOpenReader(bookmark);
     } else {
       window.open(bookmark.url, '_blank', 'noopener,noreferrer');
     }
@@ -218,7 +226,7 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
       {isNote ? (
         <div
           className="note-card-banner"
-          onClick={() => onOpenReader(bookmark)}
+          onClick={() => onOpenReader && onOpenReader(bookmark)}
           style={{
             background: 'linear-gradient(135deg, rgba(228, 43, 12, 0.07) 0%, rgba(228, 43, 12, 0.02) 100%)',
             padding: '16px 18px 12px',
@@ -404,7 +412,7 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
           <div
             className="card-title"
             style={{ cursor: 'pointer', marginBottom: '8px' }}
-            onClick={() => onOpenReader(bookmark)}
+            onClick={() => onOpenReader && onOpenReader(bookmark)}
           >
             {renderInlineMarkdown(bookmark.title)}
           </div>
@@ -432,7 +440,7 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
         {isNote ? (
           <div
             className="note-card-snippet"
-            onClick={() => onOpenReader(bookmark)}
+            onClick={() => onOpenReader && onOpenReader(bookmark)}
             style={{
               fontSize: '13px',
               color: 'var(--color-secondary)',
@@ -475,7 +483,7 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
                 No note written yet.{' '}
                 <button
                   type="button"
-                  onClick={() => onEdit(bookmark)}
+                  onClick={() => onEdit && onEdit(bookmark)}
                   style={{
                     background: 'none',
                     border: 'none',
@@ -499,7 +507,7 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
               <span
                 key={t.id || t.name}
                 className="tag-pill"
-                onClick={() => onTagClick(t.name)}
+                onClick={() => onTagClick && onTagClick(t.name)}
               >
                 #{t.name}
               </span>
@@ -522,169 +530,208 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
         )}
 
         <div className="card-actions">
-          <div className="card-actions-left">
-            {(isArticle || isNote) && (
-              <button
-                className="icon-btn"
-                title={isNote ? 'Open Full Note' : 'Reader Mode'}
-                aria-label={isNote ? 'Open Full Note' : 'Reader Mode'}
-                onClick={() => onOpenReader(bookmark)}
-              >
-                <Eye size={16} />
-              </button>
-            )}
-
-            {!isNote && (
-              <button
-                className={`icon-btn ${bookmark.personal_note ? 'has-note-btn' : ''} ${showNote ? 'active-note-btn' : ''}`}
-                title={showNote ? 'Hide Personal Note' : 'View Personal Note'}
-                aria-label={showNote ? 'Hide Personal Note' : 'View Personal Note'}
-                onClick={() => setShowNote(!showNote)}
-              >
-                <FileText size={15} />
-              </button>
-            )}
-          </div>
-
-          <div className="card-actions-right">
-            <button
-              className="icon-btn"
-              title="Share Bookmark"
-              aria-label="Share Bookmark"
-              onClick={handleShareClick}
-            >
-              <Share2 size={16} />
-            </button>
-
-            <div className="card-menu-container" ref={menuRef}>
-              <button
-                className={`icon-btn card-more-btn ${isMenuOpen ? 'active' : ''}`}
-                title="More actions"
-                aria-label="More actions"
-                onClick={() => setIsMenuOpen(!isMenuOpen)}
-              >
-                <MoreHorizontal size={17} />
-              </button>
-
-              {isMenuOpen && (
-                <div className="card-dropdown-menu">
-                  <button
-                    className="card-dropdown-item"
-                    onClick={() => {
-                      setIsMenuOpen(false);
-                      onEdit(bookmark);
-                    }}
-                  >
-                    <Edit3 size={15} />
-                    <span>Edit Bookmark</span>
-                  </button>
-
-                  {onTogglePin && (
-                    <button
-                      className="card-dropdown-item"
-                      onClick={() => {
-                        setIsMenuOpen(false);
-                        handlePinClick();
-                      }}
-                      disabled={isPinning}
-                    >
-                      {isPinned ? (
-                        <>
-                          <PinOff size={15} style={{ color: 'var(--color-primary)' }} />
-                          <span>Unpin from top</span>
-                        </>
-                      ) : (
-                        <>
-                          <Pin size={15} />
-                          <span>Pin to top</span>
-                        </>
-                      )}
-                    </button>
-                  )}
-
-                  {onManageClips && (
-                    <button
-                      className="card-dropdown-item"
-                      onClick={() => {
-                        setIsMenuOpen(false);
-                        onManageClips(bookmark);
-                      }}
-                    >
-                      <Paperclip size={15} />
-                      <span>Organize in Clip</span>
-                    </button>
-                  )}
-
-                  {onRemoveFromClip && (
-                    <button
-                      className="card-dropdown-item"
-                      onClick={() => {
-                        setIsMenuOpen(false);
-                        onRemoveFromClip(bookmark.id);
-                      }}
-                    >
-                      <Paperclip size={15} style={{ opacity: 0.6 }} />
-                      <span>Unclip from this Stack</span>
-                    </button>
-                  )}
-
-                  {!isNote && (
-                    <a
-                      href={bookmark.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="card-dropdown-item"
-                      onClick={() => setIsMenuOpen(false)}
-                    >
-                      <ExternalLink size={15} />
-                      <span>{isDocument ? 'Open PDF in new tab' : 'Open in new tab'}</span>
-                    </a>
-                  )}
-
-                  {!isNote && !isDocument && !isLocalImage && (
-                    <button
-                      className="card-dropdown-item"
-                      onClick={() => {
-                        setIsMenuOpen(false);
-                        handleRescrapeClick();
-                      }}
-                      disabled={rescaping}
-                    >
-                      <RefreshCw size={15} className={rescaping ? 'spin-animation' : ''} />
-                      <span>{rescaping ? 'Re-scraping...' : 'Re-scrape Metadata'}</span>
-                    </button>
-                  )}
-
-                  {isAIConnected && onAutoTag && !isDocument && !isLocalImage && (
-                    <button
-                      className="card-dropdown-item"
-                      onClick={() => {
-                        setIsMenuOpen(false);
-                        handleAutoTagClick();
-                      }}
-                      disabled={autoTagging}
-                    >
-                      <Sparkles size={15} className={autoTagging ? 'spin-animation' : ''} />
-                      <span>{autoTagging ? 'Auto-tagging...' : 'Auto-tag with AI'}</span>
-                    </button>
-                  )}
-
-                  <div className="card-dropdown-divider" />
-
-                  <button
-                    className="card-dropdown-item card-dropdown-danger"
-                    onClick={() => {
-                      setIsMenuOpen(false);
-                      onDelete(bookmark.id);
-                    }}
-                  >
-                    <Trash2 size={15} />
-                    <span>Delete Bookmark</span>
-                  </button>
-                </div>
+          {isRecycleBin ? (
+            <div className="recycle-card-actions" style={{ display: 'flex', width: '100%', gap: '8px', justifyContent: 'space-between' }}>
+              {onRestore && (
+                <button
+                  className="btn btn-secondary btn-recycle-restore"
+                  title="Restore Slip to active archive"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onRestore(bookmark.id);
+                  }}
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '12px', padding: '5px 10px', flex: 1, justifyContent: 'center' }}
+                >
+                  <RotateCcw size={13} style={{ color: 'var(--color-primary)' }} />
+                  <span>Restore</span>
+                </button>
+              )}
+              {onPermanentDelete && (
+                <button
+                  className="btn btn-secondary btn-recycle-delete-perm"
+                  title="Permanently eradicate this slip"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onPermanentDelete(bookmark.id);
+                  }}
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '12px', padding: '5px 10px', color: '#ef4444', flex: 1, justifyContent: 'center' }}
+                >
+                  <Trash2 size={13} />
+                  <span>Delete Forever</span>
+                </button>
               )}
             </div>
-          </div>
+          ) : (
+            <>
+              <div className="card-actions-left">
+                {(isArticle || isNote) && onOpenReader && (
+                  <button
+                    className="icon-btn"
+                    title={isNote ? 'Open Full Note' : 'Reader Mode'}
+                    aria-label={isNote ? 'Open Full Note' : 'Reader Mode'}
+                    onClick={() => onOpenReader(bookmark)}
+                  >
+                    <Eye size={16} />
+                  </button>
+                )}
+
+                {!isNote && (
+                  <button
+                    className={`icon-btn ${bookmark.personal_note ? 'has-note-btn' : ''} ${showNote ? 'active-note-btn' : ''}`}
+                    title={showNote ? 'Hide Personal Note' : 'View Personal Note'}
+                    aria-label={showNote ? 'Hide Personal Note' : 'View Personal Note'}
+                    onClick={() => setShowNote(!showNote)}
+                  >
+                    <FileText size={15} />
+                  </button>
+                )}
+              </div>
+
+              <div className="card-actions-right">
+                <button
+                  className="icon-btn"
+                  title="Share Bookmark"
+                  aria-label="Share Bookmark"
+                  onClick={handleShareClick}
+                >
+                  <Share2 size={16} />
+                </button>
+
+                <div className="card-menu-container" ref={menuRef}>
+                  <button
+                    className={`icon-btn card-more-btn ${isMenuOpen ? 'active' : ''}`}
+                    title="More actions"
+                    aria-label="More actions"
+                    onClick={() => setIsMenuOpen(!isMenuOpen)}
+                  >
+                    <MoreHorizontal size={17} />
+                  </button>
+
+                  {isMenuOpen && (
+                    <div className="card-dropdown-menu">
+                      {onEdit && (
+                        <button
+                          className="card-dropdown-item"
+                          onClick={() => {
+                            setIsMenuOpen(false);
+                            onEdit(bookmark);
+                          }}
+                        >
+                          <Edit3 size={15} />
+                          <span>Edit Bookmark</span>
+                        </button>
+                      )}
+
+                      {onTogglePin && (
+                        <button
+                          className="card-dropdown-item"
+                          onClick={() => {
+                            setIsMenuOpen(false);
+                            handlePinClick();
+                          }}
+                          disabled={isPinning}
+                        >
+                          {isPinned ? (
+                            <>
+                              <PinOff size={15} style={{ color: 'var(--color-primary)' }} />
+                              <span>Unpin from top</span>
+                            </>
+                          ) : (
+                            <>
+                              <Pin size={15} />
+                              <span>Pin to top</span>
+                            </>
+                          )}
+                        </button>
+                      )}
+
+                      {onManageClips && (
+                        <button
+                          className="card-dropdown-item"
+                          onClick={() => {
+                            setIsMenuOpen(false);
+                            onManageClips(bookmark);
+                          }}
+                        >
+                          <Paperclip size={15} />
+                          <span>Organize in Clip</span>
+                        </button>
+                      )}
+
+                      {onRemoveFromClip && (
+                        <button
+                          className="card-dropdown-item"
+                          onClick={() => {
+                            setIsMenuOpen(false);
+                            onRemoveFromClip(bookmark.id);
+                          }}
+                        >
+                          <Paperclip size={15} style={{ opacity: 0.6 }} />
+                          <span>Unclip from this Stack</span>
+                        </button>
+                      )}
+
+                      {!isNote && (
+                        <a
+                          href={bookmark.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="card-dropdown-item"
+                          onClick={() => setIsMenuOpen(false)}
+                        >
+                          <ExternalLink size={15} />
+                          <span>{isDocument ? 'Open PDF in new tab' : 'Open in new tab'}</span>
+                        </a>
+                      )}
+
+                      {!isNote && !isDocument && !isLocalImage && onRescrape && (
+                        <button
+                          className="card-dropdown-item"
+                          onClick={() => {
+                            setIsMenuOpen(false);
+                            handleRescrapeClick();
+                          }}
+                          disabled={rescaping}
+                        >
+                          <RefreshCw size={15} className={rescaping ? 'spin-animation' : ''} />
+                          <span>{rescaping ? 'Re-scraping...' : 'Re-scrape Metadata'}</span>
+                        </button>
+                      )}
+
+                      {isAIConnected && onAutoTag && !isDocument && !isLocalImage && (
+                        <button
+                          className="card-dropdown-item"
+                          onClick={() => {
+                            setIsMenuOpen(false);
+                            handleAutoTagClick();
+                          }}
+                          disabled={autoTagging}
+                        >
+                          <Sparkles size={15} className={autoTagging ? 'spin-animation' : ''} />
+                          <span>{autoTagging ? 'Auto-tagging...' : 'Auto-tag with AI'}</span>
+                        </button>
+                      )}
+
+                      <div className="card-dropdown-divider" />
+
+                      {onDelete && (
+                        <button
+                          className="card-dropdown-item card-dropdown-danger"
+                          onClick={() => {
+                            setIsMenuOpen(false);
+                            onDelete(bookmark.id);
+                          }}
+                        >
+                          <Trash2 size={15} />
+                          <span>Move to Recycle Clip</span>
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </>
+          )}
         </div>
       </div>
     </article>

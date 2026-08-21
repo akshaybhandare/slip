@@ -117,10 +117,17 @@ For each story:
     *   [x] **Task 12.5**: Add graceful provider error catching with automatic fallback to keyword search and dismissible warning banners in `frontend/src/App.tsx`.
     *   [x] **Task 12.6**: Write comprehensive backend and frontend test suites (90 backend tests + 45 frontend tests) for natural language semantic queries, data isolation, and UI toggling.
 
-### Story 13: AI Note Assistance Engine
-*   **Status**: Completed
+### Story 14: Recycle Clip (Recycle Bin, Restore & Safe Empty Workflows)
+*   **Status**: Completed (Code Frozen)
 *   **Tasks**:
-    *   [x] **Task 13.1**: Implement `performNoteAssist` service in `backend/src/services/aiService.ts` and `POST /api/ai/note-assist` route supporting continuation, grammar fixes, rephrasing, custom rewriting, and title proposal.
-    *   [x] **Task 13.2**: Integrate AI assistive actions into `NoteEditor.tsx` with floating action triggers and markdown preview integration.
-    *   [x] **Task 13.3**: Write unit and integration test coverage for note assistance actions in `ai.test.ts` and `markdownAndNote.test.tsx`.
+    *   [x] **Task 14.1**: Add `deleted_at` timestamp column and index to SQLite `bookmarks` schema with safe database migration in `backend/src/db.ts`.
+    *   [x] **Task 14.2**: Implement backend REST endpoints (`DELETE /api/bookmarks/:id` soft delete, `GET /api/bookmarks/recycle-clip`, `POST /api/bookmarks/:id/restore`, `DELETE /api/bookmarks/:id/permanent`, `POST /api/bookmarks/recycle-clip/empty`) and filter `deleted_at IS NULL` across all active feeds, searches, and clip endpoints.
+    *   [x] **Task 14.3**: Implement frontend API client helpers in `frontend/src/api.ts` and update `Bookmark` interface in `frontend/src/types.ts`.
+    *   [x] **Task 14.4**: Update `BookmarkCard.tsx` dropdown to "Move to Recycle Clip" and support Recycle Clip mode with direct "Restore Slip" and "Delete Permanently" action triggers.
+    *   [x] **Task 14.5**: Integrate the specialized **Recycle Clip** into `ClipsView.tsx` with dedicated header, item counts, empty state, and "Empty Recycle Clip" workflow.
+    *   [x] **Task 14.6**: Add Instant "Undo" Toast notification (6-second floating banner with 1-click restore) and Safe Empty Confirmation Modal (with slip count preview) in `App.tsx` and `index.css`.
+    *   [x] **Task 14.7**: Write comprehensive backend unit/integration tests and frontend UI tests verifying soft deletion, restore, instant undo, safe empty, and isolation.
+    *   [x] **Task 14.8**: UX Refinement: 1-Click Direct Navbar Access (`Trash2` icon with live badge counter) from any view, streamlined Left Tree Spine (`.spine-utility-section` eliminating tree padding anomaly), and clean Root Clips Deck layout with subtle footer link.
+    *   [x] **Task 14.9**: Soft Delete & Restore for Clips: Added `deleted_at` timestamp & index to `clips` table; updated `DELETE /api/clips/:id` with `include_children` option (re-parenting direct sub-clips when false or recursive soft deletion when true while keeping slips safe in library); added `POST /api/clips/:id/restore`, `DELETE /api/clips/:id/permanent`, and `GET /api/clips/recycle-clip`; updated empty recycle endpoint to purge both deleted slips and deleted clips; built Delete Clip modal with sub-clip inclusion checkbox and deleted clips cards in Recycle Clip view with Restore and Permanent Delete actions; added 100% passing test coverage (120 backend + 72 frontend tests).
+
 

@@ -29,6 +29,8 @@ export interface Bookmark {
   reader_html?: string | null;
   is_pinned?: boolean | number;
   pinned_at?: string | null;
+  deleted_at?: string | null;
+  original_clip_name?: string | null;
   created_at: string;
   updated_at: string;
   tags?: Tag[];
@@ -59,6 +61,7 @@ export interface Clip {
   user_id: number;
   name: string;
   parent_id: number | null;
+  deleted_at?: string | null;
   created_at: string;
   updated_at: string;
   item_count?: number;

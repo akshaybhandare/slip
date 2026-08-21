@@ -308,7 +308,7 @@ router.get('/', (req: AuthenticatedRequest, res: Response) => {
     const db = getDb();
     let query = `
       SELECT b.id, b.user_id, b.url, b.title, b.description, b.personal_note, b.content_type, 
-             b.image_path, b.favicon_path, b.is_pinned, b.pinned_at, b.created_at, b.updated_at
+             b.image_path, b.favicon_path, b.is_pinned, b.pinned_at, b.deleted_at, b.created_at, b.updated_at
       FROM bookmarks b
     `;
     const params: any[] = [userId];
@@ -317,11 +317,11 @@ router.get('/', (req: AuthenticatedRequest, res: Response) => {
       query += `
         JOIN bookmark_tags bt ON b.id = bt.bookmark_id
         JOIN tags t ON bt.tag_id = t.id
-        WHERE b.user_id = ? AND t.name = ?
+        WHERE b.user_id = ? AND b.deleted_at IS NULL AND t.name = ?
       `;
       params.push(tag);
     } else {
-      query += ` WHERE b.user_id = ?`;
+      query += ` WHERE b.user_id = ? AND b.deleted_at IS NULL`;
     }
 
     if (contentType) {
@@ -355,7 +355,7 @@ router.get('/tags', (req: AuthenticatedRequest, res: Response) => {
       FROM tags t
       JOIN bookmark_tags bt ON t.id = bt.tag_id
       JOIN bookmarks b ON bt.bookmark_id = b.id
-      WHERE b.user_id = ?
+      WHERE b.user_id = ? AND b.deleted_at IS NULL
       GROUP BY t.id, t.name
       ORDER BY count DESC, t.name ASC
     `).all(userId);
@@ -415,12 +415,12 @@ router.get('/search', async (req: AuthenticatedRequest, res: Response) => {
       try {
         const ftsQuery = `
           SELECT b.id, b.user_id, b.url, b.title, b.description, b.personal_note, b.content_type, 
-                 b.image_path, b.favicon_path, b.is_pinned, b.pinned_at, b.created_at, b.updated_at,
+                 b.image_path, b.favicon_path, b.is_pinned, b.pinned_at, b.deleted_at, b.created_at, b.updated_at,
                  snippet(bookmarks_fts, -1, '<mark>', '</mark>', '...', 25) as snippet,
                  bm25(bookmarks_fts) as rank
           FROM bookmarks_fts
           JOIN bookmarks b ON bookmarks_fts.rowid = b.id
-          WHERE bookmarks_fts MATCH ? AND b.user_id = ?
+          WHERE bookmarks_fts MATCH ? AND b.user_id = ? AND b.deleted_at IS NULL
           ORDER BY b.is_pinned DESC, rank ASC
           LIMIT ? OFFSET ?
         `;
@@ -441,9 +441,9 @@ router.get('/search', async (req: AuthenticatedRequest, res: Response) => {
 
       const likeQuery = `
         SELECT b.id, b.user_id, b.url, b.title, b.description, b.personal_note, b.content_type, 
-               b.image_path, b.favicon_path, b.is_pinned, b.pinned_at, b.created_at, b.updated_at
+               b.image_path, b.favicon_path, b.is_pinned, b.pinned_at, b.deleted_at, b.created_at, b.updated_at
         FROM bookmarks b
-        WHERE b.user_id = ? AND (${conditions})
+        WHERE b.user_id = ? AND b.deleted_at IS NULL AND (${conditions})
         ORDER BY b.is_pinned DESC, b.pinned_at DESC, b.created_at DESC
         LIMIT ? OFFSET ?
       `;
@@ -489,6 +489,54 @@ router.get('/smart-search', async (req: AuthenticatedRequest, res: Response) => 
   }
 });
 
+// 3.5 Get Recycle Clip (Trashed Bookmarks)
+router.get('/recycle-clip', (req: AuthenticatedRequest, res: Response) => {
+  const userId = req.user!.id;
+
+  try {
+    const db = getDb();
+    const bookmarks = db.prepare(`
+      SELECT b.id, b.user_id, b.url, b.title, b.description, b.personal_note, b.content_type, 
+             b.image_path, b.favicon_path, b.is_pinned, b.pinned_at, b.deleted_at, b.created_at, b.updated_at,
+             (SELECT c.name FROM clips c JOIN clip_bookmarks cb ON c.id = cb.clip_id WHERE cb.bookmark_id = b.id LIMIT 1) AS original_clip_name
+      FROM bookmarks b
+      WHERE b.user_id = ? AND b.deleted_at IS NOT NULL
+      ORDER BY b.deleted_at DESC
+    `).all(userId) as any[];
+
+    attachTagsBatch(db, bookmarks);
+    res.status(200).json(bookmarks);
+  } catch (err) {
+    console.error('Fetch recycle clip error:', err);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+// 3.6 Empty Recycle Clip (Hard delete all trashed bookmarks and clips)
+router.post('/recycle-clip/empty', (req: AuthenticatedRequest, res: Response) => {
+  const userId = req.user!.id;
+
+  try {
+    const db = getDb();
+    const emptyTx = db.transaction(() => {
+      const bRes = db.prepare(`DELETE FROM bookmarks WHERE user_id = ? AND deleted_at IS NOT NULL`).run(userId);
+      const cRes = db.prepare(`DELETE FROM clips WHERE user_id = ? AND deleted_at IS NOT NULL`).run(userId);
+      return bRes.changes + cRes.changes;
+    });
+
+    const deletedCount = emptyTx();
+    res.status(200).json({
+      message: 'Recycle Clip emptied successfully',
+      deletedCount
+    });
+  } catch (err) {
+    console.error('Empty recycle clip error:', err);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+
+
 // 4. Get Single Bookmark by ID
 router.get('/:id', (req: AuthenticatedRequest, res: Response) => {
   const userId = req.user!.id;
@@ -497,7 +545,7 @@ router.get('/:id', (req: AuthenticatedRequest, res: Response) => {
   try {
     const db = getDb();
     const bookmark = db.prepare(`
-      SELECT * FROM bookmarks WHERE id = ? AND user_id = ?
+      SELECT * FROM bookmarks WHERE id = ? AND user_id = ? AND deleted_at IS NULL
     `).get(id, userId) as any;
 
     if (!bookmark) {
@@ -922,22 +970,75 @@ router.delete('/:id/highlights/:highlightId', (req: AuthenticatedRequest, res: R
   }
 });
 
-// 6. Delete Bookmark
+// 6. Delete Bookmark (Soft delete: move to Recycle Clip)
 router.delete('/:id', (req: AuthenticatedRequest, res: Response) => {
   const userId = req.user!.id;
   const { id } = req.params;
 
   try {
     const db = getDb();
-    const result = db.prepare(`DELETE FROM bookmarks WHERE id = ? AND user_id = ?`).run(id, userId);
+    const result = db.prepare(`
+      UPDATE bookmarks 
+      SET deleted_at = datetime('now'), is_pinned = 0 
+      WHERE id = ? AND user_id = ? AND deleted_at IS NULL
+    `).run(id, userId);
 
     if (result.changes === 0) {
       return res.status(404).json({ message: 'Bookmark not found or unauthorized' });
     }
 
-    res.status(200).json({ message: 'Bookmark deleted successfully' });
+    res.status(200).json({ message: 'Bookmark moved to Recycle Clip successfully' });
   } catch (err) {
     console.error('Delete bookmark error:', err);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+// 6.1 Restore Bookmark from Recycle Clip
+router.post('/:id/restore', (req: AuthenticatedRequest, res: Response) => {
+  const userId = req.user!.id;
+  const { id } = req.params;
+
+  try {
+    const db = getDb();
+    const result = db.prepare(`
+      UPDATE bookmarks 
+      SET deleted_at = NULL, updated_at = datetime('now')
+      WHERE id = ? AND user_id = ? AND deleted_at IS NOT NULL
+    `).run(id, userId);
+
+    if (result.changes === 0) {
+      return res.status(404).json({ message: 'Slip not found in Recycle Clip' });
+    }
+
+    const restored = db.prepare(`SELECT * FROM bookmarks WHERE id = ?`).get(id) as any;
+    if (restored) {
+      attachTagsBatch(db, [restored]);
+    }
+
+    res.status(200).json({ message: 'Slip restored successfully', bookmark: restored });
+  } catch (err) {
+    console.error('Restore slip error:', err);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+// 6.2 Permanently Delete Bookmark
+router.delete('/:id/permanent', (req: AuthenticatedRequest, res: Response) => {
+  const userId = req.user!.id;
+  const { id } = req.params;
+
+  try {
+    const db = getDb();
+    const result = db.prepare(`DELETE FROM bookmarks WHERE id = ? AND user_id = ? AND deleted_at IS NOT NULL`).run(id, userId);
+
+    if (result.changes === 0) {
+      return res.status(404).json({ message: 'Slip not found in Recycle Clip' });
+    }
+
+    res.status(200).json({ message: 'Slip permanently deleted' });
+  } catch (err) {
+    console.error('Permanent delete slip error:', err);
     res.status(500).json({ message: 'Internal server error' });
   }
 });

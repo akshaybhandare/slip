@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Bookmark as BookmarkIcon, Search, Plus, Upload, Download, LogOut, RefreshCw, X, Sun, Moon, Monitor, MoreVertical, UserPlus, Sparkles, CornerDownLeft, Paperclip } from 'lucide-react';
+import { Bookmark as BookmarkIcon, Search, Plus, Upload, Download, LogOut, RefreshCw, X, Sun, Moon, Monitor, MoreVertical, UserPlus, Sparkles, CornerDownLeft, Paperclip, Trash2 } from 'lucide-react';
 import { User } from '../types';
 import { ThemeMode } from '../hooks/useTheme';
 
@@ -24,6 +24,9 @@ interface NavbarProps {
   onToggleTheme?: () => void;
   isClipsView?: boolean;
   onToggleClipsView?: () => void;
+  onOpenRecycleClip?: () => void;
+  recycleCount?: number;
+  isRecycleClipActive?: boolean;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -46,7 +49,10 @@ export const Navbar: React.FC<NavbarProps> = ({
   themeMode = 'system',
   onToggleTheme,
   isClipsView = false,
-  onToggleClipsView
+  onToggleClipsView,
+  onOpenRecycleClip,
+  recycleCount = 0,
+  isRecycleClipActive = false
 }) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -110,7 +116,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           <div className="nav-desktop-actions">
             {onToggleClipsView && (
               <button
-                className={`btn btn-secondary nav-clips-toggle-btn ${isClipsView ? 'active-clips-btn' : ''}`}
+                className={`btn btn-secondary nav-clips-toggle-btn ${isClipsView && !isRecycleClipActive ? 'active-clips-btn' : ''}`}
                 onClick={onToggleClipsView}
                 title={isClipsView ? 'Return to Main Stream' : 'Browse Clips (Folders)'}
                 aria-label="Clips & Folders"
@@ -149,6 +155,20 @@ export const Navbar: React.FC<NavbarProps> = ({
               <Download size={15} />
             </a>
 
+            {onOpenRecycleClip && (
+              <button
+                className={`btn btn-secondary nav-recycle-btn ${isRecycleClipActive ? 'active-recycle-btn' : ''}`}
+                onClick={onOpenRecycleClip}
+                title={recycleCount > 0 ? `Recycle Clip (${recycleCount} deleted ${recycleCount === 1 ? 'slip' : 'slips'})` : 'Recycle Clip'}
+                aria-label="Recycle Clip"
+              >
+                <Trash2 size={15} className="nav-recycle-icon" />
+                {recycleCount > 0 && (
+                  <span className="nav-badge-dot" />
+                )}
+              </button>
+            )}
+
             {user?.isAdmin && onAddUserClick && (
               <button className="btn btn-secondary" onClick={onAddUserClick} title="Add User">
                 <UserPlus size={15} />
@@ -183,8 +203,20 @@ export const Navbar: React.FC<NavbarProps> = ({
                       onToggleClipsView();
                     }}
                   >
-                    <Paperclip size={15} style={isClipsView ? { color: 'var(--color-primary)' } : undefined} />
+                    <Paperclip size={15} style={isClipsView && !isRecycleClipActive ? { color: 'var(--color-primary)' } : undefined} />
                     <span>{isClipsView ? 'Main Stream' : 'Clips (Folders)'}</span>
+                  </button>
+                )}
+                {onOpenRecycleClip && (
+                  <button
+                    className="nav-dropdown-item"
+                    onClick={() => {
+                      setIsMenuOpen(false);
+                      onOpenRecycleClip();
+                    }}
+                  >
+                    <Trash2 size={15} style={isRecycleClipActive ? { color: '#ef4444' } : undefined} />
+                    <span>Recycle Clip {recycleCount > 0 ? `(${recycleCount})` : ''}</span>
                   </button>
                 )}
                 {(isAIConnected || user?.isAdmin) && onAIClick && (

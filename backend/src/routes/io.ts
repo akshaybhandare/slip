@@ -128,7 +128,7 @@ router.get('/export', (req: AuthenticatedRequest, res: Response) => {
     const bookmarks = db.prepare(`
       SELECT id, url, title, description, created_at
       FROM bookmarks
-      WHERE user_id = ?
+      WHERE user_id = ? AND deleted_at IS NULL
       ORDER BY created_at ASC
     `).all(userId) as BookmarkExportItem[];
 
