@@ -1,96 +1,128 @@
-# Slip — User Guide & Onboarding Manual
-
-Welcome to **Slip**, a lightning-fast, self-hosted visual bookmark archive and reading space. This guide covers everything you need to know to get started, organize your content, connect artificial intelligence, and automate capture using our API and iOS Shortcuts.
-
----
-
-## 📖 1. What is Slip?
-
-Slip is a privacy-first web archive designed to capture, read, and search the things you want to remember (articles, design inspiration, videos, products, and notes). 
-
-Unlike traditional bookmark managers that display a list of plain blue links, Slip saves a **visual card** for every item, extracts core text, creates local screenshot/thumbnail fallbacks, and keeps everything stored safely in a single SQLite database running on your own server.
+# 🔖 SLIP: A Self-Hosted Visual Quest
+*A Visual Guide to Archiving, Reading, and Teleporting Your Bookmarks.*
 
 ---
 
-## 📁 2. Organizing with Clips & Tags
+## 🗺️ The Map of Your Journey
 
-Slip offers two primary ways to organize your saved items: **Tags** (flat, cross-cutting labels) and **Clips** (hierarchical folders).
+```mermaid
+graph TD
+    A["🌟 Step 1: Start (Unraid Dashboard)"] --> B["📂 Step 2: Organize (Clips & Tags)"]
+    B --> C["🤖 Step 3: Summon AI (BYO-AI Keys)"]
+    C --> D["⚡ Step 4: Automate (iOS Share Sheet)"]
+    D --> E["🌀 Step 5: Teleport (Tailscale Remote Access)"]
 
-### What is a "Clip"?
-A **Clip** is a container that holds bookmark cards. Unlike traditional folders that clutter your interface, Clips are **hidden by default** to keep your main visual stream clean.
-* **Hierarchical Structure**: You can nest Clips inside other Clips (e.g. `Hobbies` ➔ `3D Printing` ➔ `Slips`).
-* **Pinning**: You can "pin" your favorite Clips to the sidebar or top navigation for 1-click access.
-* **Smart Filtering**: Clicking a Clip shows only the bookmarks assigned to that collection and its sub-clips.
-
-### The Tag System
-* **Quick Tagging**: When editing a card, type `#` to see auto-completed suggestions based on your existing vocabulary.
-* **Interactive Chips**: Tap tag pills on cards to instantly filter your main feed.
-
----
-
-## 🤖 3. Connecting your own AI (BYO-AI)
-
-Slip supports a **Bring Your Own AI (BYO-AI)** model. You can connect your own keys to unlock smart search and automation.
-
-### Supported Providers
-* OpenAI (GPT-4o / GPT-4o-mini)
-* Anthropic (Claude 3.5 Sonnet / Claude 3 Haiku)
-* Google Gemini (Gemini 1.5 Pro / Flash)
-* Local Providers (Ollama, OpenRouter, Together AI)
-
-### How to Configure AI
-1. Log in as the administrator and navigate to **Settings** ➔ **AI Configuration**.
-2. Select your provider, paste your API Key, and select your preferred model.
-3. Click **Test & Save**. (Slip encrypts your API keys using AES-256 encryption before storing them in your local database).
-
-### Disconnected Fallback (Zero-AI Mode)
-If you choose not to connect an AI provider, **Slip functions perfectly as a standard, lightweight bookmark archiver**. All AI buttons, search modes, and auto-tagging options are hidden so they do not clutter your interface.
+    style A fill:#f9f,stroke:#333,stroke-width:2px
+    style E fill:#85e3ff,stroke:#333,stroke-width:2px
+```
 
 ---
 
-## ♻️ 4. Managing Deletions (Recycle Clip & Toast Undo)
+## 📖 Chapter 1: The Quest Board (Core Concepts)
 
-Accidentally deleting bookmarks is frustrating, which is why Slip uses a non-destructive **Recycle Clip** (Soft Delete) mechanism.
+```markdown
+### 🎨 1. What is Slip?
+Imagine a clean, high-density masonry grid of cards representing everything you want to remember. 
+No ugly blue links. Slip saves visual previews, extracts readable text, and takes automated screenshots of articles, products, and notes.
 
-### How it works:
-1. **Soft Delete**: When you click the **Delete** (trash) icon on any bookmark card, it is immediately removed from the active grid and moved to the **Recycle Clip**.
-2. **Undo Toast**: When deleted, a floating toast banner appears at the bottom of the screen: `Card moved to Recycle Clip (Undo)`. You have **6 seconds** to click "Undo" and restore it instantly with zero database delay.
-3. **Cascade Clip Deletions**: If you delete a parent Clip that contains sub-clips, Slip will ask you whether to:
-   * **Promote**: Keep the sub-clips and move them up one level.
-   * **Cascade**: Move the entire tree (parent, sub-clips, and all enclosed bookmarks) to the Recycle Clip.
-4. **Permanent Purge**: To free up disk space, go to the Recycle Clip and click **Empty Recycle Clip** to permanently purge all soft-deleted entries from the database.
+> [!NOTE]
+> All files, caches, and the database live entirely on your hardware.
 
----
+### 📁 2. Clips vs. Tags
+* **Tags** (`#inspiration`, `#dev`): Fast, lightweight labels for filtering the main stream.
+* **Clips** (Folders): Hierarchical structures that let you nest collections (e.g. `Hobbies` ➔ `3D Printing`). 
 
-## 🔌 5. Developer API & Integrations
+> [!TIP]
+> Clips are hidden by default to keep your interface clean and zen-like. Pin your favorites to the sidebar for easy access!
 
-Slip exposes a full JSON REST API to automate ingestion. You can generate permanent authorization tokens directly from your dashboard.
+### ♻️ 3. The Recycle Shield (Soft Delete)
+Deleting a card moves it to the Recycle Clip (Soft Delete). 
+* **6-Second Time Warp**: When you delete a card, a toast banner pops up. You have 6 seconds to click Undo to instantly restore it.
+* **Cascade Choice**: Deleting a parent folder gives you the option to Promote nested items up a level, or Cascade delete the whole family.
 
-### Creating an API Key:
-1. Go to **Settings** ➔ **Developer Settings / API Keys**.
-2. Click **Generate New Key**, give it a name (e.g., `iOS Shortcut`), and copy the token.
-
-### Native iOS Shortcut Setup
-You can save any URL to Slip in **under 1 second** using a native iOS Shortcut from your Safari Share Sheet:
-
-1. Open the **Shortcuts** app on your iPhone or iPad.
-2. Create a new shortcut called **Save to Slip**.
-3. Set the shortcut to **Receive: URLs** from the Share Sheet.
-4. Add the **"Get Contents of URL"** action and configure it:
-   * **URL**: `http://<your-unraid-ip>:3000/api/bookmarks`
-   * **Method**: `POST`
-   * **Headers**:
-     * `Authorization`: `Bearer YOUR_API_TOKEN_HERE`
-     * `Content-Type`: `application/json`
-   * **Request Body**: `JSON`
-     * `url`: Set to the Safari webpage input variable.
-5. Tap the settings icon in the Shortcut editor and toggle **"Show in Share Sheet"**.
-
-Now, when browsing any website on iOS, tap **Share** ➔ **Save to Slip** to archive the link instantly in the background!
+### 🔌 4. Integrations & Portals
+* **Browser Extension**: Capture pages in 1 click using Cmd+Shift+S.
+* **iOS Shortcut**: Post links straight from Safari's Share Sheet in under a second using your generated API key.
+```
 
 ---
 
-## 🌐 6. Desktop Browser Extension
-* Install the **Slip Extension** on your desktop browser (Chrome, Brave, Firefox, Edge, Safari).
-* Open the extension options, input your **Slip Server URL** (e.g. `http://192.168.1.50:3000`), paste your **API Key**, and click **Save**.
-* Press `Cmd+Shift+S` (Mac) or `Ctrl+Shift+S` (Windows) to capture and tag any webpage in one click without leaving your current tab.
+## 🤖 Chapter 2: Summoning the AI Companion (BYO-AI)
+
+Slip comes with a **Bring Your Own AI (BYO-AI)** engine. If you connect an LLM, you unlock advanced semantic search and automated tagging. If you don't, the app morphs into a clean, traditional bookmark archiver with zero AI clutter.
+
+```mermaid
+flowchart LR
+    A["API Key Connected?"] -- Yes --> B["🧠 Unlock Semantic Search & Auto-Tagging"]
+    A -- No --> C["🛡️ Classic Zero-AI Mode (Hidden AI Buttons)"]
+```
+
+> [!IMPORTANT]
+> **To summon your AI helper:**
+> 1. Go to **Settings** ➔ **AI Configuration**.
+> 2. Paste your API key from **OpenAI**, **Anthropic**, **Gemini**, or configure a local **Ollama** server.
+> 3. Click **Test & Save**. (All keys are encrypted in your SQLite database using AES-256).
+
+---
+
+## 🌀 Chapter 3: Teleporting Your Access (Tailscale Anywhere)
+
+Because Slip runs on your local Unraid server, it is normally locked to your home network. Instead of opening ports on your router (which exposes your server to hackers), we will create a secure **encrypted portal** using **Tailscale** to access Slip from your phone anywhere in the world.
+
+### The Secure Connection Path:
+```mermaid
+sequenceDiagram
+    participant Device as 📱 Phone (LTE / Coffee Shop)
+    participant VPN as 🔒 Tailscale Secure Tunnel
+    participant Server as 🖥️ Unraid Server (Home)
+    participant App as 🔖 Slip Container (Port 3000)
+
+    Device->>VPN: Connect to Tailnet
+    VPN->>Server: Direct Encrypted Handshake
+    Server->>App: Forward request to port 3000
+    App-->>Device: Securely load Slip feed!
+```
+
+### 🛠️ Quick Portal Setup:
+
+> [!TIP]
+> **Step 1: Install Tailscale on Unraid**
+> * Go to the **Apps** tab on your Unraid server.
+> * Search for **Tailscale** and click **Install**.
+> * Open the Tailscale configuration page and log in to link your server to your Tailscale network (your "Tailnet").
+> 
+> **Step 2: Get your Server's Magic IP**
+> * Look at your Tailscale admin console. You will see a unique IP assigned to your Unraid server (it will start with `100.x.y.z`). This is your server's permanent, private address.
+> 
+> **Step 3: Connect your Phone or Laptop**
+> * Download the Tailscale app on your iPhone, Android, or laptop.
+> * Log in with the same account.
+> * Turn Tailscale **ON**.
+> 
+> **Step 4: Load Slip Anywhere**
+> * In your browser or iOS shortcut, use your Tailscale IP instead of your local network IP:
+>   `http://100.x.y.z:3000`
+> * You can now search, save, and read bookmarks securely from any cellular network or hotel Wi-Fi in the world!
+
+---
+
+## 📱 Chapter 4: The 1-Second Capture (iOS Share Sheet)
+
+Configure your phone to save bookmarks in one tap:
+
+1. Open **Shortcuts** on your iOS device and create a new shortcut named **Save to Slip**.
+2. Set it to **Receive URLs** from the Share Sheet.
+3. Configure a **"Get Contents of URL"** block as follows:
+
+```ini
+[POST] http://100.x.y.z:3000/api/bookmarks
+├── Headers:
+│   ├── Authorization: Bearer YOUR_API_TOKEN
+│   └── Content-Type: application/json
+└── JSON Body:
+    └── url: [Shortcut Input]
+```
+
+4. Toggle **"Show in Share Sheet"** in the shortcut's details panel.
+
+Now, simply share any Safari link, select **Save to Slip**, and teleport your bookmark home!
