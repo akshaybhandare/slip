@@ -1,7 +1,7 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import React from 'react';
-import { AIConnectModal } from '../components/AIConnectModal';
+import { SettingsModal } from '../components/SettingsModal';
 import {
   AIConfig,
   AI_PROVIDERS,
@@ -87,15 +87,41 @@ describe('AI Config Module & Helpers', () => {
   });
 });
 
-describe('AIConnectModal UI Component', () => {
+describe('SettingsModal AI Tab UI Component', () => {
+  const mockOnClose = vi.fn();
   const mockOnConnect = vi.fn();
   const mockOnDisconnect = vi.fn();
-  const mockOnClose = vi.fn();
   const mockOnTestConnection = vi.fn();
 
   beforeEach(() => {
     vi.clearAllMocks();
   });
+
+  const renderSettingsAI = (config: AIConfig, userObj: any = { id: 1, username: 'admin', isAdmin: true }) => {
+    return render(
+      <SettingsModal
+        isOpen={true}
+        onClose={mockOnClose}
+        initialTab="ai"
+        user={userObj}
+        themeMode="system"
+        themePreset="default"
+        customAccent={null}
+        onSelectMode={vi.fn()}
+        onSelectPreset={vi.fn()}
+        onSetCustomAccent={vi.fn()}
+        onResetTheme={vi.fn()}
+        onImportClick={vi.fn()}
+        onRescrapeAllClick={vi.fn()}
+        isRescrapingAll={false}
+        aiConfig={config}
+        onConnectAI={mockOnConnect}
+        onDisconnectAI={mockOnDisconnect}
+        onTestAIConnection={mockOnTestConnection}
+        onLogoutClick={vi.fn()}
+      />
+    );
+  };
 
   it('renders admin connect view with provider dropdown, API key input, SHOW toggle, and hints', () => {
     const initialConfig: AIConfig = {
@@ -105,26 +131,12 @@ describe('AIConnectModal UI Component', () => {
       isConnected: false
     };
 
-    render(
-      <AIConnectModal
-        isOpen={true}
-        onClose={mockOnClose}
-        aiConfig={initialConfig}
-        isAdmin={true}
-        onConnect={mockOnConnect}
-        onDisconnect={mockOnDisconnect}
-        onTestConnection={mockOnTestConnection}
-      />
-    );
+    renderSettingsAI(initialConfig);
 
-    expect(screen.getByText('Connect your AI')).toBeInTheDocument();
-    expect(screen.getByText('Bring your own API key.')).toBeInTheDocument();
     expect(screen.getByText('PROVIDER')).toBeInTheDocument();
     expect(screen.getByText('MODEL')).toBeInTheDocument();
     expect(screen.getByText('API KEY')).toBeInTheDocument();
-    expect(screen.getByText(/Your key is tested first/i)).toBeInTheDocument();
-    expect(screen.getByText(/Secure & private/i)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Connect/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Save & Connect AI/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Show API key/i })).toBeInTheDocument();
   });
 
@@ -136,17 +148,7 @@ describe('AIConnectModal UI Component', () => {
       isConnected: false
     };
 
-    render(
-      <AIConnectModal
-        isOpen={true}
-        onClose={mockOnClose}
-        aiConfig={initialConfig}
-        isAdmin={true}
-        onConnect={mockOnConnect}
-        onDisconnect={mockOnDisconnect}
-        onTestConnection={mockOnTestConnection}
-      />
-    );
+    renderSettingsAI(initialConfig);
 
     const modelInput = screen.getByLabelText(/MODEL/i) as HTMLInputElement;
     expect(modelInput.value).toBe('gpt-4o-mini');
@@ -156,7 +158,7 @@ describe('AIConnectModal UI Component', () => {
     const keyInput = screen.getByPlaceholderText(/sk-proj-/i);
     fireEvent.change(keyInput, { target: { value: 'sk-proj-test-key-1234' } });
 
-    const connectBtn = screen.getByRole('button', { name: /Connect/i });
+    const connectBtn = screen.getByRole('button', { name: /Save & Connect AI/i });
     fireEvent.click(connectBtn);
 
     expect(mockOnConnect).toHaveBeenCalledWith(
@@ -177,17 +179,7 @@ describe('AIConnectModal UI Component', () => {
       isConnected: false
     };
 
-    render(
-      <AIConnectModal
-        isOpen={true}
-        onClose={mockOnClose}
-        aiConfig={initialConfig}
-        isAdmin={true}
-        onConnect={mockOnConnect}
-        onDisconnect={mockOnDisconnect}
-        onTestConnection={mockOnTestConnection}
-      />
-    );
+    renderSettingsAI(initialConfig);
 
     const keyInput = screen.getByPlaceholderText(/sk-proj-/i) as HTMLInputElement;
     expect(keyInput.type).toBe('password');
@@ -211,17 +203,7 @@ describe('AIConnectModal UI Component', () => {
       isConnected: false
     };
 
-    render(
-      <AIConnectModal
-        isOpen={true}
-        onClose={mockOnClose}
-        aiConfig={initialConfig}
-        isAdmin={true}
-        onConnect={mockOnConnect}
-        onDisconnect={mockOnDisconnect}
-        onTestConnection={mockOnTestConnection}
-      />
-    );
+    renderSettingsAI(initialConfig);
 
     expect(screen.queryByLabelText(/API URL/i)).not.toBeInTheDocument();
 
@@ -240,22 +222,12 @@ describe('AIConnectModal UI Component', () => {
       isConnected: false
     };
 
-    render(
-      <AIConnectModal
-        isOpen={true}
-        onClose={mockOnClose}
-        aiConfig={initialConfig}
-        isAdmin={true}
-        onConnect={mockOnConnect}
-        onDisconnect={mockOnDisconnect}
-        onTestConnection={mockOnTestConnection}
-      />
-    );
+    renderSettingsAI(initialConfig);
 
     const keyInput = screen.getByPlaceholderText(/sk-proj-/i);
     fireEvent.change(keyInput, { target: { value: 'sk-proj-abc1234567890a82f  ' } });
 
-    const connectBtn = screen.getByRole('button', { name: /Connect/i });
+    const connectBtn = screen.getByRole('button', { name: /Save & Connect AI/i });
     fireEvent.click(connectBtn);
 
     expect(mockOnConnect).toHaveBeenCalledWith(
@@ -276,23 +248,13 @@ describe('AIConnectModal UI Component', () => {
       isConnected: true
     };
 
-    render(
-      <AIConnectModal
-        isOpen={true}
-        onClose={mockOnClose}
-        aiConfig={connectedConfig}
-        isAdmin={true}
-        onConnect={mockOnConnect}
-        onDisconnect={mockOnDisconnect}
-        onTestConnection={mockOnTestConnection}
-      />
-    );
+    renderSettingsAI(connectedConfig);
 
     expect(screen.getByText('OpenAI')).toBeInTheDocument();
-    expect(screen.getByText(/Connected/i)).toBeInTheDocument();
-    expect(screen.getByText('••••••••••••••••••••••a82f')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Change/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Test connection/i })).toBeInTheDocument();
+    expect(screen.getByText(/Active/i)).toBeInTheDocument();
+    expect(screen.getByText(/Key: ••••••••••••••••••••••a82f/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Change Configuration/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Test Connection/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Disconnect/i })).toBeInTheDocument();
   });
 
@@ -305,26 +267,15 @@ describe('AIConnectModal UI Component', () => {
       isConnected: true
     };
 
-    render(
-      <AIConnectModal
-        isOpen={true}
-        onClose={mockOnClose}
-        aiConfig={connectedConfig}
-        isAdmin={false}
-        onConnect={mockOnConnect}
-        onDisconnect={mockOnDisconnect}
-        onTestConnection={mockOnTestConnection}
-      />
-    );
+    renderSettingsAI(connectedConfig, { id: 2, username: 'regularuser', isAdmin: false });
 
-    expect(screen.getByText('OpenAI')).toBeInTheDocument();
-    expect(screen.getByText(/Connected/i)).toBeInTheDocument();
+    expect(screen.getByText(/Connected \(OpenAI/i)).toBeInTheDocument();
     expect(screen.getByText('••••••••••••••••••••••a82f')).toBeInTheDocument();
-    expect(screen.getByText(/Read-only view/i)).toBeInTheDocument();
+    expect(screen.getByText(/Managed by system administrator/i)).toBeInTheDocument();
 
     // No edit or test action buttons for regular users
-    expect(screen.queryByRole('button', { name: /Change/i })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /Test connection/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Change Configuration/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Test Connection/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Disconnect/i })).not.toBeInTheDocument();
   });
 
@@ -337,25 +288,14 @@ describe('AIConnectModal UI Component', () => {
       isConnected: false
     };
 
-    render(
-      <AIConnectModal
-        isOpen={true}
-        onClose={mockOnClose}
-        aiConfig={unconfiguredConfig}
-        isAdmin={false}
-        onConnect={mockOnConnect}
-        onDisconnect={mockOnDisconnect}
-        onTestConnection={mockOnTestConnection}
-      />
-    );
+    renderSettingsAI(unconfiguredConfig, { id: 2, username: 'regularuser', isAdmin: false });
 
-    expect(screen.getByText('AI Not Configured')).toBeInTheDocument();
-    expect(screen.getByText(/Please contact an administrator to connect an AI provider/i)).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /Connect/i })).not.toBeInTheDocument();
+    expect(screen.getByText(/AI capabilities have not been configured by an administrator yet/i)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Save & Connect AI/i })).not.toBeInTheDocument();
   });
 });
 
-describe('Navbar and App AI Integration', () => {
+describe('Settings and App AI Integration', () => {
   beforeEach(() => {
     localStorage.clear();
     vi.mocked(api.getMe).mockResolvedValue({ user: { id: 1, username: 'adminuser', isAdmin: true } });
@@ -372,31 +312,38 @@ describe('Navbar and App AI Integration', () => {
     });
   });
 
-  it('renders AI button in desktop toolbar and opens modal on click', async () => {
+  it('opens AI configuration directly inside consolidated Settings modal', async () => {
     render(<App />);
 
-    const aiButton = await waitFor(() => screen.getByRole('button', { name: /Connect AI/i }));
-    expect(aiButton).toBeInTheDocument();
+    const settingsBtn = await waitFor(() => screen.getByRole('button', { name: 'Settings' }));
+    expect(settingsBtn).toBeInTheDocument();
 
-    fireEvent.click(aiButton);
+    fireEvent.click(settingsBtn);
+
+    const aiTab = screen.getByRole('button', { name: /AI & Models/i });
+    fireEvent.click(aiTab);
 
     await waitFor(() => {
       expect(screen.getByText('OpenAI')).toBeInTheDocument();
-      expect(screen.getByText('••••••••••••••••••••••a82f')).toBeInTheDocument();
+      expect(screen.getByText(/••••••••••••••••••••••a82f/i)).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /Change Configuration/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /Test Connection/i })).toBeInTheDocument();
     });
   });
 
-  it('renders AI option in mobile overflow menu', async () => {
+  it('opens Settings modal from mobile menu and accesses AI tab', async () => {
     render(<App />);
 
     const moreBtn = screen.getByTitle('More actions');
     fireEvent.click(moreBtn);
 
-    await waitFor(() => {
-      expect(screen.getByText(/AI/i)).toBeInTheDocument();
-    });
+    const settingsBtns = await waitFor(() => screen.getAllByRole('button', { name: /Settings/i }));
+    expect(settingsBtns.length).toBeGreaterThan(0);
 
-    fireEvent.click(screen.getByText(/AI/i));
+    fireEvent.click(settingsBtns[settingsBtns.length - 1]);
+
+    const aiTab = screen.getByRole('button', { name: /AI & Models/i });
+    fireEvent.click(aiTab);
 
     await waitFor(() => {
       expect(screen.getByText('OpenAI')).toBeInTheDocument();
@@ -640,26 +587,5 @@ describe('AI Smart Search UI & Interactions', () => {
     expect(screen.queryByText(/Auto-tag with AI/i)).not.toBeInTheDocument();
   });
 
-  it('hides AI button for non-admin users when AI is not connected', async () => {
-    const { Navbar } = await import('../components/Navbar');
 
-    render(
-      <Navbar
-        searchQuery=""
-        onSearchChange={vi.fn()}
-        onAddClick={vi.fn()}
-        onImportClick={vi.fn()}
-        onRescrapeAllClick={vi.fn()}
-        isRescrapingAll={false}
-        onLogoutClick={vi.fn()}
-        onAIClick={vi.fn()}
-        isAIConnected={false}
-        user={{ id: 2, username: 'regularuser', isAdmin: false }}
-      />
-    );
-
-    // Regular user must NOT see AI buttons
-    expect(screen.queryByRole('button', { name: /Connect AI/i })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /AI Connected/i })).not.toBeInTheDocument();
-  });
 });

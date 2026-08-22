@@ -2,7 +2,7 @@ import React from 'react';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, screen, fireEvent, renderHook, act } from '@testing-library/react';
 import { useTheme } from '../hooks/useTheme';
-import { ThemeModal } from '../components/ThemeModal';
+import { SettingsModal } from '../components/SettingsModal';
 import { Navbar } from '../components/Navbar';
 import { THEME_PRESETS } from '../config/themeConfig';
 import {
@@ -153,7 +153,7 @@ describe('useTheme Hook State & DOM Sync', () => {
   });
 });
 
-describe('ThemeModal UI Component', () => {
+describe('SettingsModal Appearance UI Tab', () => {
   it('renders presets, mode buttons, swatches, and handles interactions', () => {
     const onSelectMode = vi.fn();
     const onSelectPreset = vi.fn();
@@ -162,9 +162,11 @@ describe('ThemeModal UI Component', () => {
     const onClose = vi.fn();
 
     render(
-      <ThemeModal
+      <SettingsModal
         isOpen={true}
         onClose={onClose}
+        initialTab="appearance"
+        user={null}
         themeMode="system"
         themePreset="default"
         customAccent={null}
@@ -172,10 +174,19 @@ describe('ThemeModal UI Component', () => {
         onSelectPreset={onSelectPreset}
         onSetCustomAccent={onSetCustomAccent}
         onResetTheme={onResetTheme}
+        onImportClick={vi.fn()}
+        onRescrapeAllClick={vi.fn()}
+        isRescrapingAll={false}
+        aiConfig={{ isConnected: false, provider: 'openai', apiKey: '', apiUrl: '' }}
+        onConnectAI={vi.fn()}
+        onDisconnectAI={vi.fn()}
+        onTestAIConnection={vi.fn()}
+        onLogoutClick={vi.fn()}
       />
     );
 
-    expect(screen.getByText('Appearance')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Settings' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Appearance$/i })).toBeInTheDocument();
 
     // Select Dark mode
     const darkBtn = screen.getByRole('button', { name: /Dark/i });
@@ -192,8 +203,8 @@ describe('ThemeModal UI Component', () => {
     fireEvent.click(defaultAccentSwatch);
     expect(onSetCustomAccent).toHaveBeenCalled();
 
-    // Click Reset All
-    const resetBtn = screen.getByRole('button', { name: /Reset All/i });
+    // Click Reset appearance
+    const resetBtn = screen.getByRole('button', { name: /Reset appearance to defaults/i });
     fireEvent.click(resetBtn);
     expect(onResetTheme).toHaveBeenCalled();
 
@@ -204,27 +215,21 @@ describe('ThemeModal UI Component', () => {
   });
 });
 
-describe('Navbar Theme Controls', () => {
-  it('renders unified theme button and opens Appearance modal on click', () => {
-    const onOpenThemeModal = vi.fn();
+describe('Navbar Settings Controls', () => {
+  it('renders Settings button and opens settings on click', () => {
+    const onOpenSettings = vi.fn();
 
     render(
       <Navbar
         searchQuery=""
         onSearchChange={vi.fn()}
         onAddClick={vi.fn()}
-        onImportClick={vi.fn()}
-        onRescrapeAllClick={vi.fn()}
-        isRescrapingAll={false}
-        onLogoutClick={vi.fn()}
-        user={null}
-        themeMode="light"
-        onOpenThemeModal={onOpenThemeModal}
+        onOpenSettings={onOpenSettings}
       />
     );
 
-    const themeBtn = screen.getByLabelText(/Theme & Appearance settings/i);
-    fireEvent.click(themeBtn);
-    expect(onOpenThemeModal).toHaveBeenCalledTimes(1);
+    const settingsBtn = screen.getByRole('button', { name: 'Settings' });
+    fireEvent.click(settingsBtn);
+    expect(onOpenSettings).toHaveBeenCalledTimes(1);
   });
 });

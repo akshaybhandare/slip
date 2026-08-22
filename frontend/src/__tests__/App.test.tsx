@@ -104,12 +104,12 @@ describe('Frontend SPA Component Architecture & Mobile UI Interactions', () => {
     });
   });
 
-  it('renders navbar brand title, search input, and global sync button', async () => {
+  it('renders navbar brand title, search input, and settings trigger button', async () => {
     render(<App />);
 
     expect(screen.getByText('Slip')).toBeInTheDocument();
     expect(screen.getByPlaceholderText(/Search your archive/i)).toBeInTheDocument();
-    expect(screen.getByTitle(/Global Re-scrape/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Settings' })).toBeInTheDocument();
   });
 
   it('renders bookmark cards with titles, tags, and content types in stable stream columns', async () => {
@@ -178,10 +178,16 @@ describe('Frontend SPA Component Architecture & Mobile UI Interactions', () => {
     });
   });
 
-  it('triggers global re-scrape when Sync All button is clicked', async () => {
+  it('triggers global re-scrape when Sync All is clicked inside Data & Sync settings', async () => {
     render(<App />);
 
-    const syncBtn = screen.getByTitle(/Global Re-scrape/i);
+    const settingsBtn = screen.getByRole('button', { name: 'Settings' });
+    fireEvent.click(settingsBtn);
+
+    const dataTab = screen.getByRole('button', { name: /Data & Sync/i });
+    fireEvent.click(dataTab);
+
+    const syncBtn = screen.getByRole('button', { name: /Sync All/i });
     fireEvent.click(syncBtn);
 
     await waitFor(() => {
@@ -199,17 +205,20 @@ describe('Frontend SPA Component Architecture & Mobile UI Interactions', () => {
     expect(screen.getByText('Save to Slip')).toBeInTheDocument();
   });
 
-  it('opens appearance settings modal when theme button is clicked', async () => {
+  it('opens consolidated settings modal when Settings button is clicked', async () => {
     render(<App />);
 
-    const themeBtn = screen.getByLabelText(/Theme & Appearance settings/i);
-    expect(themeBtn).toBeInTheDocument();
+    const settingsBtn = screen.getByRole('button', { name: 'Settings' });
+    expect(settingsBtn).toBeInTheDocument();
 
-    fireEvent.click(themeBtn);
-    expect(screen.getByText('Appearance')).toBeInTheDocument();
+    fireEvent.click(settingsBtn);
+    expect(screen.getByText('Color Mode')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Appearance' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Data & Sync' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'API Keys' })).toBeInTheDocument();
   });
 
-  it('opens mobile overflow menu and presents sync, import, export, and logout options', async () => {
+  it('opens mobile overflow menu and opens settings modal on selection', async () => {
     render(<App />);
 
     const moreBtn = screen.getByLabelText('Open menu');
@@ -217,30 +226,34 @@ describe('Frontend SPA Component Architecture & Mobile UI Interactions', () => {
 
     fireEvent.click(moreBtn);
 
+    const settingsBtns = await waitFor(() => screen.getAllByRole('button', { name: /Settings/i }));
+    expect(settingsBtns.length).toBeGreaterThan(0);
+
+    fireEvent.click(settingsBtns[settingsBtns.length - 1]);
+
     await waitFor(() => {
-      expect(screen.getByText(/Sync & Re-scrape All/i)).toBeInTheDocument();
-      expect(screen.getByText(/Import Bookmarks/i)).toBeInTheDocument();
-      expect(screen.getByText(/Export Bookmarks/i)).toBeInTheDocument();
-      expect(screen.getByText(/Log out \(@testuser\)/i)).toBeInTheDocument();
+      expect(screen.getByText('Color Mode')).toBeInTheDocument();
     });
   });
 
-  it('opens and closes Add User modal when admin clicks Add User', async () => {
+  it('allows managing users directly inside Settings modal Users tab', async () => {
     render(<App />);
 
-    const addUserBtn = await screen.findByTitle('Manage Users & API Keys');
-    expect(addUserBtn).toBeInTheDocument();
+    const settingsBtn = screen.getByRole('button', { name: 'Settings' });
+    fireEvent.click(settingsBtn);
 
-    fireEvent.click(addUserBtn);
+    const usersTab = await waitFor(() => screen.getByRole('button', { name: 'Users' }));
+    fireEvent.click(usersTab);
 
-    expect(screen.getByText('Manage Users')).toBeInTheDocument();
-    expect(screen.getByPlaceholderText(/e.g. alex/i)).toBeInTheDocument();
+    expect(screen.getByText('Create New User')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('Username')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText(/Password \(8\+ chars\)/i)).toBeInTheDocument();
 
     const closeBtn = screen.getByLabelText('Close modal');
     fireEvent.click(closeBtn);
 
     await waitFor(() => {
-      expect(screen.queryByText('Manage Users')).not.toBeInTheDocument();
+      expect(screen.queryByText('Create New User')).not.toBeInTheDocument();
     });
   });
 
