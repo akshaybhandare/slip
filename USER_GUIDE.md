@@ -28,12 +28,13 @@ graph TD
 ---
 
 ## 🎮 QUEST 1: Awakening the Server
-*Objective: Understand what you just installed on Unraid.*
+*Objective: Install and understand what you just launched on Unraid.*
 
-💬 **Slippy**: *"Behold! You've successfully summoned Slip onto your Unraid array! I've set up shop inside a tiny Alpine container running on port 3000. All your saved bookmarks, cache images, and databases are stored safely under your server's `/config` directory."*
+💬 **Slippy**: *"Behold! You've successfully summoned Slip onto your Unraid array! You can install me in 1-click directly from the Unraid **Apps** tab by searching for **Slip**. I've set up shop inside a tiny Alpine container running on port 3000. All your saved bookmarks, cache images, and databases are stored safely under your server's `/config` directory."*
 
 ```text
 📋 QUEST LOG:
+[✓] Install in 1-Click via Unraid Community Applications (Apps tab)
 [✓] Summon container on Port 3000
 [✓] Establish persistent vault in /mnt/user/appdata/slip
 ```

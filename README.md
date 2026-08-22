@@ -11,7 +11,7 @@
 [![React](https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=black)](https://react.dev/)
 [![SQLite](https://img.shields.io/badge/SQLite-WAL%20%2B%20FTS5-003B57?logo=sqlite&logoColor=white)](https://www.sqlite.org/)
 [![Docker](https://img.shields.io/badge/Docker-Ready-2496ED?logo=docker&logoColor=white)](https://www.docker.com/)
-[![Unraid](https://img.shields.io/badge/Unraid-Compatible-F15A24?logo=unraid&logoColor=white)](https://unraid.net/)
+[![Unraid CA](https://img.shields.io/badge/Unraid%20CA-Available%20Now-F15A24?logo=unraid&logoColor=white)](https://unraid.net/community/apps)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 </div>
@@ -126,6 +126,20 @@ Open [**`http://localhost:3000`**](http://localhost:3000) in your browser. The f
 ---
 
 ## 🖥️ Unraid Server Deployment
+
+### Option 1: 1-Click Install via Community Applications (Recommended)
+
+1. Open your Unraid web GUI and navigate to the **Apps** tab.
+2. Search for **`Slip`**.
+3. Click **Install** — the official template automatically pre-configures:
+   * **WebUI Port**: `3000` (can be mapped to any host port like `3080`)
+   * **Appdata Volume**: `/mnt/user/appdata/slip` -> `/config`
+   * **PUID / PGID**: `99` / `100` (unraid `nobody` / `users`)
+4. Click **Apply** and open the WebUI!
+
+---
+
+### Option 2: Manual Docker / Compose Configuration
 
 1. **Create Appdata Directory**:
    ```bash
