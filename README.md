@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="docs/slippy_mascot.jpg" alt="Slippy the Mascot" width="200" height="200" style="border-radius: 20px" />
+<img src="frontend/public/icon.svg" alt="Slip Logo" width="80" height="80" />
 
 # Slip
 
