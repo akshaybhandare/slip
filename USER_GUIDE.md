@@ -5,14 +5,9 @@
 
 ## 🗺️ Meet Your Guide
 
-```text
-       /\___/\
-      (  o   o )  <-- "Hi! I'm Slippy, your local database companion!
-      (  =^=  )        Let's get Slip set up on your Unraid server."
-      (        )
-      (         )
-     (___(___)__)
-```
+<img src="docs/slippy_mascot.jpg" alt="Slippy the Mascot" width="180" height="180" style="border-radius: 20px;" />
+
+💬 **Slippy**: *"Hi! I'm Slippy, your local database companion! Let's get Slip set up on your Unraid server."*
 
 ---
 

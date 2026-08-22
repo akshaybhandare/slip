@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="frontend/public/icon.svg" alt="Slip Logo" width="80" height="80" />
+<img src="docs/slippy_mascot.jpg" alt="Slippy the Mascot" width="200" height="200" style="border-radius: 20px" />
 
 # Slip
 
@@ -15,6 +15,10 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 </div>
+
+---
+
+💬 **Slippy**: *"Welcome, adventurer! I am Slippy, your database mascot companion. I am here to help you store your digital loot—articles, images, clips, and tags—directly on your home server. For a full gamified walkthrough on how to harness my powers, check out the official [USER_GUIDE.md](USER_GUIDE.md)!"*
 
 ---
 
