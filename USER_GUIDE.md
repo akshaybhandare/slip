@@ -1,128 +1,129 @@
-# 🔖 SLIP: A Self-Hosted Visual Quest
-*A Visual Guide to Archiving, Reading, and Teleporting Your Bookmarks.*
+# 🔖 SLIP: The Visual Archiving Chronicles
+*A Guided Visual Quest with Slippy, your Server Companion.*
 
 ---
 
-## 🗺️ The Map of Your Journey
+## 🗺️ Meet Your Guide
 
-```mermaid
-graph TD
-    A["🌟 Step 1: Start (Unraid Dashboard)"] --> B["📂 Step 2: Organize (Clips & Tags)"]
-    B --> C["🤖 Step 3: Summon AI (BYO-AI Keys)"]
-    C --> D["⚡ Step 4: Automate (iOS Share Sheet)"]
-    D --> E["🌀 Step 5: Teleport (Tailscale Remote Access)"]
-
-    style A fill:#f9f,stroke:#333,stroke-width:2px
-    style E fill:#85e3ff,stroke:#333,stroke-width:2px
+```text
+       /\___/\
+      (  o   o )  <-- "Hi! I'm Slippy, your local database companion!
+      (  =^=  )        Let's get Slip set up on your Unraid server."
+      (        )
+      (         )
+     (___(___)__)
 ```
 
 ---
 
-## 📖 Chapter 1: The Quest Board (Core Concepts)
+## 🎮 QUEST 1: Awakening the Server
+*Objective: Understand what you just installed on Unraid.*
 
-```markdown
-### 🎨 1. What is Slip?
-Imagine a clean, high-density masonry grid of cards representing everything you want to remember. 
-No ugly blue links. Slip saves visual previews, extracts readable text, and takes automated screenshots of articles, products, and notes.
+💬 **Slippy**: *"Behold! You've successfully summoned Slip onto your Unraid array! I've set up shop inside a tiny Alpine container running on port 3000. All your saved bookmarks, cache images, and databases are stored safely under your server's `/config` directory."*
+
+```text
+📋 QUEST LOG:
+[✓] Summon container on Port 3000
+[✓] Establish persistent vault in /mnt/user/appdata/slip
+```
 
 > [!NOTE]
-> All files, caches, and the database live entirely on your hardware.
-
-### 📁 2. Clips vs. Tags
-* **Tags** (`#inspiration`, `#dev`): Fast, lightweight labels for filtering the main stream.
-* **Clips** (Folders): Hierarchical structures that let you nest collections (e.g. `Hobbies` ➔ `3D Printing`). 
-
-> [!TIP]
-> Clips are hidden by default to keep your interface clean and zen-like. Pin your favorites to the sidebar for easy access!
-
-### ♻️ 3. The Recycle Shield (Soft Delete)
-Deleting a card moves it to the Recycle Clip (Soft Delete). 
-* **6-Second Time Warp**: When you delete a card, a toast banner pops up. You have 6 seconds to click Undo to instantly restore it.
-* **Cascade Choice**: Deleting a parent folder gives you the option to Promote nested items up a level, or Cascade delete the whole family.
-
-### 🔌 4. Integrations & Portals
-* **Browser Extension**: Capture pages in 1 click using Cmd+Shift+S.
-* **iOS Shortcut**: Post links straight from Safari's Share Sheet in under a second using your generated API key.
-```
+> **Slippy's Safety Guard**: I use your Unraid `PUID` and `PGID` settings to make sure I don't write files with root permissions, so you never get those annoying permission locks on your shares!
 
 ---
 
-## 🤖 Chapter 2: Summoning the AI Companion (BYO-AI)
+## 🤖 QUEST 2: Summoning the AI Core (BYO-AI)
+*Objective: Decide whether to play as a Classic Archiver or an AI Wizard.*
 
-Slip comes with a **Bring Your Own AI (BYO-AI)** engine. If you connect an LLM, you unlock advanced semantic search and automated tagging. If you don't, the app morphs into a clean, traditional bookmark archiver with zero AI clutter.
+💬 **Slippy**: *"Here is where you make a choice. You can play Slip in two modes. I will adapt to whatever you choose!"*
 
 ```mermaid
-flowchart LR
-    A["API Key Connected?"] -- Yes --> B["🧠 Unlock Semantic Search & Auto-Tagging"]
-    A -- No --> C["🛡️ Classic Zero-AI Mode (Hidden AI Buttons)"]
+flowchart TD
+    A["Choose your path"] -->|Classic Path| B["🛡️ Pure Bookmarking (Zero-AI Clutter)"]
+    A -->|Wizard Path| C["🧠 Summon AI Core (OpenAI/Gemini/Ollama)"]
 ```
+
+💬 **Slippy**: *"If you want the AI Wizard path, bring me your API keys from **OpenAI**, **Claude**, **Gemini**, or even a local **Ollama** server. Go to **Settings ➔ AI Configuration**, paste the key, and click Save. I'll encrypt it instantly with AES-256."*
+
+💬 **Slippy**: *"Once connected, I will automatically read your articles to tags, summarize notes, and let you search using conceptual thoughts instead of exact words!"*
+
+> [!TIP]
+> **Slippy's Promise**: Don't want AI? No problem. I'll hide all AI buttons, settings, and badges so they don't get in your way. No clutter, just fast bookmarking!
+
+---
+
+## 📂 QUEST 3: Sorting the Loot (Clips & Tags)
+*Objective: Organize your visual cards without making a mess.*
+
+💬 **Slippy**: *"Look at your dashboard! You can save articles, videos, design graphics, and products. Let's keep them tidy."*
+
+💬 **Slippy**: *"You have two tools in your inventory:"*
+
+* **🏷️ Tags**: Flat, quick labels like `#inspiration` or `#development`. Tap them on any card to instantly filter your view.
+* **📁 Clips**: Think of these as secret compartments. You can nest them (e.g. `Hobbies` ➔ `3D Printing`). 
 
 > [!IMPORTANT]
-> **To summon your AI helper:**
-> 1. Go to **Settings** ➔ **AI Configuration**.
-> 2. Paste your API key from **OpenAI**, **Anthropic**, **Gemini**, or configure a local **Ollama** server.
-> 3. Click **Test & Save**. (All keys are encrypted in your SQLite database using AES-256).
+> **Slippy's Organizing Trick**: Unlike standard folders that crowd your view, Clips are **hidden by default**. Your dashboard stays clean. You can "pin" your favorite Clips to the sidebar to jump to them quickly!
 
 ---
 
-## 🌀 Chapter 3: Teleporting Your Access (Tailscale Anywhere)
+## ♻️ QUEST 4: The Recycle Shield (How Deletions Work)
+*Objective: Salvage items from accidental destruction.*
 
-Because Slip runs on your local Unraid server, it is normally locked to your home network. Instead of opening ports on your router (which exposes your server to hackers), we will create a secure **encrypted portal** using **Tailscale** to access Slip from your phone anywhere in the world.
+💬 **Slippy**: *"Whoops! Clicked delete on that recipe card by accident? Don't panic, I have deployed the **Recycle Shield**!"*
 
-### The Secure Connection Path:
-```mermaid
-sequenceDiagram
-    participant Device as 📱 Phone (LTE / Coffee Shop)
-    participant VPN as 🔒 Tailscale Secure Tunnel
-    participant Server as 🖥️ Unraid Server (Home)
-    participant App as 🔖 Slip Container (Port 3000)
-
-    Device->>VPN: Connect to Tailnet
-    VPN->>Server: Direct Encrypted Handshake
-    Server->>App: Forward request to port 3000
-    App-->>Device: Securely load Slip feed!
+```text
+[ Card Deleted! ] ───(6-Second Warp)───> [ Undo Toast ] ──(Click)──> [ Restored! ]
+                                             │ (Time Expires)
+                                             ▼
+                                     [ Recycle Clip ]
 ```
 
-### 🛠️ Quick Portal Setup:
+💬 **Slippy**: *"When you click delete, I hold the card in mid-air for **6 seconds**. You'll see a floating banner at the bottom. Tap **Undo** to bring it back instantly."*
 
-> [!TIP]
-> **Step 1: Install Tailscale on Unraid**
-> * Go to the **Apps** tab on your Unraid server.
-> * Search for **Tailscale** and click **Install**.
-> * Open the Tailscale configuration page and log in to link your server to your Tailscale network (your "Tailnet").
-> 
-> **Step 2: Get your Server's Magic IP**
-> * Look at your Tailscale admin console. You will see a unique IP assigned to your Unraid server (it will start with `100.x.y.z`). This is your server's permanent, private address.
-> 
-> **Step 3: Connect your Phone or Laptop**
-> * Download the Tailscale app on your iPhone, Android, or laptop.
-> * Log in with the same account.
-> * Turn Tailscale **ON**.
-> 
-> **Step 4: Load Slip Anywhere**
-> * In your browser or iOS shortcut, use your Tailscale IP instead of your local network IP:
->   `http://100.x.y.z:3000`
-> * You can now search, save, and read bookmarks securely from any cellular network or hotel Wi-Fi in the world!
+💬 **Slippy**: *"If you let the timer run out, the card goes to the **Recycle Clip**. It's not gone! You can open the Recycle Clip from the menu to restore it. If you want to permanently purge it, click **Empty Recycle Clip** to free up server space."*
 
 ---
 
-## 📱 Chapter 4: The 1-Second Capture (iOS Share Sheet)
+## 🌀 QUEST 5: The Teleportation Portal (Access Slip Anywhere)
+*Objective: Connect to your home server securely from anywhere in the world.*
 
-Configure your phone to save bookmarks in one tap:
+💬 **Slippy**: *"So, you're at a coffee shop and want to view your bookmarks? Normally, your Unraid server is locked inside your home network. But we can build a secure teleportation tunnel using **Tailscale**!"*
 
-1. Open **Shortcuts** on your iOS device and create a new shortcut named **Save to Slip**.
-2. Set it to **Receive URLs** from the Share Sheet.
-3. Configure a **"Get Contents of URL"** block as follows:
+```mermaid
+sequenceDiagram
+    participant Phone as 📱 Your Phone (LTE)
+    participant Portal as 🌀 Tailscale Encrypted Tunnel
+    participant Unraid as 🖥️ Unraid Server (Home)
+    
+    Phone->>Portal: "Activate Connection!"
+    Portal->>Unraid: Safe Handshake (Magic IP 100.x.y.z)
+    Unraid-->>Phone: Load Slip Instantly!
+```
+
+💬 **Slippy**: *"No port forwarding. No firewall holes. Here is the ritual:"*
+
+1. **Install Tailscale on Unraid**: Go to your Unraid **Apps** tab, search for **Tailscale**, and install it. Log in to register your server.
+2. **Find your Magic IP**: Look at your Tailscale dashboard. Your server will get a new IP address starting with `100.x.y.z`.
+3. **Install on your Phone**: Get the Tailscale app on your phone or laptop and log in. Turn it ON.
+4. **Access Slip**: Open your browser on the road and type `http://100.x.y.z:3000`. You are in!
+
+---
+
+## 📱 QUEST 6: The 1-Second Capture (iOS Share Sheet)
+*Objective: Save links directly from Safari in under a second.*
+
+💬 **Slippy**: *"Now, let's connect your phone's share button directly to my server!"*
+
+💬 **Slippy**: *"Go to **Settings ➔ API Keys** on your Slip dashboard, generate a new key, and copy the code. Then, create an iOS Shortcut like this:"*
 
 ```ini
 [POST] http://100.x.y.z:3000/api/bookmarks
 ├── Headers:
-│   ├── Authorization: Bearer YOUR_API_TOKEN
+│   ├── Authorization: Bearer YOUR_API_KEY
 │   └── Content-Type: application/json
 └── JSON Body:
-    └── url: [Shortcut Input]
+    └── url: [Safari Webpage URL]
 ```
 
-4. Toggle **"Show in Share Sheet"** in the shortcut's details panel.
-
-Now, simply share any Safari link, select **Save to Slip**, and teleport your bookmark home!
+💬 **Slippy**: *"Enable 'Show in Share Sheet'. Now, whenever you are reading a cool article on Safari, just tap Share ➔ Save to Slip. I will catch the link and archive it in under a second!"*
