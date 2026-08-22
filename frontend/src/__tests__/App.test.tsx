@@ -228,7 +228,7 @@ describe('Frontend SPA Component Architecture & Mobile UI Interactions', () => {
   it('opens and closes Add User modal when admin clicks Add User', async () => {
     render(<App />);
 
-    const addUserBtn = await screen.findByTitle('Add User');
+    const addUserBtn = await screen.findByTitle('Manage Users & API Keys');
     expect(addUserBtn).toBeInTheDocument();
 
     fireEvent.click(addUserBtn);

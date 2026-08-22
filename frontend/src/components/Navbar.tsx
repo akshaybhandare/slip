@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Bookmark as BookmarkIcon, Search, Plus, Upload, Download, LogOut, RefreshCw, X, Sun, Moon, Monitor, MoreVertical, UserPlus, Sparkles, CornerDownLeft, Paperclip, Trash2 } from 'lucide-react';
+import { Bookmark as BookmarkIcon, Search, Plus, Upload, Download, LogOut, RefreshCw, X, Sun, Moon, Monitor, MoreVertical, UserPlus, Sparkles, CornerDownLeft, Paperclip, Trash2, Key } from 'lucide-react';
 import { User } from '../types';
 import { ThemeMode } from '../hooks/useTheme';
 
@@ -27,6 +27,7 @@ interface NavbarProps {
   onOpenRecycleClip?: () => void;
   recycleCount?: number;
   isRecycleClipActive?: boolean;
+  onManageAccountClick?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -37,7 +38,6 @@ export const Navbar: React.FC<NavbarProps> = ({
   isSmartSearch = false,
   onToggleSmartSearch,
   onAddClick,
-  onAddUserClick,
   onImportClick,
   onRescrapeAllClick,
   isRescrapingAll,
@@ -52,7 +52,8 @@ export const Navbar: React.FC<NavbarProps> = ({
   onToggleClipsView,
   onOpenRecycleClip,
   recycleCount = 0,
-  isRecycleClipActive = false
+  isRecycleClipActive = false,
+  onManageAccountClick
 }) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -169,9 +170,14 @@ export const Navbar: React.FC<NavbarProps> = ({
               </button>
             )}
 
-            {user?.isAdmin && onAddUserClick && (
-              <button className="btn btn-secondary" onClick={onAddUserClick} title="Add User">
-                <UserPlus size={15} />
+            {user && onManageAccountClick && (
+              <button
+                className="btn btn-secondary"
+                onClick={onManageAccountClick}
+                title={user.isAdmin ? "Manage Users & API Keys" : "API Keys"}
+                aria-label={user.isAdmin ? "Manage Users & API Keys" : "API Keys"}
+              >
+                {user.isAdmin ? <UserPlus size={15} /> : <Key size={15} />}
               </button>
             )}
 
@@ -265,16 +271,16 @@ export const Navbar: React.FC<NavbarProps> = ({
                   <span>Export HTML Bookmarks</span>
                 </a>
 
-                {user?.isAdmin && onAddUserClick && (
+                {user && onManageAccountClick && (
                   <button
                     className="nav-dropdown-item"
                     onClick={() => {
                       setIsMenuOpen(false);
-                      onAddUserClick();
+                      onManageAccountClick();
                     }}
                   >
-                    <UserPlus size={15} />
-                    <span>Add User</span>
+                    {user.isAdmin ? <UserPlus size={15} /> : <Key size={15} />}
+                    <span>{user.isAdmin ? "Users & API Keys" : "API Keys"}</span>
                   </button>
                 )}
 

@@ -465,5 +465,32 @@ export async function setBookmarkClips(bookmarkId: number, clipIds: number[]): P
   });
 }
 
+// --- API Keys APIs ---
+
+export interface APIKeyListItem {
+  id: number;
+  name: string;
+  created_at: string;
+  user_id: number;
+  username: string;
+}
+
+export async function fetchAPIKeys(): Promise<APIKeyListItem[]> {
+  return apiFetch<APIKeyListItem[]>('/auth/apikey');
+}
+
+export async function createAPIKey(name: string, userId?: number): Promise<{ message: string; apiKey: string }> {
+  return apiFetch<{ message: string; apiKey: string }>('/auth/apikey', {
+    method: 'POST',
+    body: JSON.stringify({ name, userId })
+  });
+}
+
+export async function deleteAPIKey(id: number): Promise<{ message: string }> {
+  return apiFetch<{ message: string }>(`/auth/apikey/${id}`, {
+    method: 'DELETE'
+  });
+}
+
 
 

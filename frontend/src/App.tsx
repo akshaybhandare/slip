@@ -146,6 +146,7 @@ export const App: React.FC = () => {
   const [managingClipsBookmark, setManagingClipsBookmark] = useState<Bookmark | null>(null);
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [isAddUserOpen, setIsAddUserOpen] = useState(false);
+  const [userModalTab, setUserModalTab] = useState<'users' | 'apikeys'>('users');
   const [isAIOpen, setIsAIOpen] = useState(false);
   const [droppedFile, setDroppedFile] = useState<File | null>(null);
   const [isImportOpen, setIsImportOpen] = useState(false);
@@ -507,7 +508,10 @@ export const App: React.FC = () => {
         isSmartSearch={effectiveSmartSearch}
         onToggleSmartSearch={handleToggleSmartSearch}
         onAddClick={() => setIsAddOpen(true)}
-        onAddUserClick={() => setIsAddUserOpen(true)}
+        onManageAccountClick={() => {
+          setUserModalTab(user?.isAdmin ? 'users' : 'apikeys');
+          setIsAddUserOpen(true);
+        }}
         onImportClick={() => setIsImportOpen(true)}
         onRescrapeAllClick={handleRescrapeAll}
         isRescrapingAll={isRescrapingAll}
@@ -709,6 +713,8 @@ export const App: React.FC = () => {
       <AddUserModal
         isOpen={isAddUserOpen}
         onClose={() => setIsAddUserOpen(false)}
+        currentUser={user}
+        initialTab={userModalTab}
       />
 
       {/* 6-Second Instant Undo Toast Notification */}

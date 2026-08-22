@@ -335,15 +335,23 @@ router.get('/status', (req, res) => {
 
 // 4. Create API Key
 router.post('/apikey', authenticate, (req: AuthenticatedRequest, res: Response) => {
-  const { name } = req.body;
+  const { name, userId } = req.body;
   const user = req.user!;
+  const isAdmin = user.id === 1;
 
   try {
+    const targetUserId = (isAdmin && userId) ? Number(userId) : user.id;
+
+    const db = getDb();
+    const targetUser = db.prepare('SELECT id FROM users WHERE id = ?').get(targetUserId);
+    if (!targetUser) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
     const rawKey = 'slip_' + crypto.randomBytes(32).toString('hex');
     const tokenHash = crypto.createHash('sha256').update(rawKey).digest('hex');
 
-    const db = getDb();
-    db.prepare('INSERT INTO api_keys (user_id, token_hash, name) VALUES (?, ?, ?)').run(user.id, tokenHash, name || 'API Key');
+    db.prepare('INSERT INTO api_keys (user_id, token_hash, name) VALUES (?, ?, ?)').run(targetUserId, tokenHash, name || 'API Key');
 
     res.status(201).json({
       message: 'API Key generated successfully',
@@ -358,10 +366,27 @@ router.post('/apikey', authenticate, (req: AuthenticatedRequest, res: Response) 
 // 5. List API Keys (Metadatas only)
 router.get('/apikey', authenticate, (req: AuthenticatedRequest, res: Response) => {
   const user = req.user!;
+  const isAdmin = user.id === 1;
 
   try {
     const db = getDb();
-    const keys = db.prepare('SELECT id, name, created_at FROM api_keys WHERE user_id = ?').all(user.id);
+    let keys;
+    if (isAdmin) {
+      keys = db.prepare(`
+        SELECT api_keys.id, api_keys.name, api_keys.created_at, api_keys.user_id, users.username 
+        FROM api_keys 
+        JOIN users ON api_keys.user_id = users.id
+        ORDER BY api_keys.created_at DESC
+      `).all();
+    } else {
+      keys = db.prepare(`
+        SELECT api_keys.id, api_keys.name, api_keys.created_at, api_keys.user_id, users.username 
+        FROM api_keys 
+        JOIN users ON api_keys.user_id = users.id 
+        WHERE api_keys.user_id = ?
+        ORDER BY api_keys.created_at DESC
+      `).all(user.id);
+    }
     res.status(200).json(keys);
   } catch (err) {
     console.error('List API keys error:', err);
@@ -373,10 +398,16 @@ router.get('/apikey', authenticate, (req: AuthenticatedRequest, res: Response) =
 router.delete('/apikey/:id', authenticate, (req: AuthenticatedRequest, res: Response) => {
   const { id } = req.params;
   const user = req.user!;
+  const isAdmin = user.id === 1;
 
   try {
     const db = getDb();
-    const result = db.prepare('DELETE FROM api_keys WHERE id = ? AND user_id = ?').run(id, user.id);
+    let result;
+    if (isAdmin) {
+      result = db.prepare('DELETE FROM api_keys WHERE id = ?').run(id);
+    } else {
+      result = db.prepare('DELETE FROM api_keys WHERE id = ? AND user_id = ?').run(id, user.id);
+    }
 
     if (result.changes === 0) {
       return res.status(404).json({ message: 'API Key not found or unauthorized' });
