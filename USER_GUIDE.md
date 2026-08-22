@@ -11,6 +11,22 @@
 
 ---
 
+## 🗺️ The Map of Your Journey
+
+```mermaid
+graph TD
+    A["🌟 Step 1: Start (Unraid Dashboard)"] --> B["💎 Step 2: Collect (Slip Types & Ingestion)"]
+    B --> C["📂 Step 3: Organize (Clips & Tags)"]
+    C --> D["🤖 Step 4: Summon AI (BYO-AI Keys)"]
+    D --> E["⚡ Step 5: Automate (iOS Share Sheet)"]
+    E --> F["🌀 Step 6: Teleport (Tailscale Remote Access)"]
+
+    style A fill:#f9f,stroke:#333,stroke-width:2px
+    style F fill:#85e3ff,stroke:#333,stroke-width:2px
+```
+
+---
+
 ## 🎮 QUEST 1: Awakening the Server
 *Objective: Understand what you just installed on Unraid.*
 
@@ -27,7 +43,26 @@
 
 ---
 
-## 🤖 QUEST 2: Summoning the AI Core (BYO-AI)
+## 💎 QUEST 2: Discovering the Types of Slips (Your Inventory)
+*Objective: Learn about the different items you can collect and how they ingest.*
+
+💬 **Slippy**: *"Let's take a look at what kinds of loot you can store in your vault. When you feed me a link or write a note, I dynamically analyze and classify it into one of these types:"*
+
+* **📖 Articles**: If you save a written article (like a blog or news page), I extract the readable text and clean up ads/trackers. You can open them in our distraction-free **Reader Mode**, change typography, and highlight key sentences.
+* **🎥 Videos**: Paste a YouTube, Vimeo, or video link, and I will create an embed player directly on the card so you can watch it without leaving your feed.
+* **🛍️ Products**: Save a store page (Amazon, Shopify, etc.), and I'll extract product images, descriptions, and help you keep track of your shopping lists.
+* **🖼️ Images**: Drag in or paste direct image URLs, and I'll display them in a high-density visual gallery masonry grid.
+* **🌐 Websites**: For generic links, I'll grab OpenGraph metadata (title, description, cover image) and automatically fall back to full-page screenshots if firewalls block access.
+* **📝 Notes**: Write your own private thoughts in Markdown. Click the **Note icon** on any card or create standalone notes. These are indexed by FTS5, so they show up in your searches!
+
+💬 **Slippy**: *"How do we get these items into our collection? You have three main portals:"*
+1. **The Ingestion Bar**: Paste any link or type a quick note directly at the top of your dashboard.
+2. **Bulk Import**: Go to **Settings ➔ Import/Export** to upload a standard Netscape HTML file from Chrome, Safari, or Raindrop. I will import all your bookmarks in bulk!
+3. **External Portals**: Use our desktop browser extension or iOS Share sheet shortcut.
+
+---
+
+## 🤖 QUEST 3: Summoning the AI Core (BYO-AI)
 *Objective: Decide whether to play as a Classic Archiver or an AI Wizard.*
 
 💬 **Slippy**: *"Here is where you make a choice. You can play Slip in two modes. I will adapt to whatever you choose!"*
@@ -47,7 +82,7 @@ flowchart TD
 
 ---
 
-## 📂 QUEST 3: Sorting the Loot (Clips & Tags)
+## 📂 QUEST 4: Sorting the Loot (Clips & Tags)
 *Objective: Organize your visual cards without making a mess.*
 
 💬 **Slippy**: *"Look at your dashboard! You can save articles, videos, design graphics, and products. Let's keep them tidy."*
@@ -62,7 +97,7 @@ flowchart TD
 
 ---
 
-## ♻️ QUEST 4: The Recycle Shield (How Deletions Work)
+## ♻️ QUEST 5: The Recycle Shield (How Deletions Work)
 *Objective: Salvage items from accidental destruction.*
 
 💬 **Slippy**: *"Whoops! Clicked delete on that recipe card by accident? Don't panic, I have deployed the **Recycle Shield**!"*
@@ -80,7 +115,7 @@ flowchart TD
 
 ---
 
-## 🌀 QUEST 5: The Teleportation Portal (Access Slip Anywhere)
+## 🌀 QUEST 6: The Teleportation Portal (Access Slip Anywhere)
 *Objective: Connect to your home server securely from anywhere in the world.*
 
 💬 **Slippy**: *"So, you're at a coffee shop and want to view your bookmarks? Normally, your Unraid server is locked inside your home network. But we can build a secure teleportation tunnel using **Tailscale**!"*
@@ -105,7 +140,7 @@ sequenceDiagram
 
 ---
 
-## 📱 QUEST 6: The 1-Second Capture (iOS Share Sheet)
+## 📱 QUEST 7: The 1-Second Capture (iOS Share Sheet)
 *Objective: Save links directly from Safari in under a second.*
 
 💬 **Slippy**: *"Now, let's connect your phone's share button directly to my server!"*
