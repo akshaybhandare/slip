@@ -531,16 +531,16 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
 
         <div className="card-actions">
           {isRecycleBin ? (
-            <div className="recycle-card-actions" style={{ display: 'flex', width: '100%', gap: '8px', justifyContent: 'space-between' }}>
+            <div className="recycle-card-actions">
               {onRestore && (
                 <button
+                  type="button"
                   className="btn btn-secondary btn-recycle-restore"
                   title="Restore Slip to active archive"
                   onClick={(e) => {
                     e.stopPropagation();
                     onRestore(bookmark.id);
                   }}
-                  style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '12px', padding: '5px 10px', flex: 1, justifyContent: 'center' }}
                 >
                   <RotateCcw size={13} style={{ color: 'var(--color-primary)' }} />
                   <span>Restore</span>
@@ -548,13 +548,13 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
               )}
               {onPermanentDelete && (
                 <button
+                  type="button"
                   className="btn btn-secondary btn-recycle-delete-perm"
                   title="Permanently eradicate this slip"
                   onClick={(e) => {
                     e.stopPropagation();
                     onPermanentDelete(bookmark.id);
                   }}
-                  style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '12px', padding: '5px 10px', color: '#ef4444', flex: 1, justifyContent: 'center' }}
                 >
                   <Trash2 size={13} />
                   <span>Delete Forever</span>

@@ -972,6 +972,47 @@ body {
     margin-top: 6px;
   }
 
+  .recycle-card-actions {
+    flex-direction: column;
+    gap: 6px;
+    width: 100%;
+  }
+
+  .btn-recycle-restore,
+  .btn-recycle-delete-perm {
+    width: 100%;
+    padding: 6px 8px;
+    font-size: 11.5px;
+  }
+
+  .deleted-clips-grid {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .deleted-clip-card {
+    padding: 10px 12px;
+    gap: 8px;
+  }
+
+  .deleted-clip-left {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .deleted-clip-info {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .deleted-clip-name {
+    max-width: 100%;
+  }
+
+  .deleted-clip-actions {
+    flex-shrink: 0;
+  }
+
   .card-actions-left,
   .card-actions-right {
     gap: 6px;
@@ -3859,6 +3900,26 @@ body {
   background: var(--color-tertiary);
 }
 
+.recycle-card-actions {
+  display: flex;
+  width: 100%;
+  gap: 8px;
+  justify-content: space-between;
+}
+
+.btn-recycle-restore,
+.btn-recycle-delete-perm {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  padding: 5px 10px;
+  flex: 1;
+  justify-content: center;
+  min-width: 0;
+  white-space: nowrap;
+}
+
 .btn-recycle-restore {
   transition: all 0.15s ease;
 }
@@ -3866,6 +3927,11 @@ body {
 .btn-recycle-restore:hover {
   border-color: var(--color-primary) !important;
   color: var(--color-primary) !important;
+}
+
+.btn-recycle-delete-perm {
+  color: #ef4444;
+  transition: all 0.15s ease;
 }
 
 .btn-recycle-delete-perm:hover {
