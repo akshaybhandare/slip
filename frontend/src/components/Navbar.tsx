@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Bookmark as BookmarkIcon, Search, Plus, Upload, Download, LogOut, RefreshCw, X, Sun, Moon, Monitor, MoreVertical, UserPlus, Sparkles, CornerDownLeft, Paperclip, Trash2, Key } from 'lucide-react';
+import { Bookmark as BookmarkIcon, Search, Plus, Upload, Download, LogOut, RefreshCw, X, Sun, Moon, Monitor, MoreVertical, UserPlus, Sparkles, CornerDownLeft, Paperclip, Trash2, Key, Palette, ArrowDownUp } from 'lucide-react';
 import { User } from '../types';
 import { ThemeMode } from '../hooks/useTheme';
 
@@ -11,7 +11,6 @@ interface NavbarProps {
   isSmartSearch?: boolean;
   onToggleSmartSearch?: () => void;
   onAddClick: () => void;
-  onAddUserClick?: () => void;
   onImportClick: () => void;
   onRescrapeAllClick: () => void;
   isRescrapingAll: boolean;
@@ -21,7 +20,7 @@ interface NavbarProps {
   aiProviderName?: string;
   user: User | null;
   themeMode?: ThemeMode;
-  onToggleTheme?: () => void;
+  onOpenThemeModal?: () => void;
   isClipsView?: boolean;
   onToggleClipsView?: () => void;
   onOpenRecycleClip?: () => void;
@@ -47,7 +46,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   aiProviderName,
   user,
   themeMode = 'system',
-  onToggleTheme,
+  onOpenThemeModal,
   isClipsView = false,
   onToggleClipsView,
   onOpenRecycleClip,
@@ -57,31 +56,28 @@ export const Navbar: React.FC<NavbarProps> = ({
 }) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const [isDataMenuOpen, setIsDataMenuOpen] = useState(false);
+  const dataMenuRef = useRef<HTMLDivElement>(null);
 
-  // Close menu on click outside
+  // Close menus on click outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
         setIsMenuOpen(false);
       }
+      if (dataMenuRef.current && !dataMenuRef.current.contains(event.target as Node)) {
+        setIsDataMenuOpen(false);
+      }
     };
 
-    if (isMenuOpen) {
-      document.addEventListener('mousedown', handleClickOutside);
-      return () => document.removeEventListener('mousedown', handleClickOutside);
-    }
-  }, [isMenuOpen]);
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   const getThemeIcon = () => {
     if (themeMode === 'light') return <Sun size={15} />;
     if (themeMode === 'dark') return <Moon size={15} />;
     return <Monitor size={15} />;
-  };
-
-  const getThemeTitle = () => {
-    if (themeMode === 'light') return 'Theme: Light (Click for Dark)';
-    if (themeMode === 'dark') return 'Theme: Dark (Click for System)';
-    return 'Theme: System Auto (Click for Light)';
   };
 
   return (
@@ -101,13 +97,13 @@ export const Navbar: React.FC<NavbarProps> = ({
             <span className="btn-text-hide-mobile">Save</span>
           </button>
 
-          {/* Theme Switcher */}
-          {onToggleTheme && (
+          {/* Single Unified Theme & Appearance Button */}
+          {onOpenThemeModal && (
             <button
               className="btn btn-secondary theme-toggle-btn"
-              onClick={onToggleTheme}
-              title={getThemeTitle()}
-              aria-label="Toggle light, dark, and system theme"
+              onClick={onOpenThemeModal}
+              title={`Appearance: ${themeMode === 'light' ? 'Light' : themeMode === 'dark' ? 'Dark' : 'System'} mode (Click to customize)`}
+              aria-label="Theme & Appearance settings"
             >
               {getThemeIcon()}
             </button>
@@ -148,13 +144,42 @@ export const Navbar: React.FC<NavbarProps> = ({
               </button>
             )}
 
-            <button className="btn btn-secondary" onClick={onImportClick} title="Import HTML Bookmarks">
-              <Upload size={15} />
-            </button>
+            {/* Combined Import / Export Data Menu */}
+            <div className="nav-menu-wrapper" ref={dataMenuRef} style={{ position: 'relative' }}>
+              <button
+                className={`btn btn-secondary ${isDataMenuOpen ? 'active' : ''}`}
+                onClick={() => setIsDataMenuOpen(!isDataMenuOpen)}
+                title="Data: Import & Export Bookmarks"
+                aria-label="Import and Export Bookmarks"
+              >
+                <ArrowDownUp size={15} />
+              </button>
 
-            <a href="/api/io/export" className="btn btn-secondary" title="Export HTML Bookmarks" download>
-              <Download size={15} />
-            </a>
+              {isDataMenuOpen && (
+                <div className="nav-dropdown-menu" style={{ minWidth: '175px', top: 'calc(100% + 6px)', bottom: 'auto' }}>
+                  <button
+                    className="nav-dropdown-item"
+                    onClick={() => {
+                      setIsDataMenuOpen(false);
+                      onImportClick();
+                    }}
+                  >
+                    <Upload size={14} />
+                    <span>Import Bookmarks</span>
+                  </button>
+
+                  <a
+                    href="/api/io/export"
+                    className="nav-dropdown-item"
+                    download
+                    onClick={() => setIsDataMenuOpen(false)}
+                  >
+                    <Download size={14} />
+                    <span>Export Bookmarks</span>
+                  </a>
+                </div>
+              )}
+            </div>
 
             {onOpenRecycleClip && (
               <button
@@ -213,6 +238,18 @@ export const Navbar: React.FC<NavbarProps> = ({
                     <span>{isClipsView ? 'Main Stream' : 'Clips (Folders)'}</span>
                   </button>
                 )}
+                {onOpenThemeModal && (
+                  <button
+                    className="nav-dropdown-item"
+                    onClick={() => {
+                      setIsMenuOpen(false);
+                      onOpenThemeModal();
+                    }}
+                  >
+                    <Palette size={15} />
+                    <span>Theme & Appearance</span>
+                  </button>
+                )}
                 {onOpenRecycleClip && (
                   <button
                     className="nav-dropdown-item"
@@ -258,7 +295,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                   }}
                 >
                   <Upload size={15} />
-                  <span>Import HTML Bookmarks</span>
+                  <span>Import Bookmarks</span>
                 </button>
 
                 <a
@@ -268,7 +305,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                   onClick={() => setIsMenuOpen(false)}
                 >
                   <Download size={15} />
-                  <span>Export HTML Bookmarks</span>
+                  <span>Export Bookmarks</span>
                 </a>
 
                 {user && onManageAccountClick && (

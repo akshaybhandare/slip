@@ -409,29 +409,15 @@ export const ClipsView: React.FC<ClipsViewProps> = ({
 
         <div className="clips-top-right">
           {isViewingRecycleClip ? (
-            <>
-              <button
-                type="button"
-                className="btn btn-secondary"
-                onClick={() => setIsViewingRecycleClip(false)}
-                title="Back to Clips Deck"
-              >
-                <ArrowLeft size={14} />
-                <span>All Clips</span>
-              </button>
-              {(recycleSlips.length + recycleClips.length) > 0 && (
-                <button
-                  type="button"
-                  className="btn btn-primary"
-                  onClick={() => setIsEmptyConfirmOpen(true)}
-                  style={{ background: '#ef4444', borderColor: '#ef4444' }}
-                  title="Empty all items in Recycle Clip"
-                >
-                  <Trash2 size={14} />
-                  <span>Empty Recycle Clip</span>
-                </button>
-              )}
-            </>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={() => setIsViewingRecycleClip(false)}
+              title="Back to Clips Deck"
+            >
+              <ArrowLeft size={14} />
+              <span>All Clips</span>
+            </button>
           ) : currentClipDetail ? (
             <>
               <button
@@ -576,7 +562,7 @@ export const ClipsView: React.FC<ClipsViewProps> = ({
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
                         <Trash2 size={20} style={{ color: '#ef4444' }} />
                         <span className="deck-section-title" style={{ fontSize: '18px' }}>Recycle Clip</span>
-                        <span className="deck-count-pill" style={{ background: 'rgba(239, 68, 68, 0.1)', color: '#ef4444', marginLeft: '6px' }}>
+                        <span className="deck-count-pill" style={{ marginLeft: '6px' }}>
                           {recycleSlips.length + recycleClips.length} {(recycleSlips.length + recycleClips.length) === 1 ? 'item' : 'items'}
                         </span>
                       </div>
@@ -588,9 +574,9 @@ export const ClipsView: React.FC<ClipsViewProps> = ({
                         type="button"
                         className="btn btn-secondary"
                         onClick={() => setIsEmptyConfirmOpen(true)}
-                        style={{ color: '#ef4444', borderColor: 'rgba(239, 68, 68, 0.3)', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                        style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
                       >
-                        <Trash2 size={14} />
+                        <Trash2 size={14} style={{ color: '#ef4444' }} />
                         <span>Empty Recycle Clip</span>
                       </button>
                     )}
@@ -635,9 +621,9 @@ export const ClipsView: React.FC<ClipsViewProps> = ({
                                 className="btn btn-secondary btn-sm"
                                 onClick={() => handlePermanentDeleteClip(clip.id)}
                                 title="Delete Permanently"
-                                style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '4px 8px', fontSize: '12px', color: '#ef4444' }}
+                                style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '4px 8px', fontSize: '12px' }}
                               >
-                                <Trash2 size={12} />
+                                <Trash2 size={12} style={{ color: '#ef4444' }} />
                                 <span>Delete</span>
                               </button>
                             </div>

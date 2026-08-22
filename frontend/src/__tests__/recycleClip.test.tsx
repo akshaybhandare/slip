@@ -219,8 +219,8 @@ describe('Story 14: Recycle Clip Frontend UX & Components', () => {
         expect(screen.getByText('Trashed Slip')).toBeInTheDocument();
       });
 
-      // Click Empty Recycle Clip button in header
-      const emptyBtn = container.querySelector('.clips-top-right button.btn-primary') as HTMLElement;
+      // Click Empty Recycle Clip button in deck header
+      const emptyBtn = screen.getByRole('button', { name: /Empty Recycle Clip/i });
       expect(emptyBtn).toBeInTheDocument();
       fireEvent.click(emptyBtn);
 

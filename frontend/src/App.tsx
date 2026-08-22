@@ -33,6 +33,7 @@ import { ImportModal } from './components/ImportModal';
 import { AuthModal } from './components/AuthModal';
 import { AddUserModal } from './components/AddUserModal';
 import { AIConnectModal } from './components/AIConnectModal';
+import { ThemeModal } from './components/ThemeModal';
 import { ClipsView } from './components/ClipsView';
 import { AddToClipModal } from './components/AddToClipModal';
 import { BookmarkPlus, Plus, Sparkles, RotateCcw, X } from 'lucide-react';
@@ -41,7 +42,17 @@ import { useAIConfig } from './hooks/useAIConfig';
 import { AI_PROVIDERS } from './config/aiConfig';
 
 export const App: React.FC = () => {
-  const { themeMode, toggleTheme } = useTheme();
+  const {
+    themeMode,
+    themePreset,
+    customAccent,
+    setThemeMode,
+    setThemePreset,
+    setCustomAccent,
+    resetTheme,
+    toggleTheme
+  } = useTheme();
+  const [isThemeModalOpen, setIsThemeModalOpen] = useState(false);
   const [user, setUser] = useState<User | null>(null);
   const {
     aiConfig,
@@ -521,7 +532,7 @@ export const App: React.FC = () => {
         aiProviderName={AI_PROVIDERS[aiConfig.provider]?.name}
         user={user}
         themeMode={themeMode}
-        onToggleTheme={toggleTheme}
+        onOpenThemeModal={() => setIsThemeModalOpen(true)}
         isClipsView={isClipsView}
         onToggleClipsView={handleToggleClipsView}
         onOpenRecycleClip={handleOpenRecycleClip}
@@ -715,6 +726,18 @@ export const App: React.FC = () => {
         onClose={() => setIsAddUserOpen(false)}
         currentUser={user}
         initialTab={userModalTab}
+      />
+
+      <ThemeModal
+        isOpen={isThemeModalOpen}
+        onClose={() => setIsThemeModalOpen(false)}
+        themeMode={themeMode}
+        themePreset={themePreset}
+        customAccent={customAccent}
+        onSelectMode={setThemeMode}
+        onSelectPreset={setThemePreset}
+        onSetCustomAccent={setCustomAccent}
+        onResetTheme={resetTheme}
       />
 
       {/* 6-Second Instant Undo Toast Notification */}

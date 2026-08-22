@@ -31,9 +31,9 @@ export const SlipPinIcon: React.FC<{ isPinned: boolean; isPinning?: boolean; siz
   >
     <defs>
       <linearGradient id={`pinHeadGrad-${isPinned ? 'pinned' : 'unpinned'}`} x1="0" y1="0" x2="1" y2="1">
-        <stop offset="0%" stopColor={isPinned ? '#ff6042' : '#94a3b8'} />
-        <stop offset="55%" stopColor={isPinned ? '#e42b0c' : '#64748b'} />
-        <stop offset="100%" stopColor={isPinned ? '#a81a00' : '#475569'} />
+        <stop offset="0%" stopColor={isPinned ? 'var(--color-primary-hover, var(--color-primary))' : '#94a3b8'} />
+        <stop offset="55%" stopColor={isPinned ? 'var(--color-primary)' : '#64748b'} />
+        <stop offset="100%" stopColor={isPinned ? 'var(--color-primary)' : '#475569'} stopOpacity={isPinned ? 0.8 : 1} />
       </linearGradient>
       <linearGradient id={`pinNeedleGrad-${isPinned ? 'pinned' : 'unpinned'}`} x1="0" y1="0" x2="1" y2="1">
         <stop offset="0%" stopColor={isPinned ? '#e2e8f0' : '#cbd5e1'} />
@@ -228,7 +228,7 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
           className="note-card-banner"
           onClick={() => onOpenReader && onOpenReader(bookmark)}
           style={{
-            background: 'linear-gradient(135deg, rgba(228, 43, 12, 0.07) 0%, rgba(228, 43, 12, 0.02) 100%)',
+            background: 'linear-gradient(135deg, var(--color-primary-alpha-10, rgba(228, 43, 12, 0.07)) 0%, transparent 100%)',
             padding: '16px 18px 12px',
             borderBottom: '1px solid var(--color-border)',
             display: 'flex',
@@ -267,7 +267,7 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
           className="doc-card-banner"
           onClick={handleCardMediaClick}
           style={{
-            background: 'linear-gradient(135deg, rgba(228, 43, 12, 0.08) 0%, rgba(0, 0, 0, 0.02) 100%)',
+            background: 'linear-gradient(135deg, var(--color-primary-alpha-10, rgba(228, 43, 12, 0.08)) 0%, transparent 100%)',
             padding: '24px 20px',
             borderBottom: '1px solid var(--color-border)',
             display: 'flex',
@@ -556,7 +556,7 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
                     onPermanentDelete(bookmark.id);
                   }}
                 >
-                  <Trash2 size={13} />
+                  <Trash2 size={13} style={{ color: '#ef4444' }} />
                   <span>Delete Forever</span>
                 </button>
               )}

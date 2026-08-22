@@ -199,14 +199,14 @@ describe('Frontend SPA Component Architecture & Mobile UI Interactions', () => {
     expect(screen.getByText('Save to Slip')).toBeInTheDocument();
   });
 
-  it('toggles light, dark, and system themes when theme toggle button is clicked', async () => {
+  it('opens appearance settings modal when theme button is clicked', async () => {
     render(<App />);
 
-    const themeToggleBtn = screen.getByLabelText(/Toggle light, dark, and system theme/i);
-    expect(themeToggleBtn).toBeInTheDocument();
+    const themeBtn = screen.getByLabelText(/Theme & Appearance settings/i);
+    expect(themeBtn).toBeInTheDocument();
 
-    fireEvent.click(themeToggleBtn);
-    expect(document.documentElement.getAttribute('data-theme')).toBeTruthy();
+    fireEvent.click(themeBtn);
+    expect(screen.getByText('Appearance')).toBeInTheDocument();
   });
 
   it('opens mobile overflow menu and presents sync, import, export, and logout options', async () => {
@@ -219,8 +219,8 @@ describe('Frontend SPA Component Architecture & Mobile UI Interactions', () => {
 
     await waitFor(() => {
       expect(screen.getByText(/Sync & Re-scrape All/i)).toBeInTheDocument();
-      expect(screen.getByText(/Import HTML Bookmarks/i)).toBeInTheDocument();
-      expect(screen.getByText(/Export HTML Bookmarks/i)).toBeInTheDocument();
+      expect(screen.getByText(/Import Bookmarks/i)).toBeInTheDocument();
+      expect(screen.getByText(/Export Bookmarks/i)).toBeInTheDocument();
       expect(screen.getByText(/Log out \(@testuser\)/i)).toBeInTheDocument();
     });
   });
