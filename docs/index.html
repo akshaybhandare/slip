@@ -3,33 +3,36 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Slip — Self-Hosted Visual Bookmark Archive & Reading Space</title>
-  <meta name="description" content="A lightning-fast, self-hosted visual bookmark archive and reading space. Inspired by mymind. Built for self-hosters, creators, and researchers.">
-  <meta property="og:title" content="Slip — Visual Bookmark Archive & Reading Space">
-  <meta property="og:description" content="A lightning-fast, self-hosted visual bookmark archive and reading space.">
-  <meta property="og:type" content="website">
-  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='24' fill='%236366f1'/><path d='M30 45 L50 65 L70 35' stroke='white' stroke-width='10' stroke-linecap='round' stroke-linejoin='round' fill='none'/></svg>">
+  <title>Slip — Orderful Visual Bookmark Archive</title>
+  <meta name="description" content="A lightning-fast, self-hosted visual bookmark archive and reading space. Built for self-hosters, creators, and researchers.">
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='16' fill='%23e42b0c'/><path d='M30 45 L50 65 L70 35' stroke='white' stroke-width='10' stroke-linecap='round' stroke-linejoin='round' fill='none'/></svg>">
+  
   <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
   <!-- Lucide Icons -->
   <script src="https://unpkg.com/lucide@latest"></script>
+  
+  <!-- Font: Inter / Outfit fallback matching Telegraf light editorial style -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  
   <script>
     tailwind.config = {
-      darkMode: 'class',
       theme: {
         extend: {
+          fontFamily: {
+            sans: ['"Plus Jakarta Sans"', 'system-ui', 'sans-serif'],
+            mono: ['"JetBrains Mono"', 'monospace'],
+          },
           colors: {
-            brand: {
-              50: '#f5f3ff',
-              100: '#ede9fe',
-              200: '#ddd6fe',
-              300: '#c4b5fd',
-              400: '#a78bfa',
-              500: '#8b5cf6',
-              600: '#7c3aed',
-              700: '#6d28d9',
-              800: '#5b21b6',
-              900: '#4c1d95',
+            orderful: {
+              primary: '#e42b0c',
+              secondary: '#000000',
+              bg: '#f5f5f5',
+              surface: '#ffffff',
+              muted: '#4f5b6b',
+              border: '#e9e9e9',
             }
           }
         }
@@ -37,183 +40,293 @@
     }
   </script>
   <style>
-    @keyframes float {
-      0%, 100% { transform: translateY(0px); }
-      50% { transform: translateY(-8px); }
+    body {
+      background-color: #f5f5f5;
+      color: #000000;
+      font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+      -webkit-font-smoothing: antialiased;
     }
-    .floating {
-      animation: float 4s ease-in-out infinite;
+    .headline-display {
+      font-size: clamp(38px, 6vw, 60px);
+      font-weight: 300;
+      line-height: 1.05;
+      letter-spacing: -0.04em;
     }
-    .glass-card {
-      background: rgba(255, 255, 255, 0.7);
-      backdrop-filter: blur(16px);
-      border: 1px solid rgba(255, 255, 255, 0.4);
+    .headline-lg {
+      font-size: clamp(30px, 4.5vw, 46px);
+      font-weight: 300;
+      line-height: 1.15;
+      letter-spacing: -0.025em;
     }
-    .dark .glass-card {
-      background: rgba(30, 41, 59, 0.7);
-      backdrop-filter: blur(16px);
-      border: 1px solid rgba(255, 255, 255, 0.08);
+    .headline-md {
+      font-size: clamp(24px, 3.5vw, 35px);
+      font-weight: 300;
+      line-height: 1.2;
+      letter-spacing: -0.02em;
+    }
+    .card-orderful {
+      background-color: #ffffff;
+      border: 1px solid #e9e9e9;
+      border-radius: 8px;
+      padding: 32px;
+    }
+    .btn-primary {
+      background-color: #e42b0c;
+      color: #ffffff;
+      height: 40px;
+      padding: 0 24px;
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: 500;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      transition: background-color 0.15s ease;
+    }
+    .btn-primary:hover {
+      background-color: #c92408;
+    }
+    .btn-secondary {
+      background-color: transparent;
+      color: #000000;
+      height: 40px;
+      padding: 0 24px;
+      border-radius: 6px;
+      border: 1px solid #000000;
+      font-size: 14px;
+      font-weight: 500;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      transition: background-color 0.15s ease;
+    }
+    .btn-secondary:hover {
+      background-color: #000000;
+      color: #ffffff;
     }
   </style>
 </head>
-<body class="bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100 min-h-screen font-sans selection:bg-brand-500 selection:text-white transition-colors duration-200">
+<body class="selection:bg-orderful-primary selection:text-white">
 
-  <!-- Navbar -->
-  <header class="sticky top-0 z-50 backdrop-blur-md bg-white/70 dark:bg-slate-900/70 border-b border-slate-200/80 dark:border-slate-800">
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-      <div class="flex items-center gap-3">
-        <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-brand-600 to-indigo-500 flex items-center justify-center text-white shadow-md shadow-brand-500/20">
-          <i data-lucide="bookmark" class="w-5 h-5"></i>
+  <!-- Header / Navigation -->
+  <header class="bg-orderful-surface border-b border-orderful-border sticky top-0 z-50">
+    <div class="max-w-[1200px] mx-auto px-6 h-16 flex items-center justify-between">
+      <!-- Brand -->
+      <a href="#" class="flex items-center gap-3">
+        <div class="w-7 h-7 bg-orderful-primary rounded-[4px] flex items-center justify-center text-white">
+          <i data-lucide="bookmark" class="w-4 h-4"></i>
         </div>
-        <span class="font-bold text-xl tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-brand-600 to-indigo-600 dark:from-brand-400 dark:to-indigo-300">Slip</span>
-      </div>
+        <span class="font-semibold text-lg tracking-tight text-orderful-secondary">Slip</span>
+      </a>
 
-      <nav class="hidden md:flex items-center gap-8 text-sm font-medium text-slate-600 dark:text-slate-300">
-        <a href="#features" class="hover:text-brand-600 dark:hover:text-brand-400 transition-colors">Features</a>
-        <a href="#quickstart" class="hover:text-brand-600 dark:hover:text-brand-400 transition-colors">Quickstart</a>
-        <a href="https://github.com/akshaybhandare/slip/discussions" target="_blank" class="hover:text-brand-600 dark:hover:text-brand-400 transition-colors">Discussions</a>
+      <!-- Menu Links -->
+      <nav class="hidden md:flex items-center gap-8 text-[14px] font-medium tracking-[0.04em]">
+        <a href="#features" class="text-orderful-muted hover:text-orderful-secondary transition-colors">Features</a>
+        <a href="#architecture" class="text-orderful-muted hover:text-orderful-secondary transition-colors">Architecture</a>
+        <a href="#quickstart" class="text-orderful-muted hover:text-orderful-secondary transition-colors">Deployment</a>
+        <a href="https://github.com/akshaybhandare/slip/discussions" target="_blank" class="text-orderful-muted hover:text-orderful-secondary transition-colors">Community</a>
       </nav>
 
+      <!-- Action CTA -->
       <div class="flex items-center gap-3">
-        <button id="theme-toggle" class="p-2 rounded-lg text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors" title="Toggle Theme">
-          <i data-lucide="sun" class="w-5 h-5 hidden dark:block"></i>
-          <i data-lucide="moon" class="w-5 h-5 block dark:hidden"></i>
-        </button>
-        <a href="https://github.com/akshaybhandare/slip" target="_blank" class="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-lg bg-slate-900 text-white dark:bg-white dark:text-slate-900 hover:bg-slate-800 dark:hover:bg-slate-100 shadow-sm transition-all">
-          <i data-lucide="github" class="w-4 h-4"></i>
-          <span>GitHub</span>
+        <a href="https://github.com/akshaybhandare/slip" target="_blank" class="btn-secondary text-xs">
+          <i data-lucide="github" class="w-4 h-4 mr-2"></i>
+          GitHub
+        </a>
+        <a href="#quickstart" class="btn-primary text-xs">
+          Install
         </a>
       </div>
     </div>
   </header>
 
   <!-- Hero Section -->
-  <section class="relative pt-20 pb-16 md:pt-32 md:pb-24 overflow-hidden">
-    <div class="absolute inset-0 -z-10 flex items-center justify-center">
-      <div class="w-[600px] h-[600px] bg-gradient-to-tr from-brand-500/20 to-indigo-500/20 blur-3xl rounded-full opacity-60"></div>
+  <main class="max-w-[1200px] mx-auto px-6 pt-16 pb-20">
+    
+    <!-- Top Badge Strip -->
+    <div class="flex items-center gap-3 mb-6">
+      <span class="inline-block w-2 h-2 rounded-full bg-orderful-primary"></span>
+      <span class="text-[12px] font-medium tracking-[0.08em] text-orderful-muted uppercase">Self-Hosted Visual Bookmark Archive</span>
     </div>
 
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-      <div class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-semibold bg-brand-50 text-brand-700 dark:bg-brand-950/60 dark:text-brand-300 border border-brand-200/60 dark:border-brand-800/60 mb-6">
-        <span class="flex h-2 w-2 rounded-full bg-brand-500 animate-pulse"></span>
-        Self-Hosted &amp; Private Visual Bookmark Archive
-      </div>
+    <!-- Hero Split Grid -->
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-10 items-start pb-16 border-b border-orderful-border">
+      <div class="lg:col-span-8">
+        <h1 class="headline-display text-orderful-secondary mb-6">
+          Visual archiving with zero noise. Engineered for speed.
+        </h1>
+        <p class="text-[20px] font-light text-orderful-muted leading-relaxed max-w-2xl mb-8">
+          Slip is a fast, distraction-free visual knowledge engine. Collect links, articles, images, and notes with automated scraping, SQLite FTS5 search, and optional privacy-first AI.
+        </p>
 
-      <h1 class="text-4xl sm:text-6xl font-extrabold tracking-tight max-w-4xl mx-auto leading-tight sm:leading-none">
-        Remember everything you discover on the web.
-      </h1>
-
-      <p class="mt-6 text-lg sm:text-xl text-slate-600 dark:text-slate-400 max-w-2xl mx-auto">
-        Inspired by <em>mymind</em>. Built for self-hosters, creators, and researchers with zero tracking, instant FTS5 search, smart AI tagging, and distraction-free reader mode.
-      </p>
-
-      <div class="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4">
-        <a href="#quickstart" class="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-3.5 text-base font-semibold rounded-xl bg-brand-600 hover:bg-brand-700 text-white shadow-lg shadow-brand-500/25 transition-all">
-          <i data-lucide="rocket" class="w-5 h-5"></i>
-          Get Started in 1 Minute
-        </a>
-        <a href="https://github.com/akshaybhandare/slip" target="_blank" class="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-3.5 text-base font-semibold rounded-xl bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white transition-all shadow-sm">
-          <i data-lucide="star" class="w-5 h-5 text-amber-500"></i>
-          Star on GitHub
-        </a>
-      </div>
-
-      <!-- Mascot Callout -->
-      <div class="mt-12 inline-flex items-center gap-4 p-4 rounded-2xl glass-card text-left max-w-xl mx-auto shadow-sm">
-        <img src="slippy_mascot.jpg" alt="Slippy Mascot" class="w-14 h-14 rounded-xl object-cover shadow-sm floating" onerror="this.src='https://images.unsplash.com/photo-1543610892-0b1f7e6d8ac1?w=100&auto=format&fit=crop&q=60'">
-        <div>
-          <p class="text-xs font-bold text-brand-600 dark:text-brand-400 uppercase tracking-wider">Meet Slippy</p>
-          <p class="text-sm text-slate-600 dark:text-slate-300">"Store your digital loot—articles, images, clips, and tags—directly on your home server!"</p>
+        <div class="flex flex-wrap items-center gap-4">
+          <a href="#quickstart" class="btn-primary">
+            Quickstart Guide
+          </a>
+          <a href="https://github.com/akshaybhandare/slip" target="_blank" class="btn-secondary">
+            View Source
+          </a>
         </div>
       </div>
-    </div>
-  </section>
 
-  <!-- Features Grid -->
-  <section id="features" class="py-20 bg-slate-100/60 dark:bg-slate-900/40 border-y border-slate-200 dark:border-slate-800">
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-      <div class="text-center max-w-2xl mx-auto mb-16">
-        <h2 class="text-3xl font-bold tracking-tight sm:text-4xl">Everything you need to collect and search</h2>
-        <p class="mt-4 text-slate-600 dark:text-slate-400">Packed with power, engineered for speed and aesthetic simplicity.</p>
-      </div>
-
-      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-        <!-- Feature 1 -->
-        <div class="p-6 rounded-2xl bg-white dark:bg-slate-800/80 border border-slate-200/80 dark:border-slate-700/80 shadow-sm hover:shadow-md transition-shadow">
-          <div class="w-12 h-12 rounded-xl bg-brand-100 dark:bg-brand-900/40 text-brand-600 dark:text-brand-400 flex items-center justify-center mb-5">
-            <i data-lucide="layout-grid" class="w-6 h-6"></i>
+      <!-- Hero Side Card -->
+      <div class="lg:col-span-4">
+        <div class="card-orderful">
+          <div class="flex items-center gap-4 mb-4">
+            <img src="slippy_mascot.jpg" alt="Slippy Mascot" class="w-12 h-12 rounded-[6px] object-cover border border-orderful-border">
+            <div>
+              <p class="text-[11px] font-medium tracking-[0.08em] uppercase text-orderful-primary">System Companion</p>
+              <h3 class="text-[16px] font-semibold text-orderful-secondary">Meet Slippy</h3>
+            </div>
           </div>
-          <h3 class="text-lg font-bold mb-2">Modern Visual Masonry</h3>
-          <p class="text-sm text-slate-600 dark:text-slate-400 leading-relaxed">High-density stream masonry grid that organizes articles, videos, designs, and notes with zero layout glitching.</p>
-        </div>
-
-        <!-- Feature 2 -->
-        <div class="p-6 rounded-2xl bg-white dark:bg-slate-800/80 border border-slate-200/80 dark:border-slate-700/80 shadow-sm hover:shadow-md transition-shadow">
-          <div class="w-12 h-12 rounded-xl bg-emerald-100 dark:bg-emerald-900/40 text-emerald-600 dark:text-emerald-400 flex items-center justify-center mb-5">
-            <i data-lucide="zap" class="w-6 h-6"></i>
+          <p class="text-[14px] font-light text-orderful-muted leading-relaxed mb-4">
+            "Your database mascot companion for organizing digital loot on your own hardware."
+          </p>
+          <div class="pt-3 border-t border-orderful-border flex items-center justify-between text-[12px] text-orderful-muted">
+            <span>Storage: SQLite WAL</span>
+            <span class="text-orderful-primary font-medium">Port 3000</span>
           </div>
-          <h3 class="text-lg font-bold mb-2">Instant FTS5 &amp; Semantic Search</h3>
-          <p class="text-sm text-slate-600 dark:text-slate-400 leading-relaxed">Full-text search indexed by SQLite FTS5 alongside optional natural language semantic search for conversational queries.</p>
-        </div>
-
-        <!-- Feature 3 -->
-        <div class="p-6 rounded-2xl bg-white dark:bg-slate-800/80 border border-slate-200/80 dark:border-slate-700/80 shadow-sm hover:shadow-md transition-shadow">
-          <div class="w-12 h-12 rounded-xl bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400 flex items-center justify-center mb-5">
-            <i data-lucide="sparkles" class="w-6 h-6"></i>
-          </div>
-          <h3 class="text-lg font-bold mb-2">Bring Your Own AI (BYO-AI)</h3>
-          <p class="text-sm text-slate-600 dark:text-slate-400 leading-relaxed">Connect OpenAI, Anthropic Claude, Gemini, or local models (Ollama). Zero-AI fallback keeps everything light and clean.</p>
-        </div>
-
-        <!-- Feature 4 -->
-        <div class="p-6 rounded-2xl bg-white dark:bg-slate-800/80 border border-slate-200/80 dark:border-slate-700/80 shadow-sm hover:shadow-md transition-shadow">
-          <div class="w-12 h-12 rounded-xl bg-purple-100 dark:bg-purple-900/40 text-purple-600 dark:text-purple-400 flex items-center justify-center mb-5">
-            <i data-lucide="book-open" class="w-6 h-6"></i>
-          </div>
-          <h3 class="text-lg font-bold mb-2">Distraction-Free Reader Mode</h3>
-          <p class="text-sm text-slate-600 dark:text-slate-400 leading-relaxed">Read saved articles cleanly with sanitized HTML, custom typography, zero ads, and no trackers.</p>
-        </div>
-
-        <!-- Feature 5 -->
-        <div class="p-6 rounded-2xl bg-white dark:bg-slate-800/80 border border-slate-200/80 dark:border-slate-700/80 shadow-sm hover:shadow-md transition-shadow">
-          <div class="w-12 h-12 rounded-xl bg-amber-100 dark:bg-amber-900/40 text-amber-600 dark:text-amber-400 flex items-center justify-center mb-5">
-            <i data-lucide="folder-tree" class="w-6 h-6"></i>
-          </div>
-          <h3 class="text-lg font-bold mb-2">Clips &amp; Recycle Bin</h3>
-          <p class="text-sm text-slate-600 dark:text-slate-400 leading-relaxed">Organize into nested collections, with non-destructive recycle protection and instant 6-second undo toast.</p>
-        </div>
-
-        <!-- Feature 6 -->
-        <div class="p-6 rounded-2xl bg-white dark:bg-slate-800/80 border border-slate-200/80 dark:border-slate-700/80 shadow-sm hover:shadow-md transition-shadow">
-          <div class="w-12 h-12 rounded-xl bg-rose-100 dark:bg-rose-900/40 text-rose-600 dark:text-rose-400 flex items-center justify-center mb-5">
-            <i data-lucide="shield-check" class="w-6 h-6"></i>
-          </div>
-          <h3 class="text-lg font-bold mb-2">100% Self-Hosted &amp; Private</h3>
-          <p class="text-sm text-slate-600 dark:text-slate-400 leading-relaxed">Single SQLite WAL database file running completely on your hardware, Docker, or Unraid server.</p>
         </div>
       </div>
     </div>
-  </section>
 
-  <!-- Quickstart Section -->
-  <section id="quickstart" class="py-20">
-    <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-      <div class="text-center mb-12">
-        <h2 class="text-3xl font-bold tracking-tight sm:text-4xl">Deploy with Docker in Seconds</h2>
-        <p class="mt-4 text-slate-600 dark:text-slate-400">Run one simple command or use docker-compose to get Slip running locally.</p>
+    <!-- Key Metrics / Highlights Strip -->
+    <div class="py-12 border-b border-orderful-border grid grid-cols-2 md:grid-cols-4 gap-8">
+      <div>
+        <p class="text-[35px] font-light text-orderful-secondary tracking-tight">0 ms</p>
+        <p class="text-[14px] text-orderful-muted mt-1">Cloud Telemetry</p>
+      </div>
+      <div>
+        <p class="text-[35px] font-light text-orderful-secondary tracking-tight">FTS5</p>
+        <p class="text-[14px] text-orderful-muted mt-1">Full-Text Search</p>
+      </div>
+      <div>
+        <p class="text-[35px] font-light text-orderful-secondary tracking-tight">BYO-AI</p>
+        <p class="text-[14px] text-orderful-muted mt-1">Local & Cloud Providers</p>
+      </div>
+      <div>
+        <p class="text-[35px] font-light text-orderful-secondary tracking-tight">100%</p>
+        <p class="text-[14px] text-orderful-muted mt-1">Self-Hosted</p>
+      </div>
+    </div>
+
+    <!-- Core Features Grid -->
+    <section id="features" class="py-16 border-b border-orderful-border">
+      <div class="mb-12">
+        <p class="text-[12px] font-medium tracking-[0.08em] uppercase text-orderful-primary mb-2">Capabilities</p>
+        <h2 class="headline-lg text-orderful-secondary">Built for clarity and efficiency</h2>
       </div>
 
-      <div class="bg-slate-900 text-slate-100 rounded-2xl p-6 shadow-xl border border-slate-800">
-        <div class="flex items-center justify-between pb-4 border-b border-slate-800 text-xs text-slate-400 font-mono">
-          <div class="flex items-center gap-2">
-            <span class="w-3 h-3 rounded-full bg-rose-500 inline-block"></span>
-            <span class="w-3 h-3 rounded-full bg-amber-500 inline-block"></span>
-            <span class="w-3 h-3 rounded-full bg-emerald-500 inline-block"></span>
-            <span class="ml-2">docker-compose.yml</span>
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <!-- 1 -->
+        <div class="card-orderful">
+          <div class="w-8 h-8 rounded-[4px] bg-orderful-bg border border-orderful-border flex items-center justify-center mb-6">
+            <i data-lucide="layout-grid" class="w-4 h-4 text-orderful-secondary"></i>
           </div>
-          <span>yaml</span>
+          <h3 class="text-[18px] font-medium text-orderful-secondary mb-2">Orderful Masonry Stream</h3>
+          <p class="text-[14px] font-light text-orderful-muted leading-relaxed">
+            High-density stream masonry organizing articles, videos, product clips, and notes with zero layout shifting.
+          </p>
         </div>
-        <pre class="mt-4 font-mono text-sm overflow-x-auto text-emerald-400"><code>services:
+
+        <!-- 2 -->
+        <div class="card-orderful">
+          <div class="w-8 h-8 rounded-[4px] bg-orderful-bg border border-orderful-border flex items-center justify-center mb-6">
+            <i data-lucide="search" class="w-4 h-4 text-orderful-secondary"></i>
+          </div>
+          <h3 class="text-[18px] font-medium text-orderful-secondary mb-2">Dual Search Architecture</h3>
+          <p class="text-[14px] font-light text-orderful-muted leading-relaxed">
+            Instant lexical SQLite FTS5 search complemented by semantic conceptual queries with explanation scoring.
+          </p>
+        </div>
+
+        <!-- 3 -->
+        <div class="card-orderful">
+          <div class="w-8 h-8 rounded-[4px] bg-orderful-bg border border-orderful-border flex items-center justify-center mb-6">
+            <i data-lucide="cpu" class="w-4 h-4 text-orderful-secondary"></i>
+          </div>
+          <h3 class="text-[18px] font-medium text-orderful-secondary mb-2">Bring Your Own AI</h3>
+          <p class="text-[14px] font-light text-orderful-muted leading-relaxed">
+            Connect Claude, OpenAI, Gemini, or local Ollama. Zero-AI disconnected mode guarantees lightweight purity.
+          </p>
+        </div>
+
+        <!-- 4 -->
+        <div class="card-orderful">
+          <div class="w-8 h-8 rounded-[4px] bg-orderful-bg border border-orderful-border flex items-center justify-center mb-6">
+            <i data-lucide="book-open" class="w-4 h-4 text-orderful-secondary"></i>
+          </div>
+          <h3 class="text-[18px] font-medium text-orderful-secondary mb-2">Distraction-Free Reader</h3>
+          <p class="text-[14px] font-light text-orderful-muted leading-relaxed">
+            Sanitized HTML rendering with typography presets, zero ads, no trackers, and instant offline readability.
+          </p>
+        </div>
+
+        <!-- 5 -->
+        <div class="card-orderful">
+          <div class="w-8 h-8 rounded-[4px] bg-orderful-bg border border-orderful-border flex items-center justify-center mb-6">
+            <i data-lucide="folder" class="w-4 h-4 text-orderful-secondary"></i>
+          </div>
+          <h3 class="text-[18px] font-medium text-orderful-secondary mb-2">Clips & Recycle System</h3>
+          <p class="text-[14px] font-light text-orderful-muted leading-relaxed">
+            Nested hierarchical collections, non-destructive soft deletion, instant 6-second undo toast, and safe purge.
+          </p>
+        </div>
+
+        <!-- 6 -->
+        <div class="card-orderful">
+          <div class="w-8 h-8 rounded-[4px] bg-orderful-bg border border-orderful-border flex items-center justify-center mb-6">
+            <i data-lucide="shield" class="w-4 h-4 text-orderful-secondary"></i>
+          </div>
+          <h3 class="text-[18px] font-medium text-orderful-secondary mb-2">Single File Database</h3>
+          <p class="text-[14px] font-light text-orderful-muted leading-relaxed">
+            Self-contained SQLite WAL architecture. Simple backups, predictable performance, zero cloud lock-in.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Architecture Section -->
+    <section id="architecture" class="py-16 border-b border-orderful-border">
+      <div class="mb-12">
+        <p class="text-[12px] font-medium tracking-[0.08em] uppercase text-orderful-primary mb-2">Architecture</p>
+        <h2 class="headline-lg text-orderful-secondary">Clean separation of concerns</h2>
+      </div>
+
+      <div class="card-orderful bg-orderful-surface">
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 text-center">
+          <div class="p-6 bg-orderful-bg rounded-[6px] border border-orderful-border">
+            <span class="text-[11px] font-mono tracking-wider uppercase text-orderful-muted">Frontend</span>
+            <h4 class="text-[16px] font-semibold text-orderful-secondary mt-2">React 18 + Vite</h4>
+            <p class="text-[13px] text-orderful-muted mt-2">SPA client, Masonry grid, keyboard shortcuts & Reader UI</p>
+          </div>
+          <div class="p-6 bg-orderful-bg rounded-[6px] border border-orderful-border">
+            <span class="text-[11px] font-mono tracking-wider uppercase text-orderful-primary">Backend</span>
+            <h4 class="text-[16px] font-semibold text-orderful-secondary mt-2">Express + TypeScript</h4>
+            <p class="text-[13px] text-orderful-muted mt-2">Scraper worker queue, auth sessions & REST API</p>
+          </div>
+          <div class="p-6 bg-orderful-bg rounded-[6px] border border-orderful-border">
+            <span class="text-[11px] font-mono tracking-wider uppercase text-orderful-muted">Storage</span>
+            <h4 class="text-[16px] font-semibold text-orderful-secondary mt-2">SQLite (WAL + FTS5)</h4>
+            <p class="text-[13px] text-orderful-muted mt-2">Single persistent DB file, encrypted keys, zero overhead</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Quickstart / Docker Compose Section -->
+    <section id="quickstart" class="py-16">
+      <div class="mb-8">
+        <p class="text-[12px] font-medium tracking-[0.08em] uppercase text-orderful-primary mb-2">Deployment</p>
+        <h2 class="headline-lg text-orderful-secondary">Deploy in 60 seconds</h2>
+      </div>
+
+      <div class="card-orderful bg-orderful-secondary text-white border-0">
+        <div class="flex items-center justify-between pb-4 mb-4 border-b border-zinc-800 text-[12px] font-mono text-zinc-400">
+          <span>docker-compose.yml</span>
+          <span>Docker</span>
+        </div>
+        <pre class="font-mono text-[13px] text-zinc-200 overflow-x-auto leading-relaxed"><code>services:
   slip:
     image: ghcr.io/akshaybhandare/slip:latest
     container_name: slip
@@ -227,46 +340,36 @@
       - NODE_ENV=production</code></pre>
       </div>
 
-      <div class="mt-8 text-center">
-        <p class="text-sm text-slate-500 dark:text-slate-400">
-          Also available: Unraid Community Application template &amp; browser extensions for Chrome/Firefox/Safari.
-        </p>
+      <div class="mt-6 flex flex-wrap gap-4 items-center">
+        <a href="https://github.com/akshaybhandare/slip" target="_blank" class="btn-primary">
+          <i data-lucide="github" class="w-4 h-4 mr-2"></i>
+          Explore Repository
+        </a>
+        <a href="https://github.com/akshaybhandare/slip/discussions" target="_blank" class="btn-secondary">
+          Join Discussions
+        </a>
       </div>
-    </div>
-  </section>
+    </section>
+
+  </main>
 
   <!-- Footer -->
-  <footer class="py-12 border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-4">
-      <p class="text-sm text-slate-500 dark:text-slate-400">
-        &copy; 2026 Slip Project. Released under the MIT License.
-      </p>
-      <div class="flex items-center gap-6 text-sm text-slate-500 dark:text-slate-400">
-        <a href="https://github.com/akshaybhandare/slip" class="hover:text-brand-600 dark:hover:text-brand-400">GitHub</a>
-        <a href="https://github.com/akshaybhandare/slip/discussions" class="hover:text-brand-600 dark:hover:text-brand-400">Discussions</a>
-        <a href="https://github.com/akshaybhandare/slip/issues" class="hover:text-brand-600 dark:hover:text-brand-400">Issues</a>
+  <footer class="bg-orderful-surface border-t border-orderful-border py-12">
+    <div class="max-w-[1200px] mx-auto px-6 flex flex-col sm:flex-row items-center justify-between gap-4 text-[13px] text-orderful-muted">
+      <div class="flex items-center gap-3">
+        <span class="w-2 h-2 rounded-full bg-orderful-primary"></span>
+        <span>&copy; 2026 Slip Project. MIT License.</span>
+      </div>
+      <div class="flex items-center gap-6 font-medium">
+        <a href="https://github.com/akshaybhandare/slip" class="hover:text-orderful-secondary transition-colors">GitHub</a>
+        <a href="https://github.com/akshaybhandare/slip/discussions" class="hover:text-orderful-secondary transition-colors">Discussions</a>
+        <a href="https://github.com/akshaybhandare/slip/issues" class="hover:text-orderful-secondary transition-colors">Issues</a>
       </div>
     </div>
   </footer>
 
   <script>
-    // Lucide icon render
     lucide.createIcons();
-
-    // Dark mode toggle
-    const themeToggleBtn = document.getElementById('theme-toggle');
-    const isDark = localStorage.theme === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches);
-    if (isDark) {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-    }
-
-    themeToggleBtn.addEventListener('click', () => {
-      document.documentElement.classList.toggle('dark');
-      localStorage.theme = document.documentElement.classList.contains('dark') ? 'dark' : 'light';
-      lucide.createIcons();
-    });
   </script>
 </body>
 </html>
