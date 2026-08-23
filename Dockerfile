@@ -47,6 +47,7 @@ WORKDIR /app
 COPY --from=backend-builder /app/backend/dist ./backend/dist
 COPY --from=frontend-builder /app/frontend/dist ./frontend/dist
 COPY docker-entrypoint.sh ./docker-entrypoint.sh
+COPY slip.config.json ./slip.config.json
 RUN chmod +x ./docker-entrypoint.sh
 
 # Unraid and Docker environment defaults
@@ -57,9 +58,7 @@ ENV NODE_ENV=production \
     CACHE_DIR=/config/cache \
     FRONTEND_DIST=/app/frontend/dist \
     PUID=99 \
-    PGID=100 \
-    SUPABASE_URL=https://aofeprsbrwuphmdhagud.supabase.co \
-    SUPABASE_KEY=sb_publishable_OT7XIHQtnkcaWSIa_bqGIQ_mNCovKwI
+    PGID=100
 
 # Persistent storage volume for SQLite DB and cached thumbnails
 VOLUME ["/config"]

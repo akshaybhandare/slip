@@ -7,17 +7,24 @@ let cachedSecret: string | null = null;
 
 const projectRoot = path.resolve(__dirname, '../..');
 
-export function getMaxPinnedSlips(): number {
-  if (process.env.MAX_PINNED_SLIPS) {
-    const parsed = parseInt(process.env.MAX_PINNED_SLIPS, 10);
-    if (!isNaN(parsed) && parsed > 0) return parsed;
-  }
-  if (process.env.PIN_LIMIT) {
-    const parsed = parseInt(process.env.PIN_LIMIT, 10);
-    if (!isNaN(parsed) && parsed > 0) return parsed;
-  }
+interface SlipConfigFile {
+  maxPinnedSlips?: number | string;
+  max_pinned_slips?: number | string;
+  maxPins?: number | string;
+  pinLimit?: number | string;
+  supabaseUrl?: string;
+  supabase_url?: string;
+  supabaseKey?: string;
+  supabase_key?: string;
+  telemetry?: {
+    supabaseUrl?: string;
+    supabase_url?: string;
+    supabaseKey?: string;
+    supabase_key?: string;
+  };
+}
 
-  // Attempt to read from slip.config.json in project root, cwd, or /config directory
+export function readSlipConfig(): SlipConfigFile {
   const candidatePaths = [
     path.resolve(projectRoot, 'slip.config.json'),
     path.resolve(process.cwd(), 'slip.config.json'),
@@ -28,22 +35,43 @@ export function getMaxPinnedSlips(): number {
     try {
       if (fs.existsSync(confPath)) {
         const raw = fs.readFileSync(confPath, 'utf-8');
-        const json = JSON.parse(raw);
-        const val = json.maxPinnedSlips ?? json.max_pinned_slips ?? json.maxPins ?? json.pinLimit;
-        if (typeof val === 'number' && val > 0) {
-          return val;
-        }
-        if (typeof val === 'string') {
-          const parsed = parseInt(val, 10);
-          if (!isNaN(parsed) && parsed > 0) return parsed;
-        }
+        return JSON.parse(raw) as SlipConfigFile;
       }
     } catch {
       // Continue to next candidate or fallback
     }
   }
+  return {};
+}
+
+export function getMaxPinnedSlips(): number {
+  if (process.env.MAX_PINNED_SLIPS) {
+    const parsed = parseInt(process.env.MAX_PINNED_SLIPS, 10);
+    if (!isNaN(parsed) && parsed > 0) return parsed;
+  }
+  if (process.env.PIN_LIMIT) {
+    const parsed = parseInt(process.env.PIN_LIMIT, 10);
+    if (!isNaN(parsed) && parsed > 0) return parsed;
+  }
+
+  const conf = readSlipConfig();
+  const val = conf.maxPinnedSlips ?? conf.max_pinned_slips ?? conf.maxPins ?? conf.pinLimit;
+  if (typeof val === 'number' && val > 0) {
+    return val;
+  }
+  if (typeof val === 'string') {
+    const parsed = parseInt(val, 10);
+    if (!isNaN(parsed) && parsed > 0) return parsed;
+  }
 
   return 5; // Default max pinned slips
+}
+
+export function getTelemetryConfig(): { supabaseUrl?: string; supabaseKey?: string } {
+  const conf = readSlipConfig();
+  const url = process.env.SUPABASE_URL || conf.telemetry?.supabaseUrl || conf.telemetry?.supabase_url || conf.supabaseUrl || conf.supabase_url;
+  const key = process.env.SUPABASE_KEY || conf.telemetry?.supabaseKey || conf.telemetry?.supabase_key || conf.supabaseKey || conf.supabase_key;
+  return { supabaseUrl: url, supabaseKey: key };
 }
 
 export function getJwtSecret(): string {

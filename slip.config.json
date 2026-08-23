@@ -1,3 +1,8 @@
 {
-  "maxPinnedSlips": 5
+  "maxPinnedSlips": 5,
+  "telemetry": {
+    "supabaseUrl": "https://aofeprsbrwuphmdhagud.supabase.co",
+    "supabaseKey": "sb_publishable_OT7XIHQtnkcaWSIa_bqGIQ_mNCovKwI"
+  }
 }
+

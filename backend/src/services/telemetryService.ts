@@ -4,7 +4,7 @@ import path from 'path';
 import fs from 'fs';
 import crypto from 'crypto';
 import { getDb } from '../db';
-import { getInstanceId } from '../config';
+import { getInstanceId, getTelemetryConfig } from '../config';
 
 function getDbSetting(key: string): string | null {
   try {
@@ -41,9 +41,6 @@ function getAppVersion(): string {
   return '1.1.0';
 }
 
-const DEFAULT_SUPABASE_URL = 'https://aofeprsbrwuphmdhagud.supabase.co';
-const DEFAULT_SUPABASE_KEY = 'sb_publishable_OT7XIHQtnkcaWSIa_bqGIQ_mNCovKwI';
-
 export async function sendHeartbeat(): Promise<void> {
   if (isTelemetryDisabled()) {
     console.log('[Telemetry] Telemetry is opted-out/disabled.');
@@ -58,8 +55,9 @@ export async function sendHeartbeat(): Promise<void> {
     // Hash the instance_id locally for pseudonymous privacy
     const hashedId = crypto.createHash('sha256').update(instanceId).digest('hex');
 
-    let url = process.env.SUPABASE_URL || getDbSetting('supabase_url') || DEFAULT_SUPABASE_URL;
-    const key = process.env.SUPABASE_KEY || getDbSetting('supabase_key') || DEFAULT_SUPABASE_KEY;
+    const telemetryConfig = getTelemetryConfig();
+    let url = telemetryConfig.supabaseUrl || getDbSetting('supabase_url');
+    const key = telemetryConfig.supabaseKey || getDbSetting('supabase_key');
 
     if (!url || !key) {
       console.log('[Telemetry] Supabase URL or Key not configured. Skipping heartbeat.');
