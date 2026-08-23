@@ -213,6 +213,52 @@ describe('SettingsModal Appearance UI Tab', () => {
     fireEvent.click(doneBtn);
     expect(onClose).toHaveBeenCalled();
   });
+
+  it('renders all settings navigation tabs for discoverability without scrolling', () => {
+    render(
+      <SettingsModal
+        isOpen={true}
+        onClose={vi.fn()}
+        initialTab="appearance"
+        user={{ id: 1, username: 'admin', isAdmin: true }}
+        themeMode="system"
+        themePreset="default"
+        customAccent={null}
+        onSelectMode={vi.fn()}
+        onSelectPreset={vi.fn()}
+        onSetCustomAccent={vi.fn()}
+        onResetTheme={vi.fn()}
+        onImportClick={vi.fn()}
+        onRescrapeAllClick={vi.fn()}
+        isRescrapingAll={false}
+        aiConfig={{ isConnected: false, provider: 'openai', apiKey: '', apiUrl: '' }}
+        onConnectAI={vi.fn()}
+        onDisconnectAI={vi.fn()}
+        onTestAIConnection={vi.fn()}
+        onLogoutClick={vi.fn()}
+      />
+    );
+
+    // Ensure all 5 tabs are present and discoverable
+    const appearanceTab = screen.getByRole('button', { name: /^Appearance$/i });
+    const aiTab = screen.getByRole('button', { name: /^AI & Models$/i });
+    const keysTab = screen.getByRole('button', { name: /^API Keys$/i });
+    const dataTab = screen.getByRole('button', { name: /^Data & Sync$/i });
+    const usersTab = screen.getByRole('button', { name: /^Users$/i });
+
+    expect(appearanceTab).toBeInTheDocument();
+    expect(aiTab).toBeInTheDocument();
+    expect(keysTab).toBeInTheDocument();
+    expect(dataTab).toBeInTheDocument();
+    expect(usersTab).toBeInTheDocument();
+
+    // Verify switching tabs
+    fireEvent.click(dataTab);
+    expect(screen.getByText('Global Sync & Re-scrape')).toBeInTheDocument();
+
+    fireEvent.click(keysTab);
+    expect(screen.getByText('Generate New API Key')).toBeInTheDocument();
+  });
 });
 
 describe('Navbar Settings Controls', () => {

@@ -4448,7 +4448,7 @@ body {
    Consolidated Settings Modal
    ========================================================================== */
 .settings-modal-content {
-  max-width: 560px;
+  max-width: 600px;
   width: 100%;
   padding: 24px;
   max-height: 90vh;
@@ -4468,32 +4468,27 @@ body {
 
 .settings-tab-nav {
   display: flex;
-  gap: 4px;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 20px;
+  padding-bottom: 12px;
   border-bottom: 1px solid var(--color-border);
-  padding-bottom: 8px;
-  margin-bottom: 18px;
-  overflow-x: auto;
-  scrollbar-width: none;
-  -ms-overflow-style: none;
   flex-shrink: 0;
-  -webkit-overflow-scrolling: touch;
-}
-
-.settings-tab-nav::-webkit-scrollbar {
-  display: none;
 }
 
 .settings-nav-btn {
+  height: 34px;
+  padding: 0 13px;
+  border-radius: var(--radius-full);
+  font-size: 13px;
+  font-weight: 500;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  color: var(--color-muted);
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 7px 12px;
-  border-radius: var(--radius-md);
-  background: transparent;
-  border: 1px solid transparent;
-  color: var(--color-muted);
-  font-size: 13px;
-  font-weight: 500;
   cursor: pointer;
   white-space: nowrap;
   flex-shrink: 0;
@@ -4501,14 +4496,14 @@ body {
 }
 
 .settings-nav-btn:hover {
-  background: var(--color-tertiary);
-  color: var(--color-on-surface);
+  color: var(--color-secondary);
+  border-color: var(--color-primary);
 }
 
 .settings-nav-btn.active {
-  background: var(--color-tertiary);
-  color: var(--color-primary);
-  border-color: var(--color-border);
+  background: var(--color-primary);
+  color: var(--color-primary-contrast);
+  border-color: var(--color-primary);
   font-weight: 600;
 }
 
@@ -4590,8 +4585,15 @@ body {
     max-height: 92vh;
   }
 
+  .settings-tab-nav {
+    gap: 6px;
+    margin-bottom: 16px;
+    padding-bottom: 10px;
+  }
+
   .settings-nav-btn {
-    padding: 6px 10px;
+    height: 32px;
+    padding: 0 11px;
     font-size: 12.5px;
   }
 

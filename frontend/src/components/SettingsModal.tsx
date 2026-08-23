@@ -399,53 +399,24 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         </div>
 
         {/* Tab Navigation */}
-        <div className="settings-tab-nav">
-          <button
-            type="button"
-            className={`settings-nav-btn ${activeTab === 'appearance' ? 'active' : ''}`}
-            onClick={() => setActiveTab('appearance')}
-          >
-            <Palette size={14} />
-            <span>Appearance</span>
-          </button>
-
-          <button
-            type="button"
-            className={`settings-nav-btn ${activeTab === 'ai' ? 'active' : ''}`}
-            onClick={() => setActiveTab('ai')}
-          >
-            <Sparkles size={14} />
-            <span>AI & Models</span>
-          </button>
-
-          <button
-            type="button"
-            className={`settings-nav-btn ${activeTab === 'keys' ? 'active' : ''}`}
-            onClick={() => setActiveTab('keys')}
-          >
-            <Key size={14} />
-            <span>API Keys</span>
-          </button>
-
-          <button
-            type="button"
-            className={`settings-nav-btn ${activeTab === 'data' ? 'active' : ''}`}
-            onClick={() => setActiveTab('data')}
-          >
-            <Database size={14} />
-            <span>Data & Sync</span>
-          </button>
-
-          {isAdmin && (
+        <div className="settings-tab-nav" aria-label="Settings sections">
+          {[
+            { id: 'appearance' as const, label: 'Appearance', icon: <Palette size={14} /> },
+            { id: 'ai' as const, label: 'AI & Models', icon: <Sparkles size={14} /> },
+            { id: 'keys' as const, label: 'API Keys', icon: <Key size={14} /> },
+            { id: 'data' as const, label: 'Data & Sync', icon: <Database size={14} /> },
+            ...(isAdmin ? [{ id: 'users' as const, label: 'Users', icon: <Users size={14} /> }] : [])
+          ].map((tab) => (
             <button
+              key={tab.id}
               type="button"
-              className={`settings-nav-btn ${activeTab === 'users' ? 'active' : ''}`}
-              onClick={() => setActiveTab('users')}
+              className={`settings-nav-btn ${activeTab === tab.id ? 'active' : ''}`}
+              onClick={() => setActiveTab(tab.id)}
             >
-              <Users size={14} />
-              <span>Users</span>
+              {tab.icon}
+              <span>{tab.label}</span>
             </button>
-          )}
+          ))}
         </div>
 
         {/* Tab Body Container */}
