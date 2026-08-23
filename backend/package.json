@@ -1,6 +1,6 @@
 {
   "name": "slip-backend",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Backend API for Slip bookmark manager",
   "main": "dist/server.js",
   "scripts": {
