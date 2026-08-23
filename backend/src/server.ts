@@ -4,7 +4,7 @@ import cookieParser from 'cookie-parser';
 import dotenv from 'dotenv';
 import path from 'path';
 import fs from 'fs';
-import { initDb, getDb } from './db';
+import { initDb, getDb, getDbPath, closeDb } from './db';
 import { getInstanceId } from './config';
 import { startTelemetry } from './services/telemetryService';
 import authRouter from './routes/auth';
@@ -98,9 +98,14 @@ if (fs.existsSync(frontendDist)) {
 // Start listening if not running tests
 if (process.env.NODE_ENV !== 'test') {
   try {
-    initDb();
+    const db = initDb();
     const instanceId = getInstanceId();
+    console.log(`[Slip] Database connected at: ${getDbPath()}`);
     console.log(`[Slip] Database initialized. Instance ID: ${instanceId}`);
+
+    // Flush WAL to main .db file so writes survive container restarts
+    try { db.pragma('wal_checkpoint(TRUNCATE)'); } catch {}
+
     startTelemetry();
     app.listen(PORT, HOST, () => {
       console.log(`Slip server running on http://${HOST}:${PORT}`);
@@ -109,6 +114,15 @@ if (process.env.NODE_ENV !== 'test') {
     console.error('Failed to initialize database and start server:', err);
     process.exit(1);
   }
+
+  // Graceful shutdown: flush WAL and close DB before Docker kills the process
+  const gracefulShutdown = () => {
+    console.log('[Slip] Shutting down, flushing database...');
+    closeDb();
+    process.exit(0);
+  };
+  process.on('SIGINT', gracefulShutdown);
+  process.on('SIGTERM', gracefulShutdown);
 }
 
 export default app;

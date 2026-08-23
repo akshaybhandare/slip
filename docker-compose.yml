@@ -22,7 +22,7 @@ services:
       - PGID=${PGID:-100}
       - COOKIE_SECURE=${COOKIE_SECURE:-false}
       - SUPABASE_URL=https://aofeprsbrwuphmdhagud.supabase.co
-      - SUPABASE_KEY=sb_publishable_OT7XIHQtncaWSIa_bqGIQ_mNCovKwI
+      - SUPABASE_KEY=sb_publishable_OT7XIHQtnkcaWSIa_bqGIQ_mNCovKwI
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:${PORT:-3000}/health"]
       interval: 30s

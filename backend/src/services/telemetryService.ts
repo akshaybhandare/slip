@@ -43,6 +43,7 @@ function getAppVersion(): string {
 
 export async function sendHeartbeat(): Promise<void> {
   if (isTelemetryDisabled()) {
+    console.log('[Telemetry] Telemetry is opted-out/disabled.');
     return;
   }
 
@@ -58,7 +59,8 @@ export async function sendHeartbeat(): Promise<void> {
     const key = process.env.SUPABASE_KEY || getDbSetting('supabase_key');
 
     if (!url || !key) {
-      return; // Not configured
+      console.log('[Telemetry] Supabase URL or Key not configured. Skipping heartbeat.');
+      return;
     }
 
     // Strip trailing slash if present
@@ -67,7 +69,9 @@ export async function sendHeartbeat(): Promise<void> {
     // Direct Supabase PostgREST table endpoint
     const endpoint = `${url}/rest/v1/telemetry_pings`;
 
-    await axios.post(
+    console.log(`[Telemetry] Sending heartbeat ping to ${endpoint}...`);
+
+    const response = await axios.post(
       endpoint,
       {
         instance_id: hashedId,
@@ -87,6 +91,8 @@ export async function sendHeartbeat(): Promise<void> {
         timeout: 5000,
       }
     );
+
+    console.log(`[Telemetry] Heartbeat successfully registered with Supabase (HTTP ${response.status}).`);
   } catch (error: any) {
     const errorDetails = error?.response
       ? { status: error.response.status, statusText: error.response.statusText, data: error.response.data }

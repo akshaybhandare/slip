@@ -252,6 +252,7 @@ export function getDb(): Database.Database {
 
 export function closeDb(): void {
   if (dbInstance) {
+    try { dbInstance.pragma('wal_checkpoint(TRUNCATE)'); } catch {}
     dbInstance.close();
     dbInstance = null;
   }
