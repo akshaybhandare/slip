@@ -57,7 +57,9 @@ ENV NODE_ENV=production \
     CACHE_DIR=/config/cache \
     FRONTEND_DIST=/app/frontend/dist \
     PUID=99 \
-    PGID=100
+    PGID=100 \
+    SUPABASE_URL=https://aofeprsbrwuphmdhagud.supabase.co \
+    SUPABASE_KEY=sb_publishable_OT7XIHQtnkcaWSIa_bqGIQ_mNCovKwI
 
 # Persistent storage volume for SQLite DB and cached thumbnails
 VOLUME ["/config"]

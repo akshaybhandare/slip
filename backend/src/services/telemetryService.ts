@@ -41,6 +41,9 @@ function getAppVersion(): string {
   return '1.1.0';
 }
 
+const DEFAULT_SUPABASE_URL = 'https://aofeprsbrwuphmdhagud.supabase.co';
+const DEFAULT_SUPABASE_KEY = 'sb_publishable_OT7XIHQtnkcaWSIa_bqGIQ_mNCovKwI';
+
 export async function sendHeartbeat(): Promise<void> {
   if (isTelemetryDisabled()) {
     console.log('[Telemetry] Telemetry is opted-out/disabled.');
@@ -55,8 +58,8 @@ export async function sendHeartbeat(): Promise<void> {
     // Hash the instance_id locally for pseudonymous privacy
     const hashedId = crypto.createHash('sha256').update(instanceId).digest('hex');
 
-    let url = process.env.SUPABASE_URL || getDbSetting('supabase_url');
-    const key = process.env.SUPABASE_KEY || getDbSetting('supabase_key');
+    let url = process.env.SUPABASE_URL || getDbSetting('supabase_url') || DEFAULT_SUPABASE_URL;
+    const key = process.env.SUPABASE_KEY || getDbSetting('supabase_key') || DEFAULT_SUPABASE_KEY;
 
     if (!url || !key) {
       console.log('[Telemetry] Supabase URL or Key not configured. Skipping heartbeat.');
