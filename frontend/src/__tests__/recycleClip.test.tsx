@@ -28,8 +28,6 @@ vi.mock('../api', () => ({
   createAdminUser: vi.fn(),
   fetchAdminUsers: vi.fn(),
   deleteAdminUser: vi.fn(),
-  shareBookmark: vi.fn(),
-  revokeShareBookmark: vi.fn(),
   importBookmarksHtml: vi.fn(),
   getMe: vi.fn(),
   getAuthStatus: vi.fn(),
@@ -49,8 +47,7 @@ vi.mock('../api', () => ({
   deleteClip: vi.fn(),
   removeBookmarkFromClip: vi.fn(),
   fetchBookmarkClips: vi.fn(),
-  setBookmarkClip: vi.fn(),
-  setBookmarkClips: vi.fn()
+  setBookmarkClip: vi.fn()
 }));
 
 describe('Story 14: Recycle Clip Frontend UX & Components', () => {

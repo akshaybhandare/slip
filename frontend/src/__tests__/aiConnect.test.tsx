@@ -29,8 +29,6 @@ vi.mock('../api', () => ({
   createAdminUser: vi.fn(),
   fetchAdminUsers: vi.fn(),
   deleteAdminUser: vi.fn(),
-  shareBookmark: vi.fn(),
-  revokeShareBookmark: vi.fn(),
   importBookmarksHtml: vi.fn(),
   getMe: vi.fn(),
   getAuthStatus: vi.fn(),

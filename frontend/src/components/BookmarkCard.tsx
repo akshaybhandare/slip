@@ -69,8 +69,6 @@ export const SlipPinIcon: React.FC<{ isPinned: boolean; isPinning?: boolean; siz
   </svg>
 );
 
-export const SlipPushpin = SlipPinIcon;
-
 interface BookmarkCardProps {
   bookmark: Bookmark;
   onOpenReader?: (bookmark: Bookmark) => void;

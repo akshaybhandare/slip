@@ -67,7 +67,7 @@ export async function cacheThumbnail(imageUrl: string): Promise<string | null> {
   }
 }
 
-export function detectImageType(buffer: Buffer, originalFilename?: string): { ext: string; mime: string } | null {
+function detectImageType(buffer: Buffer, originalFilename?: string): { ext: string; mime: string } | null {
   if (!buffer || buffer.length < 4) return null;
 
   // JPEG
@@ -117,7 +117,7 @@ export function detectImageType(buffer: Buffer, originalFilename?: string): { ex
   return null;
 }
 
-export function detectFileType(buffer: Buffer, originalFilename?: string): {
+function detectFileType(buffer: Buffer, originalFilename?: string): {
   ext: string;
   mime: string;
   contentType: 'image' | 'document';

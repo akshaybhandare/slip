@@ -60,7 +60,7 @@ export interface AIConfig {
   isAdmin?: boolean;
 }
 
-export const STORAGE_KEY_AI_CONFIG = 'slip_ai_config';
+const STORAGE_KEY_AI_CONFIG = 'slip_ai_config';
 
 export function getSavedAIConfig(): AIConfig {
   try {

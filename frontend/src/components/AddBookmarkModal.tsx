@@ -8,10 +8,6 @@ import {
 import { Tag } from '../types';
 import { TagInput } from './TagInput';
 import { NoteEditor } from './NoteEditor';
-import { renderFormattedNote, renderInlineMarkdown } from '../utils/markdown';
-
-// Re-export for backward compatibility with other components importing from here
-export { renderFormattedNote, renderInlineMarkdown };
 
 interface AddBookmarkModalProps {
   isOpen: boolean;

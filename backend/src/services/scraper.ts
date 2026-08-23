@@ -25,7 +25,7 @@ export function resolveUrl(baseUrl: string, relativePath?: string | null): strin
   }
 }
 
-export function cleanDescription(desc: string): string {
+function cleanDescription(desc: string): string {
   if (!desc) return '';
   let cleaned = desc
     .replace(/(\s*#[a-zA-Z0-9_\u0080-\uFFFF]+){3,}/g, '') // remove long hashtag chains
@@ -38,7 +38,7 @@ export function cleanDescription(desc: string): string {
   return cleaned;
 }
 
-export function cleanTitle(title: string): string {
+function cleanTitle(title: string): string {
   if (!title) return '';
   let cleaned = title.replace(/\s+/g, ' ').trim();
   if (cleaned.length > 160) {
