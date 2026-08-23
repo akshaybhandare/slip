@@ -19,7 +19,6 @@ import { MasonryGrid } from './MasonryGrid';
 import {
   Paperclip,
   ArrowLeft,
-  ArrowRight,
   Edit3,
   Trash2,
   Plus,

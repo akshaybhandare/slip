@@ -5,6 +5,8 @@ import dotenv from 'dotenv';
 import path from 'path';
 import fs from 'fs';
 import { initDb, getDb } from './db';
+import { getInstanceId } from './config';
+import { startTelemetry } from './services/telemetryService';
 import authRouter from './routes/auth';
 import bookmarksRouter from './routes/bookmarks';
 import shareRouter from './routes/share';
@@ -97,6 +99,8 @@ if (fs.existsSync(frontendDist)) {
 if (process.env.NODE_ENV !== 'test') {
   try {
     initDb();
+    getInstanceId();
+    startTelemetry();
     app.listen(PORT, HOST, () => {
       console.log(`Slip server running on http://${HOST}:${PORT}`);
     });

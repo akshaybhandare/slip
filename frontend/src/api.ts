@@ -289,6 +289,17 @@ export async function importBookmarksHtml(html: string): Promise<{ message: stri
   });
 }
 
+export async function getTelemetryStatus(): Promise<{ disabled: boolean }> {
+  return apiFetch<{ disabled: boolean }>('/io/telemetry');
+}
+
+export async function updateTelemetryStatus(disabled: boolean): Promise<{ success: boolean; disabled: boolean }> {
+  return apiFetch<{ success: boolean; disabled: boolean }>('/io/telemetry', {
+    method: 'POST',
+    body: JSON.stringify({ disabled })
+  });
+}
+
 // --- AI APIs ---
 
 export interface AIConfigResponse {

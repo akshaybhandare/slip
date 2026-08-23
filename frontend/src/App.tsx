@@ -37,7 +37,6 @@ import { AddToClipModal } from './components/AddToClipModal';
 import { BookmarkPlus, Plus, Sparkles, RotateCcw, X } from 'lucide-react';
 import { useTheme } from './hooks/useTheme';
 import { useAIConfig } from './hooks/useAIConfig';
-import { AI_PROVIDERS } from './config/aiConfig';
 
 export const App: React.FC = () => {
   const {
@@ -47,8 +46,7 @@ export const App: React.FC = () => {
     setThemeMode,
     setThemePreset,
     setCustomAccent,
-    resetTheme,
-    toggleTheme
+    resetTheme
   } = useTheme();
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [settingsTab, setSettingsTab] = useState<SettingsTab>('appearance');

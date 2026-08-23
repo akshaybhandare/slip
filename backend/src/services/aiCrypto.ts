@@ -3,7 +3,6 @@ import { getJwtSecret } from '../config';
 
 const ALGORITHM = 'aes-256-gcm';
 const IV_LENGTH = 16;
-const TAG_LENGTH = 16;
 
 let cachedKey: Buffer | null = null;
 let lastSecret: string | null = null;
@@ -56,4 +55,3 @@ export function maskApiKey(apiKey: string): string {
   if (!apiKey) return '';
   return '••••••••••••••••••••••' + apiKey.trim().slice(-4);
 }
-

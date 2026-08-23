@@ -154,4 +154,38 @@ router.get('/export', (req: AuthenticatedRequest, res: Response) => {
   }
 });
 
+// 3. GET /telemetry - Get current opt-out status (All authenticated users can read)
+router.get('/telemetry', (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const db = getDb();
+    const existing = db.prepare('SELECT value FROM settings WHERE key = ?').get('disable_telemetry') as { value: string } | undefined;
+    const disabled = existing ? existing.value === 'true' : false;
+    res.status(200).json({ disabled });
+  } catch (err) {
+    console.error('Failed to get telemetry status:', err);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+// 4. POST /telemetry - Update opt-out status (Admin only)
+router.post('/telemetry', (req: AuthenticatedRequest, res: Response) => {
+  if (!req.user || !req.user.isAdmin) {
+    return res.status(403).json({ message: 'Forbidden: Only administrators can configure telemetry settings' });
+  }
+
+  const { disabled } = req.body;
+  if (typeof disabled !== 'boolean') {
+    return res.status(400).json({ message: 'disabled field must be a boolean' });
+  }
+
+  try {
+    const db = getDb();
+    db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run('disable_telemetry', disabled ? 'true' : 'false');
+    res.status(200).json({ success: true, disabled });
+  } catch (err) {
+    console.error('Failed to update telemetry status:', err);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
 export default router;
