@@ -28,8 +28,6 @@ vi.mock('../api', () => ({
   createAdminUser: vi.fn(),
   fetchAdminUsers: vi.fn(),
   deleteAdminUser: vi.fn(),
-  shareBookmark: vi.fn(),
-  revokeShareBookmark: vi.fn(),
   importBookmarksHtml: vi.fn(),
   getMe: vi.fn(),
   getAuthStatus: vi.fn(),
@@ -49,8 +47,7 @@ vi.mock('../api', () => ({
   deleteClip: vi.fn(),
   removeBookmarkFromClip: vi.fn(),
   fetchBookmarkClips: vi.fn(),
-  setBookmarkClip: vi.fn(),
-  setBookmarkClips: vi.fn()
+  setBookmarkClip: vi.fn()
 }));
 
 describe('Story 14: Recycle Clip Frontend UX & Components', () => {
@@ -219,8 +216,8 @@ describe('Story 14: Recycle Clip Frontend UX & Components', () => {
         expect(screen.getByText('Trashed Slip')).toBeInTheDocument();
       });
 
-      // Click Empty Recycle Clip button in header
-      const emptyBtn = container.querySelector('.clips-top-right button.btn-primary') as HTMLElement;
+      // Click Empty Recycle Clip button in deck header
+      const emptyBtn = screen.getByRole('button', { name: /Empty Recycle Clip/i });
       expect(emptyBtn).toBeInTheDocument();
       fireEvent.click(emptyBtn);
 

@@ -118,10 +118,6 @@ export async function smartSearchBookmarks(query: string): Promise<Bookmark[]> {
   return apiFetch<Bookmark[]>(`/bookmarks/search?q=${encodeURIComponent(query)}&smart=true`);
 }
 
-export async function fetchBookmarkById(id: number): Promise<Bookmark> {
-  return apiFetch<Bookmark>(`/bookmarks/${id}`);
-}
-
 export async function createBookmark(data: {
   url: string;
   title?: string;
@@ -199,13 +195,6 @@ export async function updateBookmark(id: number, data: {
   return apiFetch<Bookmark>(`/bookmarks/${id}`, {
     method: 'PUT',
     body: JSON.stringify(data)
-  });
-}
-
-export async function updateBookmarkNote(id: number, note: string): Promise<Bookmark> {
-  return apiFetch<Bookmark>(`/bookmarks/${id}/note`, {
-    method: 'PUT',
-    body: JSON.stringify({ note })
   });
 }
 
@@ -289,20 +278,6 @@ export async function togglePinBookmark(id: number, pinned?: boolean): Promise<B
 
 export async function fetchTags(): Promise<Tag[]> {
   return apiFetch<Tag[]>('/bookmarks/tags');
-}
-
-// --- Share APIs ---
-
-export async function shareBookmark(id: number): Promise<{ token: string; shareUrl: string }> {
-  return apiFetch<{ token: string; shareUrl: string }>(`/share/bookmark/${id}`, {
-    method: 'POST'
-  });
-}
-
-export async function revokeShareBookmark(id: number): Promise<{ message: string }> {
-  return apiFetch<{ message: string }>(`/share/bookmark/${id}`, {
-    method: 'DELETE'
-  });
 }
 
 // --- IO APIs ---
@@ -434,13 +409,6 @@ export async function permanentlyDeleteClip(id: number): Promise<{ message: stri
   });
 }
 
-export async function addBookmarkToClip(clipId: number, bookmarkId: number): Promise<{ message: string }> {
-  return apiFetch<{ message: string }>(`/clips/${clipId}/bookmarks`, {
-    method: 'POST',
-    body: JSON.stringify({ bookmarkId })
-  });
-}
-
 export async function removeBookmarkFromClip(clipId: number, bookmarkId: number): Promise<{ message: string }> {
   return apiFetch<{ message: string }>(`/clips/${clipId}/bookmarks/${bookmarkId}`, {
     method: 'DELETE'
@@ -455,13 +423,6 @@ export async function setBookmarkClip(bookmarkId: number, clipId: number | null)
   return apiFetch<{ message: string; clip: Clip | null; clips: Clip[] }>(`/clips/bookmark/${bookmarkId}`, {
     method: 'PUT',
     body: JSON.stringify({ clipId })
-  });
-}
-
-export async function setBookmarkClips(bookmarkId: number, clipIds: number[]): Promise<{ message: string; clips: Clip[] }> {
-  return apiFetch<{ message: string; clips: Clip[] }>(`/clips/bookmark/${bookmarkId}`, {
-    method: 'PUT',
-    body: JSON.stringify({ clipIds })
   });
 }
 

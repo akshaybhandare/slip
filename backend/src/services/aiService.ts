@@ -455,13 +455,7 @@ export async function autoTagBookmark(params: {
   return { tags: finalTags, added: validatedTags };
 }
 
-export interface SmartSearchResultItem {
-  id: number;
-  score: number;
-  reason: string;
-}
-
-export const SEARCH_STOP_WORDS = new Set([
+const SEARCH_STOP_WORDS = new Set([
   'a', 'about', 'above', 'after', 'again', 'against', 'all', 'am', 'an', 'and', 'any', 'are', 'aren',
   'as', 'at', 'be', 'because', 'been', 'before', 'being', 'below', 'between', 'both', 'but', 'by',
   'can', 'cannot', 'could', 'did', 'do', 'does', 'doing', 'down', 'during', 'each', 'few', 'for',
@@ -476,7 +470,7 @@ export const SEARCH_STOP_WORDS = new Set([
   'looking', 'show', 'remember', 'something'
 ]);
 
-export function extractSearchTokens(query: string): string[] {
+function extractSearchTokens(query: string): string[] {
   return (query || '')
     .toLowerCase()
     .replace(/[^\w\s]/g, ' ')
@@ -980,7 +974,7 @@ export interface NoteAssistResult {
   proposedTitle?: string;
 }
 
-export function cleanLLMTextOutput(raw: string): string {
+function cleanLLMTextOutput(raw: string): string {
   if (!raw) return '';
   let cleaned = raw.trim();
   // Strip outer markdown code blocks if the model wrapped the entire output

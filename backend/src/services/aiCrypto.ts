@@ -18,11 +18,6 @@ function getEncryptionKey(): Buffer {
   return cachedKey;
 }
 
-export function clearEncryptionKeyCache(): void {
-  cachedKey = null;
-  lastSecret = null;
-}
-
 export function encryptSecret(plaintext: string): string {
   if (!plaintext) return '';
   const key = getEncryptionKey();

@@ -31,8 +31,7 @@ import { ReaderModal } from './components/ReaderModal';
 import { ShareModal } from './components/ShareModal';
 import { ImportModal } from './components/ImportModal';
 import { AuthModal } from './components/AuthModal';
-import { AddUserModal } from './components/AddUserModal';
-import { AIConnectModal } from './components/AIConnectModal';
+import { SettingsModal, SettingsTab } from './components/SettingsModal';
 import { ClipsView } from './components/ClipsView';
 import { AddToClipModal } from './components/AddToClipModal';
 import { BookmarkPlus, Plus, Sparkles, RotateCcw, X } from 'lucide-react';
@@ -41,7 +40,18 @@ import { useAIConfig } from './hooks/useAIConfig';
 import { AI_PROVIDERS } from './config/aiConfig';
 
 export const App: React.FC = () => {
-  const { themeMode, toggleTheme } = useTheme();
+  const {
+    themeMode,
+    themePreset,
+    customAccent,
+    setThemeMode,
+    setThemePreset,
+    setCustomAccent,
+    resetTheme,
+    toggleTheme
+  } = useTheme();
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [settingsTab, setSettingsTab] = useState<SettingsTab>('appearance');
   const [user, setUser] = useState<User | null>(null);
   const {
     aiConfig,
@@ -145,9 +155,6 @@ export const App: React.FC = () => {
 
   const [managingClipsBookmark, setManagingClipsBookmark] = useState<Bookmark | null>(null);
   const [isAddOpen, setIsAddOpen] = useState(false);
-  const [isAddUserOpen, setIsAddUserOpen] = useState(false);
-  const [userModalTab, setUserModalTab] = useState<'users' | 'apikeys'>('users');
-  const [isAIOpen, setIsAIOpen] = useState(false);
   const [droppedFile, setDroppedFile] = useState<File | null>(null);
   const [isImportOpen, setIsImportOpen] = useState(false);
   const [readerBookmark, setReaderBookmark] = useState<Bookmark | null>(null);
@@ -508,20 +515,11 @@ export const App: React.FC = () => {
         isSmartSearch={effectiveSmartSearch}
         onToggleSmartSearch={handleToggleSmartSearch}
         onAddClick={() => setIsAddOpen(true)}
-        onManageAccountClick={() => {
-          setUserModalTab(user?.isAdmin ? 'users' : 'apikeys');
-          setIsAddUserOpen(true);
+        onOpenSettings={() => {
+          setSettingsTab('appearance');
+          setIsSettingsOpen(true);
         }}
-        onImportClick={() => setIsImportOpen(true)}
-        onRescrapeAllClick={handleRescrapeAll}
-        isRescrapingAll={isRescrapingAll}
-        onLogoutClick={handleLogout}
-        onAIClick={() => setIsAIOpen(true)}
         isAIConnected={aiConfig.isConnected}
-        aiProviderName={AI_PROVIDERS[aiConfig.provider]?.name}
-        user={user}
-        themeMode={themeMode}
-        onToggleTheme={toggleTheme}
         isClipsView={isClipsView}
         onToggleClipsView={handleToggleClipsView}
         onOpenRecycleClip={handleOpenRecycleClip}
@@ -666,17 +664,10 @@ export const App: React.FC = () => {
         initialFile={droppedFile}
         availableTags={tags}
         isAIConnected={aiConfig.isConnected}
-        onOpenAISettings={() => setIsAIOpen(true)}
-      />
-
-      <AIConnectModal
-        isOpen={isAIOpen}
-        onClose={() => setIsAIOpen(false)}
-        aiConfig={aiConfig}
-        isAdmin={Boolean(user?.isAdmin)}
-        onConnect={connectAI}
-        onDisconnect={disconnectAI}
-        onTestConnection={testAIConnection}
+        onOpenAISettings={() => {
+          setSettingsTab('ai');
+          setIsSettingsOpen(true);
+        }}
       />
 
       <EditBookmarkModal
@@ -685,7 +676,10 @@ export const App: React.FC = () => {
         onUpdate={handleUpdateBookmark}
         availableTags={tags}
         isAIConnected={aiConfig.isConnected}
-        onOpenAISettings={() => setIsAIOpen(true)}
+        onOpenAISettings={() => {
+          setSettingsTab('ai');
+          setIsSettingsOpen(true);
+        }}
       />
 
       <AddToClipModal
@@ -710,11 +704,26 @@ export const App: React.FC = () => {
         onImportSuccess={loadData}
       />
 
-      <AddUserModal
-        isOpen={isAddUserOpen}
-        onClose={() => setIsAddUserOpen(false)}
-        currentUser={user}
-        initialTab={userModalTab}
+      <SettingsModal
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
+        initialTab={settingsTab}
+        user={user}
+        themeMode={themeMode}
+        themePreset={themePreset}
+        customAccent={customAccent}
+        onSelectMode={setThemeMode}
+        onSelectPreset={setThemePreset}
+        onSetCustomAccent={setCustomAccent}
+        onResetTheme={resetTheme}
+        onImportClick={() => setIsImportOpen(true)}
+        onRescrapeAllClick={handleRescrapeAll}
+        isRescrapingAll={isRescrapingAll}
+        aiConfig={aiConfig}
+        onConnectAI={connectAI}
+        onDisconnectAI={disconnectAI}
+        onTestAIConnection={testAIConnection}
+        onLogoutClick={handleLogout}
       />
 
       {/* 6-Second Instant Undo Toast Notification */}
