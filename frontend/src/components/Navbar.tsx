@@ -1,7 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Bookmark as BookmarkIcon, Search, Plus, X, Settings as SettingsIcon, MoreVertical, Sparkles, CornerDownLeft, Paperclip, Trash2, RefreshCw } from 'lucide-react';
-import { User } from '../types';
-import { ThemeMode } from '../hooks/useTheme';
 
 interface NavbarProps {
   searchQuery: string;
@@ -18,17 +16,7 @@ interface NavbarProps {
   onOpenRecycleClip?: () => void;
   recycleCount?: number;
   isRecycleClipActive?: boolean;
-  // Retained optional props for compatibility
-  onImportClick?: () => void;
-  onRescrapeAllClick?: () => void;
-  isRescrapingAll?: boolean;
-  onLogoutClick?: () => void;
-  onAIClick?: () => void;
   isAIConnected?: boolean;
-  aiProviderName?: string;
-  user?: User | null;
-  themeMode?: ThemeMode;
-  onManageAccountClick?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({

@@ -200,7 +200,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     const trimmedUrl = aiCustomUrl.trim();
     const trimmedModel = (aiModel || '').trim() || currentProviderDef.defaultModel;
 
-    if (aiProvider !== 'custom' && !trimmedKey) {
+    // Require key only if not already connected to this provider or if switching providers
+    const isReusingExistingKey = aiConfig.isConnected && aiConfig.provider === aiProvider && !trimmedKey;
+    if (aiProvider !== 'custom' && !trimmedKey && !isReusingExistingKey) {
       setAiFormError('Please enter your API key.');
       return;
     }

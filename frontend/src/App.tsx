@@ -519,26 +519,7 @@ export const App: React.FC = () => {
           setSettingsTab('appearance');
           setIsSettingsOpen(true);
         }}
-        onManageAccountClick={() => {
-          setSettingsTab(user?.isAdmin ? 'users' : 'keys');
-          setIsSettingsOpen(true);
-        }}
-        onImportClick={() => setIsImportOpen(true)}
-        onRescrapeAllClick={handleRescrapeAll}
-        isRescrapingAll={isRescrapingAll}
-        onLogoutClick={handleLogout}
-        onAIClick={() => {
-          setSettingsTab('ai');
-          setIsSettingsOpen(true);
-        }}
         isAIConnected={aiConfig.isConnected}
-        aiProviderName={AI_PROVIDERS[aiConfig.provider]?.name}
-        user={user}
-        themeMode={themeMode}
-        onOpenThemeModal={() => {
-          setSettingsTab('appearance');
-          setIsSettingsOpen(true);
-        }}
         isClipsView={isClipsView}
         onToggleClipsView={handleToggleClipsView}
         onOpenRecycleClip={handleOpenRecycleClip}

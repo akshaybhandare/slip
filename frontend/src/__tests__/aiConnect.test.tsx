@@ -237,6 +237,38 @@ describe('SettingsModal AI Tab UI Component', () => {
     );
   });
 
+  it('allows updating model while leaving API key blank to reuse existing key when already connected', () => {
+    const connectedConfig: AIConfig = {
+      provider: 'openai',
+      model: 'gpt-4o-mini',
+      apiKey: '',
+      maskedApiKey: '••••••••••••••••••••••a82f',
+      apiUrl: 'https://api.openai.com/v1',
+      isConnected: true
+    };
+
+    renderSettingsAI(connectedConfig);
+
+    const changeBtn = screen.getByRole('button', { name: /Change Configuration/i });
+    fireEvent.click(changeBtn);
+
+    const modelInput = screen.getByLabelText(/MODEL/i) as HTMLInputElement;
+    fireEvent.change(modelInput, { target: { value: 'gpt-4o' } });
+
+    // Leave key blank
+    const saveBtn = screen.getByRole('button', { name: /Save & Connect AI/i });
+    fireEvent.click(saveBtn);
+
+    expect(mockOnConnect).toHaveBeenCalledWith(
+      expect.objectContaining({
+        provider: 'openai',
+        model: 'gpt-4o',
+        apiKey: '',
+        isConnected: true
+      })
+    );
+  });
+
   it('transforms card to Connected view for admin, displaying masked key and Change / Test connection actions', async () => {
     const connectedConfig: AIConfig = {
       provider: 'openai',
@@ -405,12 +437,7 @@ describe('AI Smart Search UI & Interactions', () => {
         isSmartSearch={false}
         onToggleSmartSearch={onToggleSmartSearch}
         onAddClick={vi.fn()}
-        onImportClick={vi.fn()}
-        onRescrapeAllClick={vi.fn()}
-        isRescrapingAll={false}
-        onLogoutClick={vi.fn()}
         isAIConnected={true}
-        user={{ id: 1, username: 'admin' }}
       />
     );
 
@@ -433,12 +460,7 @@ describe('AI Smart Search UI & Interactions', () => {
         isSmartSearch={true}
         onToggleSmartSearch={onToggleSmartSearch}
         onAddClick={vi.fn()}
-        onImportClick={vi.fn()}
-        onRescrapeAllClick={vi.fn()}
-        isRescrapingAll={false}
-        onLogoutClick={vi.fn()}
         isAIConnected={true}
-        user={{ id: 1, username: 'admin' }}
       />
     );
 
@@ -460,12 +482,7 @@ describe('AI Smart Search UI & Interactions', () => {
         isSmartSearch={true}
         onToggleSmartSearch={vi.fn()}
         onAddClick={vi.fn()}
-        onImportClick={vi.fn()}
-        onRescrapeAllClick={vi.fn()}
-        isRescrapingAll={false}
-        onLogoutClick={vi.fn()}
         isAIConnected={true}
-        user={{ id: 1, username: 'admin' }}
       />
     );
 
@@ -534,12 +551,7 @@ describe('AI Smart Search UI & Interactions', () => {
         isSmartSearch={false}
         onToggleSmartSearch={vi.fn()}
         onAddClick={vi.fn()}
-        onImportClick={vi.fn()}
-        onRescrapeAllClick={vi.fn()}
-        isRescrapingAll={false}
-        onLogoutClick={vi.fn()}
         isAIConnected={false}
-        user={{ id: 1, username: 'admin' }}
       />
     );
 
