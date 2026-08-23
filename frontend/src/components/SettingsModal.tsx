@@ -22,7 +22,8 @@ import {
   ChevronDown,
   Globe,
   ShieldCheck,
-  CheckCircle2
+  CheckCircle2,
+  Sliders
 } from 'lucide-react';
 import { User, UserListItem } from '../types';
 import { ThemeMode, ThemePreset, THEME_PRESETS } from '../config/themeConfig';
@@ -637,9 +638,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         setAiTestResult(null);
                         setAiFormError('');
                       }}
-                      style={{ fontSize: '13.5px', height: '40px', flex: 1 }}
                     >
-                      Change Configuration
+                      <Sliders size={14} />
+                      <span>Change Configuration</span>
                     </button>
 
                     <button
@@ -647,7 +648,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       className="btn btn-secondary"
                       onClick={handleTestAIConnection}
                       disabled={aiIsTesting}
-                      style={{ fontSize: '13.5px', height: '40px', flex: 1 }}
                     >
                       {aiIsTesting ? (
                         <>
@@ -655,7 +655,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                           <span>Testing...</span>
                         </>
                       ) : (
-                        'Test Connection'
+                        <>
+                          <RefreshCw size={14} />
+                          <span>Test Connection</span>
+                        </>
                       )}
                     </button>
 
@@ -676,10 +679,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                           }
                         }
                       }}
-                      style={{ fontSize: '13.5px', height: '40px' }}
                       title="Disconnect AI"
                     >
-                      Disconnect
+                      <LogOut size={14} />
+                      <span>Disconnect</span>
                     </button>
                   </div>
                 </div>
