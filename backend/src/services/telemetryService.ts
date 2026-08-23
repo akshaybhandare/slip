@@ -41,6 +41,34 @@ function getAppVersion(): string {
   return '1.1.0';
 }
 
+function getUsageStats(): { slipsCount: number; clipsCount: number; isAiEnabled: boolean } {
+  try {
+    const db = getDb();
+    const slipsRow = db.prepare('SELECT COUNT(*) as count FROM bookmarks WHERE deleted_at IS NULL').get() as { count: number } | undefined;
+    const clipsRow = db.prepare('SELECT COUNT(*) as count FROM clips WHERE deleted_at IS NULL').get() as { count: number } | undefined;
+    const aiRow = db.prepare('SELECT value FROM settings WHERE key = ?').get('ai_config') as { value: string } | undefined;
+
+    let isAiEnabled = false;
+    if (aiRow?.value) {
+      try {
+        const parsed = JSON.parse(aiRow.value);
+        isAiEnabled = Boolean(parsed.is_connected && parsed.encrypted_api_key);
+      } catch {
+        isAiEnabled = false;
+      }
+    }
+
+    return {
+      slipsCount: typeof slipsRow?.count === 'number' ? slipsRow.count : 0,
+      clipsCount: typeof clipsRow?.count === 'number' ? clipsRow.count : 0,
+      isAiEnabled,
+    };
+  } catch (err) {
+    console.error('[Telemetry] Failed to collect usage stats:', err);
+    return { slipsCount: 0, clipsCount: 0, isAiEnabled: false };
+  }
+}
+
 export async function sendHeartbeat(): Promise<void> {
   if (isTelemetryDisabled()) {
     console.log('[Telemetry] Telemetry is opted-out/disabled.');
@@ -51,6 +79,7 @@ export async function sendHeartbeat(): Promise<void> {
     const instanceId = getInstanceId();
     const version = getAppVersion();
     const osType = os.platform();
+    const stats = getUsageStats();
 
     // Hash the instance_id locally for pseudonymous privacy
     const hashedId = crypto.createHash('sha256').update(instanceId).digest('hex');
@@ -78,6 +107,9 @@ export async function sendHeartbeat(): Promise<void> {
         instance_id: hashedId,
         version: version,
         os_type: osType,
+        slips_count: stats.slipsCount,
+        clips_count: stats.clipsCount,
+        is_ai_enabled: stats.isAiEnabled,
         last_ping_at: new Date().toISOString()
       },
       {
