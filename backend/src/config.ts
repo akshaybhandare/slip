@@ -80,3 +80,35 @@ export function getJwtSecret(): string {
     return cachedSecret;
   }
 }
+
+let cachedInstanceId: string | null = null;
+
+export function getInstanceId(): string {
+  if (cachedInstanceId) {
+    return cachedInstanceId;
+  }
+  try {
+    const db = getDb();
+    const existing = db.prepare('SELECT value FROM settings WHERE key = ?').get('instance_id') as { value: string } | undefined;
+    if (existing && existing.value) {
+      cachedInstanceId = existing.value;
+      return cachedInstanceId;
+    }
+
+    const newInstanceId = crypto.randomUUID ? crypto.randomUUID() : (() => {
+      const rnd = crypto.randomBytes(16);
+      rnd[6] = (rnd[6] & 0x0f) | 0x40;
+      rnd[8] = (rnd[8] & 0x3f) | 0x80;
+      return rnd.toString('hex').replace(/^(.{8})(.{4})(.{4})(.{4})(.{12})$/, '$1-$2-$3-$4-$5');
+    })();
+
+    db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run('instance_id', newInstanceId);
+    cachedInstanceId = newInstanceId;
+    return cachedInstanceId;
+  } catch {
+    if (!cachedInstanceId) {
+      cachedInstanceId = crypto.randomUUID ? crypto.randomUUID() : 'fallback-uuid-string';
+    }
+    return cachedInstanceId;
+  }
+}

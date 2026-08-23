@@ -8,6 +8,7 @@ export interface AuthenticatedRequest extends Request {
   user?: {
     id: number;
     username: string;
+    isAdmin?: boolean;
   };
 }
 
@@ -21,7 +22,7 @@ export function authenticate(req: AuthenticatedRequest, res: Response, next: Nex
     try {
       const secret = getJwtSecret();
       const decoded = jwt.verify(bearer, secret) as { userId: number; username: string };
-      req.user = { id: decoded.userId, username: decoded.username };
+      req.user = { id: decoded.userId, username: decoded.username, isAdmin: decoded.userId === 1 };
       return next();
     } catch {
       // If not a JWT, check if it's an API Key
@@ -33,7 +34,7 @@ export function authenticate(req: AuthenticatedRequest, res: Response, next: Nex
         if (apiKeyRecord) {
           const user = db.prepare('SELECT id, username FROM users WHERE id = ?').get(apiKeyRecord.user_id) as { id: number; username: string } | undefined;
           if (user) {
-            req.user = { id: user.id, username: user.username };
+            req.user = { id: user.id, username: user.username, isAdmin: user.id === 1 };
             return next();
           }
         }
@@ -62,7 +63,7 @@ export function authenticate(req: AuthenticatedRequest, res: Response, next: Nex
     const secret = getJwtSecret();
     const decoded = jwt.verify(token, secret) as { userId: number; username: string };
     
-    req.user = { id: decoded.userId, username: decoded.username };
+    req.user = { id: decoded.userId, username: decoded.username, isAdmin: decoded.userId === 1 };
     next();
   } catch (err) {
     return res.status(401).json({ message: 'Unauthorized: Invalid token' });

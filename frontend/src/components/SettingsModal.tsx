@@ -36,7 +36,9 @@ import {
   fetchAPIKeys,
   createAPIKey,
   deleteAPIKey,
-  APIKeyListItem
+  APIKeyListItem,
+  getTelemetryStatus,
+  updateTelemetryStatus
 } from '../api';
 import { copyToClipboard } from '../utils/clipboard';
 
@@ -121,6 +123,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [userDeletingId, setUserDeletingId] = useState<number | null>(null);
   const [userError, setUserError] = useState('');
   const [userSuccess, setUserSuccess] = useState('');
+  const [telemetryDisabled, setTelemetryDisabled] = useState(false);
 
   const isAdmin = Boolean(user?.isAdmin || user?.id === 1);
 
@@ -144,9 +147,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       // Load Keys
       loadKeys();
 
-      // Load Users if Admin
+      // Load Users & Telemetry if Admin
       if (isAdmin) {
         loadUsers();
+        loadTelemetryStatus();
       }
 
       if (user) {
@@ -171,6 +175,26 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       setUsersList(data);
     } catch {
       // Ignored
+    }
+  };
+
+  const loadTelemetryStatus = async () => {
+    if (!isAdmin) return;
+    try {
+      const res = await getTelemetryStatus();
+      setTelemetryDisabled(res.disabled);
+    } catch {
+      // Ignored
+    }
+  };
+
+  const handleToggleTelemetry = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const nextDisabled = !e.target.checked;
+    try {
+      const res = await updateTelemetryStatus(nextDisabled);
+      setTelemetryDisabled(res.disabled);
+    } catch (err) {
+      console.error('Failed to update telemetry status', err);
     }
   };
 
@@ -1008,6 +1032,28 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     <span>Export</span>
                   </a>
                 </div>
+
+                {/* Anonymous Telemetry Toggle (Admin Only) */}
+                {isAdmin && (
+                  <div className="settings-action-card">
+                    <div className="settings-action-card-text">
+                      <div className="settings-action-card-title">
+                        Anonymous Telemetry
+                      </div>
+                      <div className="settings-action-card-desc">
+                        Zero personal data or IP addresses are tracked. Only aggregates active install counts for development analytics.
+                      </div>
+                    </div>
+                    <label className="telemetry-toggle-switch">
+                      <input
+                        type="checkbox"
+                        checked={!telemetryDisabled}
+                        onChange={handleToggleTelemetry}
+                      />
+                      <span className="telemetry-toggle-slider"></span>
+                    </label>
+                  </div>
+                )}
               </div>
             </div>
           )}

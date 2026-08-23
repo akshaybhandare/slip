@@ -4671,3 +4671,49 @@ body {
   }
 }
 
+/* Telemetry Toggle Switch */
+.telemetry-toggle-switch {
+  position: relative;
+  display: inline-block;
+  width: 40px;
+  height: 20px;
+  flex-shrink: 0;
+}
+
+.telemetry-toggle-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.telemetry-toggle-slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: var(--color-border);
+  transition: .3s;
+  border-radius: 20px;
+}
+
+.telemetry-toggle-slider:before {
+  position: absolute;
+  content: "";
+  height: 14px;
+  width: 14px;
+  left: 3px;
+  bottom: 3px;
+  background-color: white;
+  transition: .3s;
+  border-radius: 50%;
+}
+
+input:checked + .telemetry-toggle-slider {
+  background-color: var(--color-primary);
+}
+
+input:checked + .telemetry-toggle-slider:before {
+  transform: translateX(20px);
+}

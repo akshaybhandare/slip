@@ -97,7 +97,6 @@ export function useTheme() {
       root.setAttribute('data-preset', themePreset);
 
       // Determine active accent color
-      const presetDef = THEME_PRESETS[themePreset] || THEME_PRESETS.default;
       const effectiveAccent = customAccent || null;
 
       if (effectiveAccent) {

@@ -126,5 +126,54 @@ describe('Netscape HTML Bookmark Import & Export', () => {
       const reParsed = parseNetscapeHtml(exportedHtml);
       expect(reParsed.length).toBe(3);
     });
+
+    test('GET /api/io/telemetry should return default false status', async () => {
+      const response = await request(app)
+        .get('/api/io/telemetry')
+        .set('Cookie', authCookie);
+
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual({ disabled: false });
+    });
+
+    test('POST /api/io/telemetry should fail if not an admin', async () => {
+      await request(app)
+        .post('/api/auth/users')
+        .set('Cookie', authCookie)
+        .send({
+          username: 'regularuser',
+          password: 'password123'
+        });
+
+      const regularLogin = await request(app).post('/api/auth/login').send({
+        username: 'regularuser',
+        password: 'password123'
+      });
+      const regularCookie = regularLogin.headers['set-cookie'][0].split(';')[0];
+
+      const response = await request(app)
+        .post('/api/io/telemetry')
+        .set('Cookie', regularCookie)
+        .send({ disabled: true });
+
+      expect(response.status).toBe(403);
+      expect(response.body.message).toMatch(/Forbidden/i);
+    });
+
+    test('POST /api/io/telemetry should update status if admin', async () => {
+      const response = await request(app)
+        .post('/api/io/telemetry')
+        .set('Cookie', authCookie)
+        .send({ disabled: true });
+
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual({ success: true, disabled: true });
+
+      const getRes = await request(app)
+        .get('/api/io/telemetry')
+        .set('Cookie', authCookie);
+      expect(getRes.status).toBe(200);
+      expect(getRes.body).toEqual({ disabled: true });
+    });
   });
 });
