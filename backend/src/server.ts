@@ -99,7 +99,8 @@ if (fs.existsSync(frontendDist)) {
 if (process.env.NODE_ENV !== 'test') {
   try {
     initDb();
-    getInstanceId();
+    const instanceId = getInstanceId();
+    console.log(`[Slip] Database initialized. Instance ID: ${instanceId}`);
     startTelemetry();
     app.listen(PORT, HOST, () => {
       console.log(`Slip server running on http://${HOST}:${PORT}`);

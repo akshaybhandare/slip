@@ -11,7 +11,8 @@ function getDbSetting(key: string): string | null {
     const db = getDb();
     const row = db.prepare('SELECT value FROM settings WHERE key = ?').get(key) as { value: string } | undefined;
     return row ? row.value : null;
-  } catch {
+  } catch (err) {
+    console.error(`[Telemetry] Failed to query setting '${key}' from database:`, err);
     return null;
   }
 }
@@ -34,8 +35,8 @@ function getAppVersion(): string {
       const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'));
       return packageJson.version || '1.1.0';
     }
-  } catch {
-    // Fail silently
+  } catch (err) {
+    console.error('[Telemetry] Failed to read package.json version:', err);
   }
   return '1.1.0';
 }
@@ -57,7 +58,7 @@ export async function sendHeartbeat(): Promise<void> {
     const key = process.env.SUPABASE_KEY || getDbSetting('supabase_key');
 
     if (!url || !key) {
-      return; // Fail silently if not configured
+      return; // Not configured
     }
 
     // Strip trailing slash if present
@@ -86,8 +87,11 @@ export async function sendHeartbeat(): Promise<void> {
         timeout: 5000,
       }
     );
-  } catch (error) {
-    // Fail completely silently without blocking the main application
+  } catch (error: any) {
+    const errorDetails = error?.response
+      ? { status: error.response.status, statusText: error.response.statusText, data: error.response.data }
+      : (error?.message || error);
+    console.error('[Telemetry] Failed to send heartbeat to Supabase:', errorDetails);
   }
 }
 
@@ -100,8 +104,8 @@ function scheduleNextHeartbeat() {
   setTimeout(async () => {
     try {
       await sendHeartbeat();
-    } catch {
-      // Fail silently
+    } catch (err) {
+      console.error('[Telemetry] Error in scheduled heartbeat:', err);
     }
     scheduleNextHeartbeat();
   }, delay);
@@ -113,7 +117,9 @@ export function startTelemetry(): void {
   }
 
   // Trigger once at startup
-  sendHeartbeat().catch(() => {});
+  sendHeartbeat().catch((err) => {
+    console.error('[Telemetry] Initial startup heartbeat failed:', err);
+  });
 
   // Schedule every 24 hours with random jitter
   scheduleNextHeartbeat();

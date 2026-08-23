@@ -73,7 +73,8 @@ export function getJwtSecret(): string {
     db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run('jwt_secret', newSecret);
     cachedSecret = newSecret;
     return cachedSecret;
-  } catch {
+  } catch (err) {
+    console.error('[Config] Failed to persist or retrieve jwt_secret from settings table:', err);
     if (!cachedSecret) {
       cachedSecret = crypto.randomBytes(32).toString('hex');
     }
@@ -105,7 +106,8 @@ export function getInstanceId(): string {
     db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run('instance_id', newInstanceId);
     cachedInstanceId = newInstanceId;
     return cachedInstanceId;
-  } catch {
+  } catch (err) {
+    console.error('[Config] Failed to persist or retrieve instance_id from settings table:', err);
     if (!cachedInstanceId) {
       cachedInstanceId = crypto.randomUUID ? crypto.randomUUID() : 'fallback-uuid-string';
     }
