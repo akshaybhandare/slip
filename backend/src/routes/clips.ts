@@ -469,7 +469,6 @@ router.put('/:id', (req: AuthenticatedRequest, res: Response) => {
       FROM clips c
       WHERE c.id = ?
     `).get(clipId);
-
     res.status(200).json(updatedClip);
   } catch (err) {
     console.error('Update clip error:', err);
