@@ -313,7 +313,6 @@ function parseClipIdsFromBody(body: any): number[] {
   if (Array.isArray(body?.ids)) ids = body.ids;
   else if (Array.isArray(body?.clip_ids)) ids = body.clip_ids;
   else if (Array.isArray(body?.clipIds)) ids = body.clipIds;
-  else if (body?.id) ids = [body.id];
 
   return Array.from(new Set(ids.map(Number))).filter((n) => !isNaN(n) && n > 0);
 }
