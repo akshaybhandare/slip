@@ -7,6 +7,7 @@ import { scrapeUrl, ScrapedMetadata, extractPlatformTag } from '../services/scra
 import { scrapeQueue } from '../services/queue';
 import { cacheThumbnail, saveUploadedFile, saveUploadedImage } from '../services/thumbnail';
 import { autoTagBookmark, performSmartSearch, getActiveAIConfig } from '../services/aiService';
+import { chunkArray } from '../utils';
 
 const router = Router();
 
@@ -15,20 +16,23 @@ router.use(authenticate);
 function attachTagsBatch(db: any, bookmarks: any[]): void {
   if (!bookmarks || bookmarks.length === 0) return;
   const bookmarkIds = bookmarks.map((b) => b.id);
-  const placeholders = bookmarkIds.map(() => '?').join(',');
-  const allTags = db.prepare(`
-    SELECT bt.bookmark_id, t.id, t.name 
-    FROM tags t
-    JOIN bookmark_tags bt ON t.id = bt.tag_id
-    WHERE bt.bookmark_id IN (${placeholders})
-  `).all(...bookmarkIds) as { bookmark_id: number; id: number; name: string }[];
-
   const tagMap = new Map<number, { id: number; name: string }[]>();
-  for (const t of allTags) {
-    if (!tagMap.has(t.bookmark_id)) {
-      tagMap.set(t.bookmark_id, []);
+
+  for (const chunk of chunkArray(bookmarkIds, 500)) {
+    const placeholders = chunk.map(() => '?').join(',');
+    const allTags = db.prepare(`
+      SELECT bt.bookmark_id, t.id, t.name 
+      FROM tags t
+      JOIN bookmark_tags bt ON t.id = bt.tag_id
+      WHERE bt.bookmark_id IN (${placeholders})
+    `).all(...chunk) as { bookmark_id: number; id: number; name: string }[];
+
+    for (const t of allTags) {
+      if (!tagMap.has(t.bookmark_id)) {
+        tagMap.set(t.bookmark_id, []);
+      }
+      tagMap.get(t.bookmark_id)!.push({ id: t.id, name: t.name });
     }
-    tagMap.get(t.bookmark_id)!.push({ id: t.id, name: t.name });
   }
 
   for (const b of bookmarks) {
@@ -536,6 +540,166 @@ router.post('/recycle-clip/empty', (req: AuthenticatedRequest, res: Response) =>
 });
 
 
+
+// Helper: Extract valid numeric IDs from request body
+function parseIdsFromBody(body: any): number[] {
+  let ids: any[] = [];
+  if (Array.isArray(body?.ids)) ids = body.ids;
+  else if (Array.isArray(body?.bookmark_ids)) ids = body.bookmark_ids;
+  else if (Array.isArray(body?.bookmarkIds)) ids = body.bookmarkIds;
+  else if (body?.id) ids = [body.id];
+
+  return Array.from(new Set(ids.map(Number))).filter((n) => !isNaN(n) && n > 0);
+}
+
+// 3.7 Bulk Delete Bookmarks (Soft delete: move to Recycle Clip)
+router.post('/bulk/delete', (req: AuthenticatedRequest, res: Response) => {
+  const userId = req.user!.id;
+  const targetIds = parseIdsFromBody(req.body);
+
+  if (targetIds.length === 0) {
+    return res.status(400).json({ message: 'No valid bookmark IDs provided' });
+  }
+
+  try {
+    const db = getDb();
+    const deleteTx = db.transaction(() => {
+      let deletedCount = 0;
+      for (const chunk of chunkArray(targetIds, 500)) {
+        const placeholders = chunk.map(() => '?').join(',');
+        const result = db.prepare(`
+          UPDATE bookmarks 
+          SET deleted_at = datetime('now'), is_pinned = 0 
+          WHERE id IN (${placeholders}) AND user_id = ? AND deleted_at IS NULL
+        `).run(...chunk, userId);
+        deletedCount += result.changes;
+      }
+      return deletedCount;
+    });
+
+    const deletedCount = deleteTx();
+    res.status(200).json({
+      message: 'Bookmarks moved to Recycle Clip successfully',
+      deletedCount,
+      ids: targetIds
+    });
+  } catch (err) {
+    console.error('Bulk delete bookmarks error:', err);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+router.delete('/bulk', (req: AuthenticatedRequest, res: Response) => {
+  const userId = req.user!.id;
+  const targetIds = parseIdsFromBody(req.body);
+
+  if (targetIds.length === 0) {
+    return res.status(400).json({ message: 'No valid bookmark IDs provided' });
+  }
+
+  try {
+    const db = getDb();
+    const deleteTx = db.transaction(() => {
+      let deletedCount = 0;
+      for (const chunk of chunkArray(targetIds, 500)) {
+        const placeholders = chunk.map(() => '?').join(',');
+        const result = db.prepare(`
+          UPDATE bookmarks 
+          SET deleted_at = datetime('now'), is_pinned = 0 
+          WHERE id IN (${placeholders}) AND user_id = ? AND deleted_at IS NULL
+        `).run(...chunk, userId);
+        deletedCount += result.changes;
+      }
+      return deletedCount;
+    });
+
+    const deletedCount = deleteTx();
+    res.status(200).json({
+      message: 'Bookmarks moved to Recycle Clip successfully',
+      deletedCount,
+      ids: targetIds
+    });
+  } catch (err) {
+    console.error('Bulk delete bookmarks error:', err);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+// 3.8 Bulk Restore Bookmarks from Recycle Clip
+router.post('/bulk/restore', (req: AuthenticatedRequest, res: Response) => {
+  const userId = req.user!.id;
+  const targetIds = parseIdsFromBody(req.body);
+
+  if (targetIds.length === 0) {
+    return res.status(400).json({ message: 'No valid bookmark IDs provided' });
+  }
+
+  try {
+    const db = getDb();
+    const restoreTx = db.transaction(() => {
+      let restoredCount = 0;
+      for (const chunk of chunkArray(targetIds, 500)) {
+        const placeholders = chunk.map(() => '?').join(',');
+        const result = db.prepare(`
+          UPDATE bookmarks 
+          SET deleted_at = NULL, updated_at = datetime('now')
+          WHERE id IN (${placeholders}) AND user_id = ? AND deleted_at IS NOT NULL
+        `).run(...chunk, userId);
+        restoredCount += result.changes;
+      }
+      return restoredCount;
+    });
+
+    const restoredCount = restoreTx();
+    res.status(200).json({
+      message: 'Bookmarks restored successfully',
+      restoredCount,
+      ids: targetIds
+    });
+  } catch (err) {
+    console.error('Bulk restore bookmarks error:', err);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+// 3.9 Bulk Permanently Delete Bookmarks
+const handleBulkPermanentDelete = (req: AuthenticatedRequest, res: Response) => {
+  const userId = req.user!.id;
+  const targetIds = parseIdsFromBody(req.body);
+
+  if (targetIds.length === 0) {
+    return res.status(400).json({ message: 'No valid bookmark IDs provided' });
+  }
+
+  try {
+    const db = getDb();
+    const permTx = db.transaction(() => {
+      let deletedCount = 0;
+      for (const chunk of chunkArray(targetIds, 500)) {
+        const placeholders = chunk.map(() => '?').join(',');
+        const result = db.prepare(`
+          DELETE FROM bookmarks 
+          WHERE id IN (${placeholders}) AND user_id = ? AND deleted_at IS NOT NULL
+        `).run(...chunk, userId);
+        deletedCount += result.changes;
+      }
+      return deletedCount;
+    });
+
+    const deletedCount = permTx();
+    res.status(200).json({
+      message: 'Bookmarks permanently deleted',
+      deletedCount,
+      ids: targetIds
+    });
+  } catch (err) {
+    console.error('Bulk permanent delete bookmarks error:', err);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+};
+
+router.post('/bulk/permanent', handleBulkPermanentDelete);
+router.delete('/bulk/permanent', handleBulkPermanentDelete);
 
 // 4. Get Single Bookmark by ID
 router.get('/:id', (req: AuthenticatedRequest, res: Response) => {

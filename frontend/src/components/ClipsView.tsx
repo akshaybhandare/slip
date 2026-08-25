@@ -13,9 +13,18 @@ import {
   permanentlyDeleteBookmark,
   restoreClip,
   permanentlyDeleteClip,
-  emptyRecycleClip
+  emptyRecycleClip,
+  bulkDeleteBookmarks,
+  bulkRestoreBookmarks,
+  bulkPermanentlyDeleteBookmarks,
+  bulkDeleteClips,
+  bulkRestoreClips,
+  bulkPermanentlyDeleteClips,
+  bulkAction
 } from '../api';
 import { MasonryGrid } from './MasonryGrid';
+import { BulkActionBar } from './BulkActionBar';
+import { isActionSupported, ActionId, ActionContext } from '../config/actionRegistry';
 import {
   Paperclip,
   ArrowLeft,
@@ -80,6 +89,14 @@ export const ClipsView: React.FC<ClipsViewProps> = ({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Multi-Selection State
+  const [selectedSlipIds, setSelectedSlipIds] = useState<Set<number>>(new Set());
+  const [selectedClipIds, setSelectedClipIds] = useState<Set<number>>(new Set());
+  const [isBulkPermDeleteOpen, setIsBulkPermDeleteOpen] = useState(false);
+  const [isBulkDeleteClipsOpen, setIsBulkDeleteClipsOpen] = useState(false);
+  const [bulkIncludeChildren, setBulkIncludeChildren] = useState(true);
+  const [bulkInProgress, setBulkInProgress] = useState(false);
+
   const onRecycleCountChangeRef = useRef(onRecycleCountChange);
   useEffect(() => {
     onRecycleCountChangeRef.current = onRecycleCountChange;
@@ -102,6 +119,8 @@ export const ClipsView: React.FC<ClipsViewProps> = ({
   }, [isViewingRecycleClip]);
 
   const navigateToClip = (id: number | null) => {
+    setSelectedSlipIds(new Set());
+    setSelectedClipIds(new Set());
     setIsViewingRecycleClip(false);
     setCurrentClipId(id);
     try {
@@ -157,6 +176,275 @@ export const ClipsView: React.FC<ClipsViewProps> = ({
   useEffect(() => {
     loadClipsData();
   }, [loadClipsData]);
+
+  // Selection handlers
+  const isSelectionMode = selectedSlipIds.size > 0 || selectedClipIds.size > 0;
+
+  const toggleSelectSlip = (id: number) => {
+    setSelectedSlipIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectClip = (id: number) => {
+    setSelectedClipIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const clearSelection = () => {
+    setSelectedSlipIds(new Set());
+    setSelectedClipIds(new Set());
+  };
+
+  // Compute active context and selectable counts
+  const currentContext: ActionContext = isViewingRecycleClip
+    ? 'recycle_clip'
+    : currentClipDetail
+    ? 'clip_detail'
+    : 'feed';
+
+  let totalSelectableCount = 0;
+  if (isViewingRecycleClip) {
+    totalSelectableCount = recycleSlips.length + recycleClips.length;
+  } else if (currentClipDetail) {
+    totalSelectableCount = (currentClipDetail.subclips?.length || 0) + (currentClipDetail.bookmarks?.length || 0);
+  } else {
+    totalSelectableCount = rootClips.length;
+  }
+
+  const isAllSelected =
+    totalSelectableCount > 0 &&
+    (isViewingRecycleClip
+      ? selectedSlipIds.size === recycleSlips.length && selectedClipIds.size === recycleClips.length
+      : currentClipDetail
+      ? selectedClipIds.size === (currentClipDetail.subclips?.length || 0) &&
+        selectedSlipIds.size === (currentClipDetail.bookmarks?.length || 0)
+      : selectedClipIds.size === rootClips.length);
+
+  const handleSelectAll = () => {
+    if (isAllSelected) {
+      clearSelection();
+    } else {
+      if (isViewingRecycleClip) {
+        setSelectedSlipIds(new Set(recycleSlips.map((s) => s.id)));
+        setSelectedClipIds(new Set(recycleClips.map((c) => c.id)));
+      } else if (currentClipDetail) {
+        setSelectedClipIds(new Set(currentClipDetail.subclips.map((c) => c.id)));
+        setSelectedSlipIds(new Set(currentClipDetail.bookmarks.map((b) => b.id)));
+      } else {
+        setSelectedClipIds(new Set(rootClips.map((c) => c.id)));
+      }
+    }
+  };
+
+  // Bulk Action Execution Router
+  const handleExecuteBulkAction = async (actionId: ActionId) => {
+    if (actionId === 'restore') {
+      await handleConfirmBulkRestore();
+    } else if (actionId === 'permanent_delete') {
+      setIsBulkPermDeleteOpen(true);
+    } else if (actionId === 'delete') {
+      if (selectedClipIds.size > 0) {
+        setIsBulkDeleteClipsOpen(true);
+      } else {
+        await handleConfirmBulkDeleteSlipsOnly();
+      }
+    } else if (actionId === 'remove_from_clip') {
+      await handleBulkRemoveFromCurrentClip();
+    }
+  };
+
+  const handleConfirmBulkRestore = async () => {
+    const slipIdsArr = Array.from(selectedSlipIds);
+    const clipIdsArr = Array.from(selectedClipIds);
+    if (slipIdsArr.length === 0 && clipIdsArr.length === 0) return;
+
+    // Optimistic instantaneous UI update
+    setRecycleSlips((prev) => prev.filter((s) => !selectedSlipIds.has(s.id)));
+    setRecycleClips((prev) => prev.filter((c) => !selectedClipIds.has(c.id)));
+    if (onRecycleCountChangeRef.current) {
+      onRecycleCountChangeRef.current(
+        Math.max(0, recycleSlips.length + recycleClips.length - slipIdsArr.length - clipIdsArr.length)
+      );
+    }
+    clearSelection();
+
+    setBulkInProgress(true);
+    try {
+      await bulkAction({
+        action: 'restore',
+        slipIds: slipIdsArr,
+        clipIds: clipIdsArr
+      });
+      loadClipsData();
+    } catch (err: any) {
+      setError(err.message || 'Failed to restore selected items');
+      loadClipsData();
+    } finally {
+      setBulkInProgress(false);
+    }
+  };
+
+  const handleConfirmBulkPermanentDelete = async () => {
+    const slipIdsArr = Array.from(selectedSlipIds);
+    const clipIdsArr = Array.from(selectedClipIds);
+    if (slipIdsArr.length === 0 && clipIdsArr.length === 0) return;
+
+    setIsBulkPermDeleteOpen(false);
+
+    // Optimistic instantaneous UI update
+    setRecycleSlips((prev) => prev.filter((s) => !selectedSlipIds.has(s.id)));
+    setRecycleClips((prev) => prev.filter((c) => !selectedClipIds.has(c.id)));
+    if (onRecycleCountChangeRef.current) {
+      onRecycleCountChangeRef.current(
+        Math.max(0, recycleSlips.length + recycleClips.length - slipIdsArr.length - clipIdsArr.length)
+      );
+    }
+    clearSelection();
+
+    setBulkInProgress(true);
+    try {
+      await bulkAction({
+        action: 'permanent_delete',
+        slipIds: slipIdsArr,
+        clipIds: clipIdsArr
+      });
+      loadClipsData();
+    } catch (err: any) {
+      setError(err.message || 'Failed to permanently delete items');
+      loadClipsData();
+    } finally {
+      setBulkInProgress(false);
+    }
+  };
+
+  const handleConfirmBulkDeleteClips = async () => {
+    const slipIdsArr = Array.from(selectedSlipIds);
+    const clipIdsArr = Array.from(selectedClipIds);
+    const includeChildren = bulkIncludeChildren;
+    setIsBulkDeleteClipsOpen(false);
+
+    // Optimistic UI updates
+    if (clipIdsArr.length > 0) {
+      setRootClips((prev) => prev.filter((c) => !selectedClipIds.has(c.id)));
+      if (currentClipDetail) {
+        setCurrentClipDetail((prev) =>
+          prev
+            ? {
+                ...prev,
+                subclips: prev.subclips.filter((s) => !selectedClipIds.has(s.id))
+              }
+            : null
+        );
+      }
+    }
+    if (slipIdsArr.length > 0 && currentClipDetail) {
+      setCurrentClipDetail((prev) =>
+        prev
+          ? {
+              ...prev,
+              bookmarks: prev.bookmarks.filter((b) => !selectedSlipIds.has(b.id)),
+              clip: {
+                ...prev.clip,
+                item_count: Math.max(0, (prev.clip.item_count || 1) - slipIdsArr.length)
+              }
+            }
+          : null
+      );
+    }
+    clearSelection();
+
+    setBulkInProgress(true);
+    try {
+      await bulkAction({
+        action: 'delete',
+        slipIds: slipIdsArr,
+        clipIds: clipIdsArr,
+        includeChildren
+      });
+      loadClipsData();
+    } catch (err: any) {
+      setError(err.message || 'Failed to delete selected items');
+      loadClipsData();
+    } finally {
+      setBulkInProgress(false);
+    }
+  };
+
+  const handleConfirmBulkDeleteSlipsOnly = async () => {
+    const slipIdsArr = Array.from(selectedSlipIds);
+    if (slipIdsArr.length === 0) return;
+
+    if (currentClipDetail) {
+      setCurrentClipDetail((prev) =>
+        prev
+          ? {
+              ...prev,
+              bookmarks: prev.bookmarks.filter((b) => !selectedSlipIds.has(b.id)),
+              clip: {
+                ...prev.clip,
+                item_count: Math.max(0, (prev.clip.item_count || 1) - slipIdsArr.length)
+              }
+            }
+          : null
+      );
+    }
+    clearSelection();
+
+    setBulkInProgress(true);
+    try {
+      await bulkDeleteBookmarks(slipIdsArr);
+      loadClipsData();
+    } catch (err: any) {
+      setError(err.message || 'Failed to delete selected slips');
+      loadClipsData();
+    } finally {
+      setBulkInProgress(false);
+    }
+  };
+
+  const handleBulkRemoveFromCurrentClip = async () => {
+    if (!currentClipId) return;
+    const slipIdsArr = Array.from(selectedSlipIds);
+    if (slipIdsArr.length === 0) return;
+
+    // Optimistic instantaneous UI update
+    if (currentClipDetail) {
+      setCurrentClipDetail((prev) =>
+        prev
+          ? {
+              ...prev,
+              bookmarks: prev.bookmarks.filter((b) => !selectedSlipIds.has(b.id)),
+              clip: {
+                ...prev.clip,
+                item_count: Math.max(0, (prev.clip.item_count || 1) - slipIdsArr.length)
+              }
+            }
+          : null
+      );
+    }
+    clearSelection();
+
+    setBulkInProgress(true);
+    try {
+      for (const bId of slipIdsArr) {
+        await removeBookmarkFromClip(currentClipId, bId);
+      }
+      loadClipsData();
+    } catch (err: any) {
+      setError(err.message || 'Failed to unclip slips');
+      loadClipsData();
+    } finally {
+      setBulkInProgress(false);
+    }
+  };
 
   const handleCreateClip = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -216,10 +504,14 @@ export const ClipsView: React.FC<ClipsViewProps> = ({
     setDeleteClipTarget(null);
     setRootClips((prev) => prev.filter((c) => c.id !== targetId));
     if (currentClipDetail) {
-      setCurrentClipDetail((prev) => prev ? {
-        ...prev,
-        subclips: prev.subclips.filter((s) => s.id !== targetId)
-      } : null);
+      setCurrentClipDetail((prev) =>
+        prev
+          ? {
+              ...prev,
+              subclips: prev.subclips.filter((s) => s.id !== targetId)
+            }
+          : null
+      );
     }
     setRecycleClips((prev) => [{ ...targetClip, deleted_at: new Date().toISOString() }, ...prev]);
     if (onRecycleCountChangeRef.current) {
@@ -231,9 +523,10 @@ export const ClipsView: React.FC<ClipsViewProps> = ({
     try {
       await deleteClip(targetId, includeChildren);
       if (currentClipId === targetId) {
-        const parentId = currentClipDetail?.breadcrumbs && currentClipDetail.breadcrumbs.length > 1
-          ? currentClipDetail.breadcrumbs[currentClipDetail.breadcrumbs.length - 2].id
-          : null;
+        const parentId =
+          currentClipDetail?.breadcrumbs && currentClipDetail.breadcrumbs.length > 1
+            ? currentClipDetail.breadcrumbs[currentClipDetail.breadcrumbs.length - 2].id
+            : null;
         navigateToClip(parentId);
       } else {
         loadClipsData();
@@ -249,14 +542,18 @@ export const ClipsView: React.FC<ClipsViewProps> = ({
   const handleDeleteBookmarkInClip = async (id: number) => {
     // Optimistic instantaneous UI update
     if (currentClipDetail) {
-      setCurrentClipDetail((prev) => prev ? {
-        ...prev,
-        bookmarks: prev.bookmarks.filter((b) => b.id !== id),
-        clip: {
-          ...prev.clip,
-          item_count: Math.max(0, (prev.clip.item_count || 1) - 1)
-        }
-      } : null);
+      setCurrentClipDetail((prev) =>
+        prev
+          ? {
+              ...prev,
+              bookmarks: prev.bookmarks.filter((b) => b.id !== id),
+              clip: {
+                ...prev.clip,
+                item_count: Math.max(0, (prev.clip.item_count || 1) - 1)
+              }
+            }
+          : null
+      );
     }
     try {
       await onDeleteBookmark(id);
@@ -270,14 +567,18 @@ export const ClipsView: React.FC<ClipsViewProps> = ({
     if (!currentClipId) return;
     // Optimistic instantaneous UI update
     if (currentClipDetail) {
-      setCurrentClipDetail((prev) => prev ? {
-        ...prev,
-        bookmarks: prev.bookmarks.filter((b) => b.id !== bookmarkId),
-        clip: {
-          ...prev.clip,
-          item_count: Math.max(0, (prev.clip.item_count || 1) - 1)
-        }
-      } : null);
+      setCurrentClipDetail((prev) =>
+        prev
+          ? {
+              ...prev,
+              bookmarks: prev.bookmarks.filter((b) => b.id !== bookmarkId),
+              clip: {
+                ...prev.clip,
+                item_count: Math.max(0, (prev.clip.item_count || 1) - 1)
+              }
+            }
+          : null
+      );
     }
     try {
       await removeBookmarkFromClip(currentClipId, bookmarkId);
@@ -489,29 +790,28 @@ export const ClipsView: React.FC<ClipsViewProps> = ({
             </div>
 
             {/* Ancestor and Current Steps */}
-            {!isViewingRecycleClip && currentClipDetail?.breadcrumbs.map((crumb, idx) => {
-              const isLast = idx === currentClipDetail.breadcrumbs.length - 1;
-              const hasNext = idx < currentClipDetail.breadcrumbs.length - 1;
+            {!isViewingRecycleClip &&
+              currentClipDetail?.breadcrumbs.map((crumb, idx) => {
+                const isLast = idx === currentClipDetail.breadcrumbs.length - 1;
+                const hasNext = idx < currentClipDetail.breadcrumbs.length - 1;
 
-              return (
-                <div
-                  key={crumb.id}
-                  className={`v-crumb-step ${isLast ? 'active' : 'clickable'}`}
-                  onClick={() => !isLast && navigateToClip(crumb.id)}
-                >
-                  <div className="v-crumb-dot-col">
-                    <div className={`v-crumb-dot ${isLast ? 'current' : ''}`} />
-                    {hasNext && <div className="v-crumb-line" />}
+                return (
+                  <div
+                    key={crumb.id}
+                    className={`v-crumb-step ${isLast ? 'active' : 'clickable'}`}
+                    onClick={() => !isLast && navigateToClip(crumb.id)}
+                  >
+                    <div className="v-crumb-dot-col">
+                      <div className={`v-crumb-dot ${isLast ? 'current' : ''}`} />
+                      {hasNext && <div className="v-crumb-line" />}
+                    </div>
+                    <div className="v-crumb-content">
+                      <span className="v-crumb-name">{crumb.name}</span>
+                      {isLast && <span className="v-crumb-active-badge">Active Clip</span>}
+                    </div>
                   </div>
-                  <div className="v-crumb-content">
-                    <span className="v-crumb-name">{crumb.name}</span>
-                    {isLast && (
-                      <span className="v-crumb-active-badge">Active Clip</span>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
+                );
+              })}
           </div>
 
           {/* Dedicated System Utility Section at bottom of Spine */}
@@ -520,6 +820,8 @@ export const ClipsView: React.FC<ClipsViewProps> = ({
               type="button"
               className={`spine-utility-btn ${isViewingRecycleClip ? 'active' : ''}`}
               onClick={() => {
+                setSelectedSlipIds(new Set());
+                setSelectedClipIds(new Set());
                 setCurrentClipId(null);
                 setIsViewingRecycleClip(true);
               }}
@@ -529,7 +831,7 @@ export const ClipsView: React.FC<ClipsViewProps> = ({
                 <Trash2 size={15} className="spine-utility-icon" />
                 <span>Recycle Clip</span>
               </div>
-              {(recycleSlips.length + recycleClips.length) > 0 && (
+              {recycleSlips.length + recycleClips.length > 0 && (
                 <span className="spine-utility-badge">
                   {recycleSlips.length + recycleClips.length}
                 </span>
@@ -541,7 +843,17 @@ export const ClipsView: React.FC<ClipsViewProps> = ({
         {/* Right Column: Clipped Deck & Stacks */}
         <main className="clips-main-deck">
           {error && (
-            <div className="alert-error" style={{ marginBottom: '16px', padding: '10px 14px', borderRadius: '8px', background: 'rgba(228, 43, 12, 0.1)', color: 'var(--color-error)', fontSize: '13px' }}>
+            <div
+              className="alert-error"
+              style={{
+                marginBottom: '16px',
+                padding: '10px 14px',
+                borderRadius: '8px',
+                background: 'rgba(228, 43, 12, 0.1)',
+                color: 'var(--color-error)',
+                fontSize: '13px'
+              }}
+            >
               {error}
             </div>
           )}
@@ -556,19 +868,34 @@ export const ClipsView: React.FC<ClipsViewProps> = ({
               {isViewingRecycleClip ? (
                 /* Recycle Clip Dedicated Management View */
                 <div>
-                  <div className="deck-section-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '20px', flexWrap: 'wrap', gap: '12px' }}>
+                  <div
+                    className="deck-section-header"
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'flex-start',
+                      marginBottom: '20px',
+                      flexWrap: 'wrap',
+                      gap: '12px'
+                    }}
+                  >
                     <div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
                         <Trash2 size={20} style={{ color: '#ef4444' }} />
-                        <span className="deck-section-title" style={{ fontSize: '18px' }}>Recycle Clip</span>
+                        <span className="deck-section-title" style={{ fontSize: '18px' }}>
+                          Recycle Clip
+                        </span>
                         <span className="deck-count-pill" style={{ marginLeft: '6px' }}>
-                          {recycleSlips.length + recycleClips.length} {(recycleSlips.length + recycleClips.length) === 1 ? 'item' : 'items'}
+                          {recycleSlips.length + recycleClips.length}{' '}
+                          {recycleSlips.length + recycleClips.length === 1 ? 'item' : 'items'}
                         </span>
                       </div>
-                      <span className="deck-section-hint">Deleted clips and slips go here before vanishing from reality. Restore any item or empty the bin.</span>
+                      <span className="deck-section-hint">
+                        Deleted clips and slips go here before vanishing from reality. Select items for bulk restore or permanent delete, or empty the bin.
+                      </span>
                     </div>
 
-                    {(recycleSlips.length + recycleClips.length) > 0 && (
+                    {recycleSlips.length + recycleClips.length > 0 && (
                       <button
                         type="button"
                         className="btn btn-secondary"
@@ -591,43 +918,70 @@ export const ClipsView: React.FC<ClipsViewProps> = ({
                       </div>
 
                       <div className="deleted-clips-grid">
-                        {recycleClips.map((clip) => (
-                          <div key={clip.id} className="deleted-clip-card">
-                            <div className="deleted-clip-left">
-                              <div className="deleted-clip-icon-wrap">
-                                <Paperclip size={16} style={{ color: 'var(--color-muted)' }} />
+                        {recycleClips.map((clip) => {
+                          const isSelected = selectedClipIds.has(clip.id);
+
+                          return (
+                            <div
+                              key={clip.id}
+                              className={`deleted-clip-card ${isSelected ? 'is-selected-clip' : ''}`}
+                              onClick={() => toggleSelectClip(clip.id)}
+                            >
+                              <div className="deleted-clip-left">
+                                <button
+                                  type="button"
+                                  className={`card-select-checkbox-btn deleted-clip-select-btn ${isSelected ? 'is-selected' : ''} ${isSelectionMode ? 'selection-mode' : ''}`}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    toggleSelectClip(clip.id);
+                                  }}
+                                  title={isSelected ? 'Deselect clip' : 'Select clip'}
+                                  aria-label={isSelected ? 'Deselect clip' : 'Select clip'}
+                                >
+                                  <div className={`card-select-checkbox-indicator ${isSelected ? 'checked' : ''}`}>
+                                    {isSelected ? (
+                                      <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                                        <polyline points="20 6 9 17 4 12" />
+                                      </svg>
+                                    ) : null}
+                                  </div>
+                                </button>
+
+                                <div className="deleted-clip-icon-wrap">
+                                  <Paperclip size={16} style={{ color: 'var(--color-muted)' }} />
+                                </div>
+                                <div className="deleted-clip-info">
+                                  <span className="deleted-clip-name">{clip.name}</span>
+                                  <span className="deleted-clip-sub">
+                                    {clip.item_count || 0} {clip.item_count === 1 ? 'slip' : 'slips'}
+                                  </span>
+                                </div>
                               </div>
-                              <div className="deleted-clip-info">
-                                <span className="deleted-clip-name">{clip.name}</span>
-                                <span className="deleted-clip-sub">
-                                  {clip.item_count || 0} {clip.item_count === 1 ? 'slip' : 'slips'}
-                                </span>
+                              <div className="deleted-clip-actions" onClick={(e) => e.stopPropagation()}>
+                                <button
+                                  type="button"
+                                  className="btn btn-secondary btn-sm"
+                                  onClick={() => handleRestoreClip(clip.id)}
+                                  title="Restore Clip"
+                                  style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '4px 8px', fontSize: '12px' }}
+                                >
+                                  <RotateCcw size={12} />
+                                  <span>Restore</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  className="btn btn-secondary btn-sm"
+                                  onClick={() => handlePermanentDeleteClip(clip.id)}
+                                  title="Delete Permanently"
+                                  style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '4px 8px', fontSize: '12px' }}
+                                >
+                                  <Trash2 size={12} style={{ color: '#ef4444' }} />
+                                  <span>Delete</span>
+                                </button>
                               </div>
                             </div>
-                            <div className="deleted-clip-actions">
-                              <button
-                                type="button"
-                                className="btn btn-secondary btn-sm"
-                                onClick={() => handleRestoreClip(clip.id)}
-                                title="Restore Clip"
-                                style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '4px 8px', fontSize: '12px' }}
-                              >
-                                <RotateCcw size={12} />
-                                <span>Restore</span>
-                              </button>
-                              <button
-                                type="button"
-                                className="btn btn-secondary btn-sm"
-                                onClick={() => handlePermanentDeleteClip(clip.id)}
-                                title="Delete Permanently"
-                                style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '4px 8px', fontSize: '12px' }}
-                              >
-                                <Trash2 size={12} style={{ color: '#ef4444' }} />
-                                <span>Delete</span>
-                              </button>
-                            </div>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     </div>
                   )}
@@ -657,6 +1011,9 @@ export const ClipsView: React.FC<ClipsViewProps> = ({
                         isRecycleBin={true}
                         onRestore={handleRestoreSlip}
                         onPermanentDelete={handlePermanentDeleteSlip}
+                        selectedSlipIds={selectedSlipIds}
+                        isSelectionMode={isSelectionMode}
+                        onToggleSelectSlip={toggleSelectSlip}
                       />
                     </div>
                   ) : recycleClips.length === 0 ? (
@@ -683,60 +1040,89 @@ export const ClipsView: React.FC<ClipsViewProps> = ({
                     <div>
                       <div className="deck-section-header">
                         <span className="deck-section-title">Your Clips ({rootClips.length})</span>
-                        <span className="deck-section-hint">Click a clip to open its stack of slips</span>
+                        <span className="deck-section-hint">Click a clip to open its stack of slips, or select multiple to delete in bulk</span>
                       </div>
 
                       <div className="clip-deck-grid">
-                        {rootClips.map((clip) => (
-                          <div
-                            key={clip.id}
-                            className="clip-deck-card"
-                            onClick={() => navigateToClip(clip.id)}
-                          >
-                            {/* Top Paperclip Metallic Accent */}
-                            <div className="deck-paperclip-pin">
-                              <Paperclip size={18} />
-                            </div>
+                        {rootClips.map((clip) => {
+                          const isSelected = selectedClipIds.has(clip.id);
 
-                            <div className="deck-card-top">
-                              <div className="deck-badge">
-                                <span>Clip Deck</span>
+                          return (
+                            <div
+                              key={clip.id}
+                              className={`clip-deck-card ${isSelected ? 'is-selected-clip' : ''}`}
+                              onClick={() => {
+                                if (isSelectionMode) {
+                                  toggleSelectClip(clip.id);
+                                } else {
+                                  navigateToClip(clip.id);
+                                }
+                              }}
+                            >
+                              <button
+                                type="button"
+                                className={`card-select-checkbox-btn ${isSelected ? 'is-selected' : ''} ${isSelectionMode ? 'selection-mode' : ''}`}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  toggleSelectClip(clip.id);
+                                }}
+                                title={isSelected ? 'Deselect clip' : 'Select clip'}
+                                aria-label={isSelected ? 'Deselect clip' : 'Select clip'}
+                              >
+                                <div className={`card-select-checkbox-indicator ${isSelected ? 'checked' : ''}`}>
+                                  {isSelected ? (
+                                    <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                                      <polyline points="20 6 9 17 4 12" />
+                                    </svg>
+                                  ) : null}
+                                </div>
+                              </button>
+
+                              {/* Top Paperclip Metallic Accent */}
+                              <div className="deck-paperclip-pin">
+                                <Paperclip size={18} />
                               </div>
-                              <div className="deck-card-actions" onClick={(e) => e.stopPropagation()}>
-                                <button
-                                  type="button"
-                                  className="icon-btn"
-                                  title="Rename clip"
-                                  onClick={() => handleOpenRename(clip)}
-                                >
-                                  <Edit3 size={13} />
-                                </button>
-                                <button
-                                  type="button"
-                                  className="icon-btn"
-                                  title="Delete clip"
-                                  onClick={() => handleOpenDeleteClip(clip)}
-                                  style={{ color: 'var(--color-error)' }}
-                                >
-                                  <Trash2 size={13} />
-                                </button>
+
+                              <div className="deck-card-top" style={{ paddingLeft: '24px' }}>
+                                <div className="deck-badge">
+                                  <span>Clip Deck</span>
+                                </div>
+                                <div className="deck-card-actions" onClick={(e) => e.stopPropagation()}>
+                                  <button
+                                    type="button"
+                                    className="icon-btn"
+                                    title="Rename clip"
+                                    onClick={() => handleOpenRename(clip)}
+                                  >
+                                    <Edit3 size={13} />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="icon-btn"
+                                    title="Delete clip"
+                                    onClick={() => handleOpenDeleteClip(clip)}
+                                    style={{ color: 'var(--color-error)' }}
+                                  >
+                                    <Trash2 size={13} />
+                                  </button>
+                                </div>
                               </div>
-                            </div>
 
-                            <h3 className="deck-card-title">{clip.name}</h3>
+                              <h3 className="deck-card-title">{clip.name}</h3>
 
-                            <div className="deck-card-footer">
-                              <span className="deck-count-pill">
-                                📎 {clip.item_count || 0} {(clip.item_count === 1 ? 'slip' : 'slips')}
-                              </span>
-                              {(clip.subclip_count || 0) > 0 && (
-                                <span className="deck-sub-pill">
-                                  {clip.subclip_count} sub-{(clip.subclip_count === 1 ? 'clip' : 'clips')}
+                              <div className="deck-card-footer">
+                                <span className="deck-count-pill">
+                                  📎 {clip.item_count || 0} {clip.item_count === 1 ? 'slip' : 'slips'}
                                 </span>
-                              )}
+                                {(clip.subclip_count || 0) > 0 && (
+                                  <span className="deck-sub-pill">
+                                    {clip.subclip_count} sub-{clip.subclip_count === 1 ? 'clip' : 'clips'}
+                                  </span>
+                                )}
+                              </div>
                             </div>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     </div>
                   ) : (
@@ -758,18 +1144,23 @@ export const ClipsView: React.FC<ClipsViewProps> = ({
                   )}
 
                   {/* Subtle, non-intrusive Recycle Clip footer link */}
-                  {(recycleSlips.length + recycleClips.length) > 0 && (
+                  {recycleSlips.length + recycleClips.length > 0 && (
                     <div className="clips-subtle-recycle-footer">
                       <button
                         type="button"
                         className="subtle-recycle-link"
                         onClick={() => {
+                          setSelectedSlipIds(new Set());
+                          setSelectedClipIds(new Set());
                           setCurrentClipId(null);
                           setIsViewingRecycleClip(true);
                         }}
                       >
                         <Trash2 size={13} />
-                        <span>Recycle Clip ({recycleSlips.length + recycleClips.length} {(recycleSlips.length + recycleClips.length) === 1 ? 'item' : 'items'})</span>
+                        <span>
+                          Recycle Clip ({recycleSlips.length + recycleClips.length}{' '}
+                          {recycleSlips.length + recycleClips.length === 1 ? 'item' : 'items'})
+                        </span>
                       </button>
                     </div>
                   )}
@@ -785,55 +1176,84 @@ export const ClipsView: React.FC<ClipsViewProps> = ({
                       </div>
 
                       <div className="clip-deck-grid">
-                        {currentClipDetail.subclips.map((sub) => (
-                          <div
-                            key={sub.id}
-                            className="clip-deck-card sub-deck-card"
-                            onClick={() => navigateToClip(sub.id)}
-                          >
-                            <div className="deck-paperclip-pin">
-                              <Paperclip size={16} />
-                            </div>
+                        {currentClipDetail.subclips.map((sub) => {
+                          const isSelected = selectedClipIds.has(sub.id);
 
-                            <div className="deck-card-top">
-                              <div className="deck-badge sub-badge">
-                                <span>Sub-Clip</span>
+                          return (
+                            <div
+                              key={sub.id}
+                              className={`clip-deck-card sub-deck-card ${isSelected ? 'is-selected-clip' : ''}`}
+                              onClick={() => {
+                                if (isSelectionMode) {
+                                  toggleSelectClip(sub.id);
+                                } else {
+                                  navigateToClip(sub.id);
+                                }
+                              }}
+                            >
+                              <button
+                                type="button"
+                                className={`card-select-checkbox-btn ${isSelected ? 'is-selected' : ''} ${isSelectionMode ? 'selection-mode' : ''}`}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  toggleSelectClip(sub.id);
+                                }}
+                                title={isSelected ? 'Deselect clip' : 'Select clip'}
+                                aria-label={isSelected ? 'Deselect clip' : 'Select clip'}
+                              >
+                                <div className={`card-select-checkbox-indicator ${isSelected ? 'checked' : ''}`}>
+                                  {isSelected ? (
+                                    <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                                      <polyline points="20 6 9 17 4 12" />
+                                    </svg>
+                                  ) : null}
+                                </div>
+                              </button>
+
+                              <div className="deck-paperclip-pin">
+                                <Paperclip size={16} />
                               </div>
-                              <div className="deck-card-actions" onClick={(e) => e.stopPropagation()}>
-                                <button
-                                  type="button"
-                                  className="icon-btn"
-                                  title="Rename sub-clip"
-                                  onClick={() => handleOpenRename(sub)}
-                                >
-                                  <Edit3 size={13} />
-                                </button>
-                                <button
-                                  type="button"
-                                  className="icon-btn"
-                                  title="Delete sub-clip"
-                                  onClick={() => handleOpenDeleteClip(sub)}
-                                  style={{ color: 'var(--color-error)' }}
-                                >
-                                  <Trash2 size={13} />
-                                </button>
+
+                              <div className="deck-card-top" style={{ paddingLeft: '24px' }}>
+                                <div className="deck-badge sub-badge">
+                                  <span>Sub-Clip</span>
+                                </div>
+                                <div className="deck-card-actions" onClick={(e) => e.stopPropagation()}>
+                                  <button
+                                    type="button"
+                                    className="icon-btn"
+                                    title="Rename sub-clip"
+                                    onClick={() => handleOpenRename(sub)}
+                                  >
+                                    <Edit3 size={13} />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="icon-btn"
+                                    title="Delete sub-clip"
+                                    onClick={() => handleOpenDeleteClip(sub)}
+                                    style={{ color: 'var(--color-error)' }}
+                                  >
+                                    <Trash2 size={13} />
+                                  </button>
+                                </div>
                               </div>
-                            </div>
 
-                            <h3 className="deck-card-title">{sub.name}</h3>
+                              <h3 className="deck-card-title">{sub.name}</h3>
 
-                            <div className="deck-card-footer">
-                              <span className="deck-count-pill">
-                                📎 {sub.item_count || 0} {(sub.item_count === 1 ? 'slip' : 'slips')}
-                              </span>
-                              {(sub.subclip_count || 0) > 0 && (
-                                <span className="deck-sub-pill">
-                                  {sub.subclip_count} sub-clips
+                              <div className="deck-card-footer">
+                                <span className="deck-count-pill">
+                                  📎 {sub.item_count || 0} {sub.item_count === 1 ? 'slip' : 'slips'}
                                 </span>
-                              )}
+                                {(sub.subclip_count || 0) > 0 && (
+                                  <span className="deck-sub-pill">
+                                    {sub.subclip_count} sub-clips
+                                  </span>
+                                )}
+                              </div>
                             </div>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     </div>
                   )}
@@ -860,6 +1280,9 @@ export const ClipsView: React.FC<ClipsViewProps> = ({
                         onTagClick={onTagClick}
                         onManageClips={onManageBookmarkClips}
                         onRemoveFromClip={handleRemoveBookmarkFromCurrentClip}
+                        selectedSlipIds={selectedSlipIds}
+                        isSelectionMode={isSelectionMode}
+                        onToggleSelectSlip={toggleSelectSlip}
                       />
                     ) : (
                       <div className="empty-state clip-empty-deck" style={{ padding: '60px 20px' }}>
@@ -885,7 +1308,140 @@ export const ClipsView: React.FC<ClipsViewProps> = ({
         </main>
       </div>
 
-      {/* Modal: Delete Clip Confirmation (Soft Delete with include_children option) */}
+      {/* Floating Bulk Action Bar */}
+      {isSelectionMode && (
+        <BulkActionBar
+          selectedSlipCount={selectedSlipIds.size}
+          selectedClipCount={selectedClipIds.size}
+          totalSelectableCount={totalSelectableCount}
+          context={currentContext}
+          onSelectAll={handleSelectAll}
+          onClearSelection={clearSelection}
+          isAllSelected={isAllSelected}
+          onExecuteBulkAction={handleExecuteBulkAction}
+          isProcessing={bulkInProgress}
+        />
+      )}
+
+      {/* Modal: Bulk Permanent Delete Confirmation */}
+      {isBulkPermDeleteOpen && (
+        <div className="modal-overlay" role="dialog" aria-modal="true" onClick={() => !bulkInProgress && setIsBulkPermDeleteOpen(false)}>
+          <div className="modal-content" style={{ maxWidth: '440px' }} onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Trash2 size={18} style={{ color: '#ef4444' }} />
+                <h2 className="modal-title">Delete Forever?</h2>
+              </div>
+              <button
+                className="modal-close-btn"
+                onClick={() => setIsBulkPermDeleteOpen(false)}
+                disabled={bulkInProgress}
+                title="Close"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="modal-body" style={{ padding: '20px 24px' }}>
+              <p style={{ fontSize: '14px', color: 'var(--color-secondary)', lineHeight: 1.5, marginBottom: '12px' }}>
+                Are you sure you want to permanently delete{' '}
+                <strong>
+                  {selectedSlipIds.size + selectedClipIds.size} selected item
+                  {selectedSlipIds.size + selectedClipIds.size === 1 ? '' : 's'}
+                </strong>
+                ?
+              </p>
+              <p style={{ fontSize: '13px', color: 'var(--color-muted)', lineHeight: 1.4 }}>
+                This action cannot be undone. These items will be permanently eradicated from the database.
+              </p>
+            </div>
+
+            <div className="modal-footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', padding: '14px 24px', borderTop: '1px solid var(--color-border)' }}>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => setIsBulkPermDeleteOpen(false)}
+                disabled={bulkInProgress}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={handleConfirmBulkPermanentDelete}
+                disabled={bulkInProgress}
+                style={{ background: '#ef4444', borderColor: '#ef4444' }}
+              >
+                {bulkInProgress ? 'Deleting...' : 'Delete Forever'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Bulk Delete Clips Confirmation */}
+      {isBulkDeleteClipsOpen && (
+        <div className="modal-overlay" role="dialog" aria-modal="true" onClick={() => !bulkInProgress && setIsBulkDeleteClipsOpen(false)}>
+          <div className="modal-content" style={{ maxWidth: '440px' }} onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Trash2 size={18} style={{ color: '#ef4444' }} />
+                <h2 className="modal-title">Delete Selected Clips</h2>
+              </div>
+              <button
+                className="modal-close-btn"
+                onClick={() => setIsBulkDeleteClipsOpen(false)}
+                disabled={bulkInProgress}
+                title="Close"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="modal-body" style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <p style={{ fontSize: '14px', color: 'var(--color-on-surface)', margin: 0, lineHeight: 1.5 }}>
+                Move{' '}
+                <strong>
+                  {selectedClipIds.size} clip{selectedClipIds.size === 1 ? '' : 's'}
+                </strong>{' '}
+                {selectedSlipIds.size > 0 && ` and ${selectedSlipIds.size} slip${selectedSlipIds.size === 1 ? '' : 's'}`} to Recycle Clip?
+              </p>
+
+              <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', fontSize: '13.5px', color: 'var(--color-secondary)', padding: '4px 0', userSelect: 'none' }}>
+                <input
+                  type="checkbox"
+                  checked={bulkIncludeChildren}
+                  onChange={(e) => setBulkIncludeChildren(e.target.checked)}
+                  style={{ width: '16px', height: '16px', cursor: 'pointer', accentColor: 'var(--color-primary)' }}
+                />
+                <span>Include all nested sub-clips and member slips</span>
+              </label>
+            </div>
+
+            <div className="modal-footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', padding: '14px 24px', borderTop: '1px solid var(--color-border)' }}>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => setIsBulkDeleteClipsOpen(false)}
+                disabled={bulkInProgress}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={handleConfirmBulkDeleteClips}
+                disabled={bulkInProgress}
+                style={{ background: '#ef4444', borderColor: '#ef4444' }}
+              >
+                {bulkInProgress ? 'Deleting...' : 'Move to Recycle Clip'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Delete Single Clip Confirmation */}
       {deleteClipTarget && (
         <div className="modal-overlay" role="dialog" aria-modal="true" onClick={() => !savingAction && setDeleteClipTarget(null)}>
           <div className="modal-content" style={{ maxWidth: '420px' }} onClick={(e) => e.stopPropagation()}>

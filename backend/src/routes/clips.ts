@@ -1,6 +1,7 @@
 import { Router, Response } from 'express';
 import { getDb } from '../db';
 import { authenticate, AuthenticatedRequest } from '../middleware/auth';
+import { chunkArray } from '../utils';
 
 const router = Router();
 
@@ -306,6 +307,259 @@ router.put('/bookmark/:bookmarkId', (req: AuthenticatedRequest, res: Response) =
   }
 });
 
+// Helper: Parse clip IDs from request body
+function parseClipIdsFromBody(body: any): number[] {
+  let ids: any[] = [];
+  if (Array.isArray(body?.ids)) ids = body.ids;
+  else if (Array.isArray(body?.clip_ids)) ids = body.clip_ids;
+  else if (Array.isArray(body?.clipIds)) ids = body.clipIds;
+  else if (body?.id) ids = [body.id];
+
+  return Array.from(new Set(ids.map(Number))).filter((n) => !isNaN(n) && n > 0);
+}
+
+// 4.5 POST /api/clips/bulk/delete - Bulk soft delete clips
+const handleBulkDeleteClips = (req: AuthenticatedRequest, res: Response) => {
+  const userId = req.user!.id;
+  const targetIds = parseClipIdsFromBody(req.body);
+  const rawInclude = req.query.include_children ?? req.body?.include_children ?? req.body?.includeChildren;
+  const includeChildren = rawInclude === undefined ? true : (rawInclude === true || rawInclude === 'true' || rawInclude === '1');
+
+  if (targetIds.length === 0) {
+    return res.status(400).json({ message: 'No valid clip IDs provided' });
+  }
+
+  try {
+    const db = getDb();
+    const bulkDeleteTx = db.transaction(() => {
+      let totalDeletedClips = 0;
+      if (includeChildren) {
+        const allDescendantIdsSet = new Set<number>();
+        for (const cid of targetIds) {
+          const clip = db.prepare('SELECT id FROM clips WHERE id = ? AND user_id = ? AND deleted_at IS NULL').get(cid, userId);
+          if (clip) {
+            const descIds = getDescendantClipIds(db, cid, userId);
+            for (const d of descIds) allDescendantIdsSet.add(d);
+          }
+        }
+
+        const allIds = Array.from(allDescendantIdsSet);
+        if (allIds.length > 0) {
+          for (const chunk of chunkArray(allIds, 500)) {
+            const placeholders = chunk.map(() => '?').join(',');
+            // Soft delete slips in these clips
+            db.prepare(`
+              UPDATE bookmarks 
+              SET deleted_at = datetime('now'), updated_at = datetime('now')
+              WHERE id IN (
+                SELECT bookmark_id FROM clip_bookmarks WHERE clip_id IN (${placeholders})
+              ) AND user_id = ? AND deleted_at IS NULL
+            `).run(...chunk, userId);
+
+            // Untag bookmarks
+            const clips = db.prepare(`SELECT id, name FROM clips WHERE id IN (${placeholders}) AND user_id = ?`).all(...chunk, userId) as { id: number; name: string }[];
+            for (const c of clips) {
+              const cleanName = c.name.trim().toLowerCase().replace(/^#/, '');
+              if (cleanName) {
+                const tagRecord = db.prepare('SELECT id FROM tags WHERE name = ?').get(cleanName) as { id: number } | undefined;
+                if (tagRecord) {
+                  db.prepare(`
+                    DELETE FROM bookmark_tags 
+                    WHERE tag_id = ? 
+                    AND bookmark_id IN (SELECT bookmark_id FROM clip_bookmarks WHERE clip_id = ?)
+                  `).run(tagRecord.id, c.id);
+                }
+              }
+            }
+
+            // Soft delete clips
+            const updateRes = db.prepare(`
+              UPDATE clips 
+              SET deleted_at = datetime('now'), updated_at = datetime('now')
+              WHERE id IN (${placeholders}) AND user_id = ?
+            `).run(...chunk, userId);
+            totalDeletedClips += updateRes.changes;
+          }
+        }
+      } else {
+        for (const cid of targetIds) {
+          const clip = db.prepare('SELECT id, name, parent_id FROM clips WHERE id = ? AND user_id = ? AND deleted_at IS NULL').get(cid, userId) as { id: number; name: string; parent_id: number | null } | undefined;
+          if (clip) {
+            // Promote direct children
+            db.prepare(`
+              UPDATE clips 
+              SET parent_id = ?, updated_at = datetime('now')
+              WHERE parent_id = ? AND user_id = ? AND deleted_at IS NULL
+            `).run(clip.parent_id, cid, userId);
+
+            // Untag
+            const cleanName = clip.name.trim().toLowerCase().replace(/^#/, '');
+            if (cleanName) {
+              const tagRecord = db.prepare('SELECT id FROM tags WHERE name = ?').get(cleanName) as { id: number } | undefined;
+              if (tagRecord) {
+                db.prepare(`
+                  DELETE FROM bookmark_tags 
+                  WHERE tag_id = ? 
+                  AND bookmark_id IN (SELECT bookmark_id FROM clip_bookmarks WHERE clip_id = ?)
+                `).run(tagRecord.id, cid);
+              }
+            }
+
+            const updateRes = db.prepare(`
+              UPDATE clips 
+              SET deleted_at = datetime('now'), updated_at = datetime('now')
+              WHERE id = ? AND user_id = ?
+            `).run(cid, userId);
+            totalDeletedClips += updateRes.changes;
+          }
+        }
+      }
+      return totalDeletedClips;
+    });
+
+    const deletedCount = bulkDeleteTx();
+    res.status(200).json({
+      message: 'Clips moved to Recycle Clip successfully',
+      deletedCount,
+      ids: targetIds
+    });
+  } catch (err) {
+    console.error('Bulk delete clips error:', err);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+};
+
+router.post('/bulk/delete', handleBulkDeleteClips);
+router.delete('/bulk', handleBulkDeleteClips);
+
+// 4.6 POST /api/clips/bulk/restore - Bulk restore clips
+router.post('/bulk/restore', (req: AuthenticatedRequest, res: Response) => {
+  const userId = req.user!.id;
+  const targetIds = parseClipIdsFromBody(req.body);
+
+  if (targetIds.length === 0) {
+    return res.status(400).json({ message: 'No valid clip IDs provided' });
+  }
+
+  try {
+    const db = getDb();
+    const bulkRestoreTx = db.transaction(() => {
+      let restoredCount = 0;
+      for (const clipId of targetIds) {
+        const clip = db.prepare('SELECT id, name, parent_id FROM clips WHERE id = ? AND user_id = ? AND deleted_at IS NOT NULL').get(clipId, userId) as { id: number; name: string; parent_id: number | null } | undefined;
+        if (clip) {
+          let targetParentId = clip.parent_id;
+          if (targetParentId !== null) {
+            const parent = db.prepare('SELECT id FROM clips WHERE id = ? AND user_id = ? AND deleted_at IS NULL').get(targetParentId, userId);
+            if (!parent) targetParentId = null;
+          }
+
+          // Collect descendants
+          const targetIdsQueue = [clipId];
+          const queue = [clipId];
+          const visited = new Set<number>([clipId]);
+          while (queue.length > 0) {
+            const curr = queue.shift()!;
+            const children = db.prepare('SELECT id FROM clips WHERE parent_id = ? AND user_id = ?').all(curr, userId) as { id: number }[];
+            for (const ch of children) {
+              if (!visited.has(ch.id)) {
+                visited.add(ch.id);
+                targetIdsQueue.push(ch.id);
+                queue.push(ch.id);
+              }
+            }
+          }
+          const placeholders = targetIdsQueue.map(() => '?').join(',');
+
+          // Restore root of this clip
+          db.prepare(`
+            UPDATE clips 
+            SET deleted_at = NULL, parent_id = ?, updated_at = datetime('now')
+            WHERE id = ? AND user_id = ?
+          `).run(targetParentId, clipId, userId);
+
+          // Restore descendants and their bookmarks in chunks
+          for (const chunk of chunkArray(targetIdsQueue, 500)) {
+            const placeholders = chunk.map(() => '?').join(',');
+            db.prepare(`
+              UPDATE clips 
+              SET deleted_at = NULL, updated_at = datetime('now')
+              WHERE id IN (${placeholders}) AND user_id = ? AND deleted_at IS NOT NULL
+            `).run(...chunk, userId);
+
+            db.prepare(`
+              UPDATE bookmarks
+              SET deleted_at = NULL, updated_at = datetime('now')
+              WHERE id IN (
+                SELECT bookmark_id FROM clip_bookmarks WHERE clip_id IN (${placeholders})
+              ) AND user_id = ? AND deleted_at IS NOT NULL
+            `).run(...chunk, userId);
+          }
+
+          // Re-apply tags
+          for (const cId of targetIdsQueue) {
+            const c = db.prepare('SELECT name FROM clips WHERE id = ?').get(cId) as { name: string } | undefined;
+            if (c) {
+              const clippedBookmarks = db.prepare('SELECT bookmark_id FROM clip_bookmarks WHERE clip_id = ?').all(cId) as { bookmark_id: number }[];
+              for (const cb of clippedBookmarks) {
+                addTagToBookmark(db, cb.bookmark_id, c.name);
+              }
+            }
+          }
+          restoredCount++;
+        }
+      }
+      return restoredCount;
+    });
+
+    const restoredCount = bulkRestoreTx();
+    res.status(200).json({
+      message: 'Clips restored successfully',
+      restoredCount,
+      ids: targetIds
+    });
+  } catch (err) {
+    console.error('Bulk restore clips error:', err);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+// 4.7 POST /api/clips/bulk/permanent - Bulk permanently delete clips
+const handleBulkPermanentDeleteClips = (req: AuthenticatedRequest, res: Response) => {
+  const userId = req.user!.id;
+  const targetIds = parseClipIdsFromBody(req.body);
+
+  if (targetIds.length === 0) {
+    return res.status(400).json({ message: 'No valid clip IDs provided' });
+  }
+
+  try {
+    const db = getDb();
+    const permTx = db.transaction(() => {
+      let deletedCount = 0;
+      for (const chunk of chunkArray(targetIds, 500)) {
+        const placeholders = chunk.map(() => '?').join(',');
+        const result = db.prepare(`DELETE FROM clips WHERE id IN (${placeholders}) AND user_id = ?`).run(...chunk, userId);
+        deletedCount += result.changes;
+      }
+      return deletedCount;
+    });
+
+    const deletedCount = permTx();
+    res.status(200).json({
+      message: 'Clips permanently deleted',
+      deletedCount,
+      ids: targetIds
+    });
+  } catch (err) {
+    console.error('Bulk permanent delete clips error:', err);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+};
+
+router.post('/bulk/permanent', handleBulkPermanentDeleteClips);
+router.delete('/bulk/permanent', handleBulkPermanentDeleteClips);
+
 // 5. GET /api/clips/:id - Get clip details, breadcrumbs, subclips, and bookmarks
 router.get('/:id', (req: AuthenticatedRequest, res: Response) => {
   const userId = req.user!.id;
@@ -499,39 +753,42 @@ router.delete('/:id', (req: AuthenticatedRequest, res: Response) => {
       if (includeChildren) {
         // Collect target clip + all recursive descendants
         const targetIds = getDescendantClipIds(db, clipId, userId);
-        const placeholders = targetIds.map(() => '?').join(',');
 
-        // Soft delete slips within these clips
-        db.prepare(`
-          UPDATE bookmarks 
-          SET deleted_at = datetime('now'), updated_at = datetime('now')
-          WHERE id IN (
-            SELECT bookmark_id FROM clip_bookmarks WHERE clip_id IN (${placeholders})
-          ) AND user_id = ? AND deleted_at IS NULL
-        `).run(...targetIds, userId);
+        for (const chunk of chunkArray(targetIds, 500)) {
+          const placeholders = chunk.map(() => '?').join(',');
 
-        // Untag bookmarks for all soft-deleted clips
-        const clips = db.prepare(`SELECT id, name FROM clips WHERE id IN (${placeholders}) AND user_id = ?`).all(...targetIds, userId) as { id: number; name: string }[];
-        for (const c of clips) {
-          const cleanName = c.name.trim().toLowerCase().replace(/^#/, '');
-          if (cleanName) {
-            const tagRecord = db.prepare('SELECT id FROM tags WHERE name = ?').get(cleanName) as { id: number } | undefined;
-            if (tagRecord) {
-              db.prepare(`
-                DELETE FROM bookmark_tags 
-                WHERE tag_id = ? 
-                AND bookmark_id IN (SELECT bookmark_id FROM clip_bookmarks WHERE clip_id = ?)
-              `).run(tagRecord.id, c.id);
+          // Soft delete slips within these clips
+          db.prepare(`
+            UPDATE bookmarks 
+            SET deleted_at = datetime('now'), updated_at = datetime('now')
+            WHERE id IN (
+              SELECT bookmark_id FROM clip_bookmarks WHERE clip_id IN (${placeholders})
+            ) AND user_id = ? AND deleted_at IS NULL
+          `).run(...chunk, userId);
+
+          // Untag bookmarks for all soft-deleted clips
+          const clips = db.prepare(`SELECT id, name FROM clips WHERE id IN (${placeholders}) AND user_id = ?`).all(...chunk, userId) as { id: number; name: string }[];
+          for (const c of clips) {
+            const cleanName = c.name.trim().toLowerCase().replace(/^#/, '');
+            if (cleanName) {
+              const tagRecord = db.prepare('SELECT id FROM tags WHERE name = ?').get(cleanName) as { id: number } | undefined;
+              if (tagRecord) {
+                db.prepare(`
+                  DELETE FROM bookmark_tags 
+                  WHERE tag_id = ? 
+                  AND bookmark_id IN (SELECT bookmark_id FROM clip_bookmarks WHERE clip_id = ?)
+                `).run(tagRecord.id, c.id);
+              }
             }
           }
-        }
 
-        // Soft delete all target clips
-        db.prepare(`
-          UPDATE clips 
-          SET deleted_at = datetime('now'), updated_at = datetime('now')
-          WHERE id IN (${placeholders}) AND user_id = ?
-        `).run(...targetIds, userId);
+          // Soft delete all target clips
+          db.prepare(`
+            UPDATE clips 
+            SET deleted_at = datetime('now'), updated_at = datetime('now')
+            WHERE id IN (${placeholders}) AND user_id = ?
+          `).run(...chunk, userId);
+        }
       } else {
         // Promote direct children up to this clip's parent
         db.prepare(`
@@ -610,8 +867,6 @@ router.post('/:id/restore', (req: AuthenticatedRequest, res: Response) => {
           }
         }
       }
-      const placeholders = targetIds.map(() => '?').join(',');
-
       // Restore clip
       db.prepare(`
         UPDATE clips 
@@ -619,21 +874,23 @@ router.post('/:id/restore', (req: AuthenticatedRequest, res: Response) => {
         WHERE id = ? AND user_id = ?
       `).run(targetParentId, clipId, userId);
 
-      // Restore descendant clips if any were deleted
-      db.prepare(`
-        UPDATE clips 
-        SET deleted_at = NULL, updated_at = datetime('now')
-        WHERE id IN (${placeholders}) AND user_id = ? AND deleted_at IS NOT NULL
-      `).run(...targetIds, userId);
+      // Restore descendant clips and bookmarks in chunks
+      for (const chunk of chunkArray(targetIds, 500)) {
+        const placeholders = chunk.map(() => '?').join(',');
+        db.prepare(`
+          UPDATE clips 
+          SET deleted_at = NULL, updated_at = datetime('now')
+          WHERE id IN (${placeholders}) AND user_id = ? AND deleted_at IS NOT NULL
+        `).run(...chunk, userId);
 
-      // Restore any soft-deleted bookmarks that belong to these clips
-      db.prepare(`
-        UPDATE bookmarks
-        SET deleted_at = NULL, updated_at = datetime('now')
-        WHERE id IN (
-          SELECT bookmark_id FROM clip_bookmarks WHERE clip_id IN (${placeholders})
-        ) AND user_id = ? AND deleted_at IS NOT NULL
-      `).run(...targetIds, userId);
+        db.prepare(`
+          UPDATE bookmarks
+          SET deleted_at = NULL, updated_at = datetime('now')
+          WHERE id IN (
+            SELECT bookmark_id FROM clip_bookmarks WHERE clip_id IN (${placeholders})
+          ) AND user_id = ? AND deleted_at IS NOT NULL
+        `).run(...chunk, userId);
+      }
 
       // Re-apply tags to all bookmarks in these clips
       for (const cId of targetIds) {

@@ -464,5 +464,75 @@ export async function deleteAPIKey(id: number): Promise<{ message: string }> {
   });
 }
 
+// --- Bulk Operations APIs ---
+
+export async function bulkDeleteBookmarks(ids: number[]): Promise<{ message: string; deletedCount: number; ids: number[] }> {
+  return apiFetch<{ message: string; deletedCount: number; ids: number[] }>('/bookmarks/bulk/delete', {
+    method: 'POST',
+    body: JSON.stringify({ ids })
+  });
+}
+
+export async function bulkRestoreBookmarks(ids: number[]): Promise<{ message: string; restoredCount: number; ids: number[] }> {
+  return apiFetch<{ message: string; restoredCount: number; ids: number[] }>('/bookmarks/bulk/restore', {
+    method: 'POST',
+    body: JSON.stringify({ ids })
+  });
+}
+
+export async function bulkPermanentlyDeleteBookmarks(ids: number[]): Promise<{ message: string; deletedCount: number; ids: number[] }> {
+  return apiFetch<{ message: string; deletedCount: number; ids: number[] }>('/bookmarks/bulk/permanent', {
+    method: 'POST',
+    body: JSON.stringify({ ids })
+  });
+}
+
+export async function bulkDeleteClips(ids: number[], includeChildren: boolean = true): Promise<{ message: string; deletedCount: number; ids: number[] }> {
+  return apiFetch<{ message: string; deletedCount: number; ids: number[] }>('/clips/bulk/delete', {
+    method: 'POST',
+    body: JSON.stringify({ ids, include_children: includeChildren })
+  });
+}
+
+export async function bulkRestoreClips(ids: number[]): Promise<{ message: string; restoredCount: number; ids: number[] }> {
+  return apiFetch<{ message: string; restoredCount: number; ids: number[] }>('/clips/bulk/restore', {
+    method: 'POST',
+    body: JSON.stringify({ ids })
+  });
+}
+
+export async function bulkPermanentlyDeleteClips(ids: number[]): Promise<{ message: string; deletedCount: number; ids: number[] }> {
+  return apiFetch<{ message: string; deletedCount: number; ids: number[] }>('/clips/bulk/permanent', {
+    method: 'POST',
+    body: JSON.stringify({ ids })
+  });
+}
+
+export async function bulkAction(params: {
+  action: 'delete' | 'restore' | 'permanent_delete';
+  slipIds?: number[];
+  clipIds?: number[];
+  includeChildren?: boolean;
+}): Promise<{
+  message: string;
+  deletedSlipsCount?: number;
+  deletedClipsCount?: number;
+  restoredSlipsCount?: number;
+  restoredClipsCount?: number;
+  slipIds?: number[];
+  clipIds?: number[];
+}> {
+  const endpoint = `/bulk/${params.action === 'permanent_delete' ? 'permanent' : params.action}`;
+  return apiFetch<any>(endpoint, {
+    method: 'POST',
+    body: JSON.stringify({
+      slipIds: params.slipIds,
+      clipIds: params.clipIds,
+      include_children: params.includeChildren
+    })
+  });
+}
+
+
 
 
