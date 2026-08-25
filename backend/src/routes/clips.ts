@@ -469,7 +469,6 @@ router.post('/bulk/restore', (req: AuthenticatedRequest, res: Response) => {
               }
             }
           }
-          const placeholders = targetIdsQueue.map(() => '?').join(',');
 
           // Restore root of this clip
           db.prepare(`
