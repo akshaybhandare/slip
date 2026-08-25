@@ -544,6 +544,25 @@ export const App: React.FC = () => {
     }
   };
 
+const mergeRestored = (
+    prev: Bookmark[],
+    restoredList: Bookmark[]
+  ): Bookmark[] => {
+    const restoredIds = new Set(restoredList.map((b) => b.id));
+    const updated = [...restoredList, ...prev.filter((b) => !restoredIds.has(b.id))];
+    return updated.sort((a, b) => {
+      const aPin = a.is_pinned ? 1 : 0;
+      const bPin = b.is_pinned ? 1 : 0;
+      if (aPin !== bPin) return bPin - aPin;
+      if (aPin && bPin) {
+        const aPinnedTime = a.pinned_at ? new Date(a.pinned_at).getTime() : 0;
+        const bPinnedTime = b.pinned_at ? new Date(b.pinned_at).getTime() : 0;
+        if (aPinnedTime !== bPinnedTime) return bPinnedTime - aPinnedTime;
+      }
+      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+    });
+  };
+
   const handleUndoDelete = async () => {
     if (!undoToast) return;
     const { id, bookmark, bulkBookmarks } = undoToast;
@@ -557,37 +576,14 @@ export const App: React.FC = () => {
         setRecycleCount((prev) => Math.max(0, prev - ids.length));
         setBookmarks((prev) => {
           const restoredList = bulkBookmarks.map((b) => ({ ...b, deleted_at: null }));
-          const existingIds = new Set(ids);
-          const updated = [...restoredList, ...prev.filter((b) => !existingIds.has(b.id))];
-          return updated.sort((a, b) => {
-            const aPin = a.is_pinned ? 1 : 0;
-            const bPin = b.is_pinned ? 1 : 0;
-            if (aPin !== bPin) return bPin - aPin;
-            if (aPin && bPin) {
-              const aPinnedTime = a.pinned_at ? new Date(a.pinned_at).getTime() : 0;
-              const bPinnedTime = b.pinned_at ? new Date(b.pinned_at).getTime() : 0;
-              if (aPinnedTime !== bPinnedTime) return bPinnedTime - aPinnedTime;
-            }
-            return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
-          });
+          return mergeRestored(prev, restoredList);
         });
       } else {
         await restoreBookmark(id);
         setRecycleCount((prev) => Math.max(0, prev - 1));
         setBookmarks((prev) => {
           const restored = { ...bookmark, deleted_at: null };
-          const updated = [restored, ...prev.filter((b) => b.id !== id)];
-          return updated.sort((a, b) => {
-            const aPin = a.is_pinned ? 1 : 0;
-            const bPin = b.is_pinned ? 1 : 0;
-            if (aPin !== bPin) return bPin - aPin;
-            if (aPin && bPin) {
-              const aPinnedTime = a.pinned_at ? new Date(a.pinned_at).getTime() : 0;
-              const bPinnedTime = b.pinned_at ? new Date(b.pinned_at).getTime() : 0;
-              if (aPinnedTime !== bPinnedTime) return bPinnedTime - aPinnedTime;
-            }
-            return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
-          });
+          return mergeRestored(prev, [restored]);
         });
       }
       fetchTags().then(setTags).catch(() => {});
