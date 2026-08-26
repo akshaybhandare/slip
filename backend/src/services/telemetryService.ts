@@ -33,12 +33,12 @@ function getAppVersion(): string {
     const packageJsonPath = path.resolve(__dirname, '../../package.json');
     if (fs.existsSync(packageJsonPath)) {
       const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'));
-      return packageJson.version || '1.1.0';
+      return packageJson.version || '1.1.1';
     }
   } catch (err) {
     console.error('[Telemetry] Failed to read package.json version:', err);
   }
-  return '1.1.0';
+  return '1.1.1';
 }
 
 function getUsageStats(): { slipsCount: number; clipsCount: number; isAiEnabled: boolean } {
