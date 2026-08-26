@@ -96,7 +96,7 @@ describe('Bulk Operations & Action Registry Single Source of Truth', () => {
       user2Cookie = login2.headers['set-cookie'][0].split(';')[0];
     });
 
-    test('POST /api/bookmarks/bulk/delete should soft delete multiple bookmarks and unpin them', async () => {
+    test('POST /api/bulk/delete should soft delete multiple bookmarks and unpin them', async () => {
       // Create 3 bookmarks
       const b1 = await request(app).post('/api/bookmarks').set('Cookie', user1Cookie).send({
         url: 'https://example.com/b1',
@@ -119,12 +119,12 @@ describe('Bulk Operations & Action Registry Single Source of Truth', () => {
 
       // Bulk soft delete b1 and b2
       const delRes = await request(app)
-        .post('/api/bookmarks/bulk/delete')
+        .post('/api/bulk/delete')
         .set('Cookie', user1Cookie)
-        .send({ ids: [b1.body.id, b2.body.id] });
+        .send({ slipIds: [b1.body.id, b2.body.id] });
 
       expect(delRes.status).toBe(200);
-      expect(delRes.body.deletedCount).toBe(2);
+      expect(delRes.body.deletedSlipsCount).toBe(2);
 
       // Verify b1 and b2 are in recycle clip and not in active bookmarks
       const active = await request(app).get('/api/bookmarks').set('Cookie', user1Cookie);
@@ -143,7 +143,7 @@ describe('Bulk Operations & Action Registry Single Source of Truth', () => {
       expect(b1InRecycle.is_pinned).toBeFalsy();
     });
 
-    test('POST /api/bookmarks/bulk/restore should restore multiple bookmarks', async () => {
+    test('POST /api/bulk/restore should restore multiple bookmarks', async () => {
       // Create and delete 2 bookmarks
       const b1 = await request(app).post('/api/bookmarks').set('Cookie', user1Cookie).send({
         url: 'https://example.com/restore1',
@@ -154,16 +154,16 @@ describe('Bulk Operations & Action Registry Single Source of Truth', () => {
         title: 'Restore Item 2'
       });
 
-      await request(app).post('/api/bookmarks/bulk/delete').set('Cookie', user1Cookie).send({ ids: [b1.body.id, b2.body.id] });
+      await request(app).post('/api/bulk/delete').set('Cookie', user1Cookie).send({ slipIds: [b1.body.id, b2.body.id] });
 
       // Bulk restore
       const resRes = await request(app)
-        .post('/api/bookmarks/bulk/restore')
+        .post('/api/bulk/restore')
         .set('Cookie', user1Cookie)
-        .send({ ids: [b1.body.id, b2.body.id] });
+        .send({ slipIds: [b1.body.id, b2.body.id] });
 
       expect(resRes.status).toBe(200);
-      expect(resRes.body.restoredCount).toBe(2);
+      expect(resRes.body.restoredSlipsCount).toBe(2);
 
       const active = await request(app).get('/api/bookmarks').set('Cookie', user1Cookie);
       const activeIds = active.body.map((b: any) => b.id);
@@ -171,7 +171,7 @@ describe('Bulk Operations & Action Registry Single Source of Truth', () => {
       expect(activeIds).toContain(b2.body.id);
     });
 
-    test('POST /api/bookmarks/bulk/permanent should permanently eradicate multiple bookmarks', async () => {
+    test('POST /api/bulk/permanent should permanently eradicate multiple bookmarks', async () => {
       const b1 = await request(app).post('/api/bookmarks').set('Cookie', user1Cookie).send({
         url: 'https://example.com/perm1',
         title: 'Perm Item 1'
@@ -182,15 +182,15 @@ describe('Bulk Operations & Action Registry Single Source of Truth', () => {
       });
 
       // Must be trashed first
-      await request(app).post('/api/bookmarks/bulk/delete').set('Cookie', user1Cookie).send({ ids: [b1.body.id, b2.body.id] });
+      await request(app).post('/api/bulk/delete').set('Cookie', user1Cookie).send({ slipIds: [b1.body.id, b2.body.id] });
 
       const permRes = await request(app)
-        .post('/api/bookmarks/bulk/permanent')
+        .post('/api/bulk/permanent')
         .set('Cookie', user1Cookie)
-        .send({ ids: [b1.body.id, b2.body.id] });
+        .send({ slipIds: [b1.body.id, b2.body.id] });
 
       expect(permRes.status).toBe(200);
-      expect(permRes.body.deletedCount).toBe(2);
+      expect(permRes.body.deletedSlipsCount).toBe(2);
 
       const recycle = await request(app).get('/api/bookmarks/recycle-clip').set('Cookie', user1Cookie);
       const recycleIds = recycle.body.map((b: any) => b.id);
@@ -198,7 +198,7 @@ describe('Bulk Operations & Action Registry Single Source of Truth', () => {
       expect(recycleIds).not.toContain(b2.body.id);
     });
 
-    test('POST /api/clips/bulk/delete should cascade soft delete multiple clips and member slips', async () => {
+    test('POST /api/bulk/delete should cascade soft delete multiple clips and member slips', async () => {
       // Create clip 1 with subclip and slip
       const c1 = await request(app).post('/api/clips').set('Cookie', user1Cookie).send({ name: 'Bulk Clip 1' });
       const c1Child = await request(app).post('/api/clips').set('Cookie', user1Cookie).send({ name: 'Bulk Clip 1 Child', parentId: c1.body.id });
@@ -212,12 +212,12 @@ describe('Bulk Operations & Action Registry Single Source of Truth', () => {
 
       // Bulk delete c1 and c2 with include_children=true
       const delRes = await request(app)
-        .post('/api/clips/bulk/delete')
+        .post('/api/bulk/delete')
         .set('Cookie', user1Cookie)
-        .send({ ids: [c1.body.id, c2.body.id], include_children: true });
+        .send({ clipIds: [c1.body.id, c2.body.id], include_children: true });
 
       expect(delRes.status).toBe(200);
-      expect(delRes.body.deletedCount).toBeGreaterThanOrEqual(3); // c1, c1Child, c2
+      expect(delRes.body.deletedClipsCount).toBeGreaterThanOrEqual(3); // c1, c1Child, c2
 
       // Verify clips in recycle
       const trashedClips = await request(app).get('/api/clips/recycle-clip').set('Cookie', user1Cookie);
@@ -233,23 +233,23 @@ describe('Bulk Operations & Action Registry Single Source of Truth', () => {
       expect(trashedSlipIds).toContain(b2.body.id);
     });
 
-    test('POST /api/clips/bulk/restore should restore multiple clips and member slips', async () => {
+    test('POST /api/bulk/restore should restore multiple clips and member slips', async () => {
       // Create and delete 2 clips
       const c1 = await request(app).post('/api/clips').set('Cookie', user1Cookie).send({ name: 'Restore Clip 1' });
       const c2 = await request(app).post('/api/clips').set('Cookie', user1Cookie).send({ name: 'Restore Clip 2' });
       const b1 = await request(app).post('/api/bookmarks').set('Cookie', user1Cookie).send({ url: 'https://example.com/rclipbm', title: 'RClip BM' });
       await request(app).post(`/api/clips/${c1.body.id}/bookmarks`).set('Cookie', user1Cookie).send({ bookmarkId: b1.body.id });
 
-      await request(app).post('/api/clips/bulk/delete').set('Cookie', user1Cookie).send({ ids: [c1.body.id, c2.body.id] });
+      await request(app).post('/api/bulk/delete').set('Cookie', user1Cookie).send({ clipIds: [c1.body.id, c2.body.id] });
 
       // Bulk restore
       const restoreRes = await request(app)
-        .post('/api/clips/bulk/restore')
+        .post('/api/bulk/restore')
         .set('Cookie', user1Cookie)
-        .send({ ids: [c1.body.id, c2.body.id] });
+        .send({ clipIds: [c1.body.id, c2.body.id] });
 
       expect(restoreRes.status).toBe(200);
-      expect(restoreRes.body.restoredCount).toBe(2);
+      expect(restoreRes.body.restoredClipsCount).toBe(2);
 
       const activeClips = await request(app).get('/api/clips').set('Cookie', user1Cookie);
       const activeClipIds = activeClips.body.map((c: any) => c.id);
@@ -261,19 +261,19 @@ describe('Bulk Operations & Action Registry Single Source of Truth', () => {
       expect(activeBookmarkIds).toContain(b1.body.id);
     });
 
-    test('POST /api/clips/bulk/permanent should permanently delete multiple clips', async () => {
+    test('POST /api/bulk/permanent should permanently delete multiple clips', async () => {
       const c1 = await request(app).post('/api/clips').set('Cookie', user1Cookie).send({ name: 'Perm Clip 1' });
       const c2 = await request(app).post('/api/clips').set('Cookie', user1Cookie).send({ name: 'Perm Clip 2' });
 
-      await request(app).post('/api/clips/bulk/delete').set('Cookie', user1Cookie).send({ ids: [c1.body.id, c2.body.id] });
+      await request(app).post('/api/bulk/delete').set('Cookie', user1Cookie).send({ clipIds: [c1.body.id, c2.body.id] });
 
       const permRes = await request(app)
-        .post('/api/clips/bulk/permanent')
+        .post('/api/bulk/permanent')
         .set('Cookie', user1Cookie)
-        .send({ ids: [c1.body.id, c2.body.id] });
+        .send({ clipIds: [c1.body.id, c2.body.id] });
 
       expect(permRes.status).toBe(200);
-      expect(permRes.body.deletedCount).toBe(2);
+      expect(permRes.body.deletedClipsCount).toBe(2);
 
       const trashed = await request(app).get('/api/clips/recycle-clip').set('Cookie', user1Cookie);
       const trashedIds = trashed.body.map((c: any) => c.id);
@@ -316,6 +316,53 @@ describe('Bulk Operations & Action Registry Single Source of Truth', () => {
       expect(permRes.status).toBe(200);
       expect(permRes.body.deletedSlipsCount).toBe(1);
       expect(permRes.body.deletedClipsCount).toBe(1);
+    });
+
+    test('Security: active clips cannot be permanently deleted without being soft-deleted first', async () => {
+      const activeClip = await request(app).post('/api/clips').set('Cookie', user1Cookie).send({ name: 'Active Protected Clip' });
+
+      // Attempt permanent delete on active clip
+      const permRes = await request(app)
+        .post('/api/bulk/permanent')
+        .set('Cookie', user1Cookie)
+        .send({ clipIds: [activeClip.body.id] });
+
+      expect(permRes.status).toBe(200);
+      expect(permRes.body.deletedClipsCount).toBe(0);
+
+      // Verify activeClip is still active
+      const checkActive = await request(app).get('/api/clips').set('Cookie', user1Cookie);
+      expect(checkActive.body.some((c: any) => c.id === activeClip.body.id)).toBe(true);
+    });
+
+    test('Data consistency: cascade soft delete unpins slips, and non-cascade delete cleans up clip_bookmarks', async () => {
+      // 1. Test cascade unpin
+      const parentClip = await request(app).post('/api/clips').set('Cookie', user1Cookie).send({ name: 'Parent Pin Clip' });
+      const pinSlip = await request(app).post('/api/bookmarks').set('Cookie', user1Cookie).send({ url: 'https://example.com/pinslip', title: 'Pin Slip' });
+      await request(app).put(`/api/bookmarks/${pinSlip.body.id}/pin`).set('Cookie', user1Cookie).send({ pinned: true });
+      await request(app).post(`/api/clips/${parentClip.body.id}/bookmarks`).set('Cookie', user1Cookie).send({ bookmarkId: pinSlip.body.id });
+
+      // Bulk delete clip with include_children=true
+      await request(app).post('/api/bulk/delete').set('Cookie', user1Cookie).send({ clipIds: [parentClip.body.id], include_children: true });
+
+      // Check slip in recycle - is_pinned must be false
+      const recycleSlips = await request(app).get('/api/bookmarks/recycle-clip').set('Cookie', user1Cookie);
+      const trashedPinSlip = recycleSlips.body.find((b: any) => b.id === pinSlip.body.id);
+      expect(trashedPinSlip.is_pinned).toBeFalsy();
+
+      // 2. Test non-cascade clip_bookmarks cleanup
+      const nonCascadeClip = await request(app).post('/api/clips').set('Cookie', user1Cookie).send({ name: 'Non Cascade Clip' });
+      const activeSlip = await request(app).post('/api/bookmarks').set('Cookie', user1Cookie).send({ url: 'https://example.com/activeslip', title: 'Active Slip' });
+      await request(app).post(`/api/clips/${nonCascadeClip.body.id}/bookmarks`).set('Cookie', user1Cookie).send({ bookmarkId: activeSlip.body.id });
+
+      // Bulk delete nonCascadeClip with include_children=false
+      await request(app).post('/api/bulk/delete').set('Cookie', user1Cookie).send({ clipIds: [nonCascadeClip.body.id], include_children: false });
+
+      // Active slip should remain active and unclipped
+      const activeBms = await request(app).get('/api/bookmarks').set('Cookie', user1Cookie);
+      const foundActive = activeBms.body.find((b: any) => b.id === activeSlip.body.id);
+      expect(foundActive).toBeDefined();
+      expect(foundActive.deleted_at).toBeNull();
     });
 
     test('Security: user cannot bulk delete or restore other users slips or clips', async () => {

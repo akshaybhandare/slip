@@ -38,6 +38,7 @@ vi.mock('../api', () => ({
   updateClip: vi.fn(),
   deleteClip: vi.fn(),
   removeBookmarkFromClip: vi.fn(),
+  removeBookmarksFromClip: vi.fn(),
   fetchBookmarkClips: vi.fn().mockResolvedValue([]),
   setBookmarkClip: vi.fn().mockResolvedValue({ message: 'Success', clip: null, clips: [] }),
   fetchRecycleClip: vi.fn().mockResolvedValue([]),

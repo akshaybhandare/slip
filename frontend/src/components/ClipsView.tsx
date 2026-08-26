@@ -7,6 +7,7 @@ import {
   updateClip,
   deleteClip,
   removeBookmarkFromClip,
+  removeBookmarksFromClip,
   fetchRecycleClip,
   fetchRecycleClips,
   restoreBookmark,
@@ -434,9 +435,7 @@ export const ClipsView: React.FC<ClipsViewProps> = ({
 
     setBulkInProgress(true);
     try {
-      for (const bId of slipIdsArr) {
-        await removeBookmarkFromClip(currentClipId, bId);
-      }
+      await removeBookmarksFromClip(currentClipId, slipIdsArr);
       loadClipsData();
     } catch (err: any) {
       setError(err.message || 'Failed to unclip slips');

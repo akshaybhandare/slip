@@ -47,11 +47,11 @@ function parseIds(arr: any): number[] {
   return Array.from(new Set(arr.map(Number))).filter((n) => !isNaN(n) && n > 0);
 }
 
-// POST /api/bulk/delete - Bulk soft delete slips and/or clips
-router.post('/delete', (req: AuthenticatedRequest, res: Response) => {
+// POST /api/bulk/delete or DELETE /api/bulk/delete - Bulk soft delete slips and/or clips
+const handleBulkDelete = (req: AuthenticatedRequest, res: Response) => {
   const userId = req.user!.id;
-  const slipIds = parseIds(req.body?.slipIds || req.body?.slip_ids || req.body?.bookmarkIds || req.body?.bookmark_ids);
   const clipIds = parseIds(req.body?.clipIds || req.body?.clip_ids);
+  const slipIds = parseIds(req.body?.slipIds || req.body?.slip_ids || req.body?.bookmarkIds || req.body?.bookmark_ids || (clipIds.length === 0 ? req.body?.ids : undefined));
   const rawInclude = req.query.include_children ?? req.body?.include_children ?? req.body?.includeChildren;
   const includeChildren = rawInclude === undefined ? true : (rawInclude === true || rawInclude === 'true' || rawInclude === '1');
 
@@ -97,7 +97,7 @@ router.post('/delete', (req: AuthenticatedRequest, res: Response) => {
               // Soft delete slips within these clips
               db.prepare(`
                 UPDATE bookmarks 
-                SET deleted_at = datetime('now'), updated_at = datetime('now')
+                SET deleted_at = datetime('now'), is_pinned = 0, updated_at = datetime('now')
                 WHERE id IN (
                   SELECT bookmark_id FROM clip_bookmarks WHERE clip_id IN (${placeholders})
                 ) AND user_id = ? AND deleted_at IS NULL
@@ -149,6 +149,9 @@ router.post('/delete', (req: AuthenticatedRequest, res: Response) => {
                 }
               }
 
+              // Clean up clip_bookmarks association for this deleted clip
+              db.prepare('DELETE FROM clip_bookmarks WHERE clip_id = ?').run(cid);
+
               const cRes = db.prepare(`
                 UPDATE clips 
                 SET deleted_at = datetime('now'), updated_at = datetime('now')
@@ -174,13 +177,17 @@ router.post('/delete', (req: AuthenticatedRequest, res: Response) => {
     console.error('Unified bulk delete error:', err);
     res.status(500).json({ message: 'Internal server error' });
   }
-});
+};
+
+router.post('/delete', handleBulkDelete);
+router.delete('/delete', handleBulkDelete);
+router.delete('/', handleBulkDelete);
 
 // POST /api/bulk/restore - Bulk restore slips and/or clips
-router.post('/restore', (req: AuthenticatedRequest, res: Response) => {
+const handleBulkRestore = (req: AuthenticatedRequest, res: Response) => {
   const userId = req.user!.id;
-  const slipIds = parseIds(req.body?.slipIds || req.body?.slip_ids || req.body?.bookmarkIds || req.body?.bookmark_ids);
   const clipIds = parseIds(req.body?.clipIds || req.body?.clip_ids);
+  const slipIds = parseIds(req.body?.slipIds || req.body?.slip_ids || req.body?.bookmarkIds || req.body?.bookmark_ids || (clipIds.length === 0 ? req.body?.ids : undefined));
 
   if (slipIds.length === 0 && clipIds.length === 0) {
     return res.status(400).json({ message: 'No slip or clip IDs provided for bulk restoration' });
@@ -243,9 +250,14 @@ router.post('/restore', (req: AuthenticatedRequest, res: Response) => {
             }
 
             for (const cId of targetIdsQueue) {
-              const c = db.prepare('SELECT name FROM clips WHERE id = ?').get(cId) as { name: string } | undefined;
+              const c = db.prepare('SELECT name FROM clips WHERE id = ? AND user_id = ?').get(cId, userId) as { name: string } | undefined;
               if (c) {
-                const clippedBookmarks = db.prepare('SELECT bookmark_id FROM clip_bookmarks WHERE clip_id = ?').all(cId) as { bookmark_id: number }[];
+                const clippedBookmarks = db.prepare(`
+                  SELECT cb.bookmark_id 
+                  FROM clip_bookmarks cb
+                  JOIN bookmarks b ON cb.bookmark_id = b.id
+                  WHERE cb.clip_id = ? AND b.user_id = ?
+                `).all(cId, userId) as { bookmark_id: number }[];
                 for (const cb of clippedBookmarks) {
                   addTagToBookmark(db, cb.bookmark_id, c.name);
                 }
@@ -283,13 +295,15 @@ router.post('/restore', (req: AuthenticatedRequest, res: Response) => {
     console.error('Unified bulk restore error:', err);
     res.status(500).json({ message: 'Internal server error' });
   }
-});
+};
 
-// POST /api/bulk/permanent - Bulk permanent delete slips and/or clips
-router.post('/permanent', (req: AuthenticatedRequest, res: Response) => {
+router.post('/restore', handleBulkRestore);
+
+// POST /api/bulk/permanent or DELETE /api/bulk/permanent - Bulk permanent delete slips and/or clips
+const handleBulkPermanent = (req: AuthenticatedRequest, res: Response) => {
   const userId = req.user!.id;
-  const slipIds = parseIds(req.body?.slipIds || req.body?.slip_ids || req.body?.bookmarkIds || req.body?.bookmark_ids);
   const clipIds = parseIds(req.body?.clipIds || req.body?.clip_ids);
+  const slipIds = parseIds(req.body?.slipIds || req.body?.slip_ids || req.body?.bookmarkIds || req.body?.bookmark_ids || (clipIds.length === 0 ? req.body?.ids : undefined));
 
   if (slipIds.length === 0 && clipIds.length === 0) {
     return res.status(400).json({ message: 'No slip or clip IDs provided for bulk permanent deletion' });
@@ -317,7 +331,7 @@ router.post('/permanent', (req: AuthenticatedRequest, res: Response) => {
           const placeholders = chunk.map(() => '?').join(',');
           const cRes = db.prepare(`
             DELETE FROM clips 
-            WHERE id IN (${placeholders}) AND user_id = ?
+            WHERE id IN (${placeholders}) AND user_id = ? AND deleted_at IS NOT NULL
           `).run(...chunk, userId);
           deletedClipsCount += cRes.changes;
         }
@@ -337,6 +351,9 @@ router.post('/permanent', (req: AuthenticatedRequest, res: Response) => {
     console.error('Unified bulk permanent delete error:', err);
     res.status(500).json({ message: 'Internal server error' });
   }
-});
+};
+
+router.post('/permanent', handleBulkPermanent);
+router.delete('/permanent', handleBulkPermanent);
 
 export default router;
