@@ -13,6 +13,8 @@ import {
   restoreBookmark,
   fetchRecycleClip,
   fetchRecycleClips,
+  bulkDeleteBookmarks,
+  bulkRestoreBookmarks,
   rescrapeBookmark,
   autoTagBookmark,
   rescrapeAllBookmarks,
@@ -24,6 +26,8 @@ import {
 import { Navbar } from './components/Navbar';
 import { FilterTabs } from './components/FilterTabs';
 import { MasonryGrid } from './components/MasonryGrid';
+import { BulkActionBar } from './components/BulkActionBar';
+import { ActionId } from './config/actionRegistry';
 import { SlipPinIcon } from './components/BookmarkCard';
 import { AddBookmarkModal } from './components/AddBookmarkModal';
 import { EditBookmarkModal } from './components/EditBookmarkModal';
@@ -427,8 +431,77 @@ export const App: React.FC = () => {
     }
   };
 
-  const [undoToast, setUndoToast] = useState<{ id: number; title: string; bookmark: Bookmark } | null>(null);
+  const [undoToast, setUndoToast] = useState<{ id: number; title: string; bookmark: Bookmark; bulkBookmarks?: Bookmark[] } | null>(null);
   const undoTimerRef = useRef<any>(null);
+
+  // Multi-Selection State for Feed
+  const [selectedSlipIds, setSelectedSlipIds] = useState<Set<number>>(new Set());
+  const [isBulkOperating, setIsBulkOperating] = useState(false);
+
+  const toggleSelectSlip = useCallback((id: number) => {
+    setSelectedSlipIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const clearSelection = useCallback(() => {
+    setSelectedSlipIds(new Set());
+  }, []);
+
+  const isAllSelected = bookmarks.length > 0 && selectedSlipIds.size === bookmarks.length;
+
+  const handleSelectAll = useCallback(() => {
+    if (isAllSelected) {
+      clearSelection();
+    } else {
+      setSelectedSlipIds(new Set(bookmarks.map((b) => b.id)));
+    }
+  }, [isAllSelected, bookmarks, clearSelection]);
+
+  // Clear selection on filter changes or switching views
+  useEffect(() => {
+    clearSelection();
+  }, [activeType, selectedTag, searchQuery, isClipsView, clearSelection]);
+
+  const handleExecuteBulkAction = async (actionId: ActionId) => {
+    if (actionId === 'delete') {
+      const ids = Array.from(selectedSlipIds);
+      if (ids.length === 0) return;
+      const deletedSlips = bookmarks.filter((b) => selectedSlipIds.has(b.id));
+
+      clearSelection();
+      setBookmarks((prev) => prev.filter((b) => !ids.includes(b.id)));
+      setRecycleCount((prev) => prev + ids.length);
+
+      setIsBulkOperating(true);
+      try {
+        await bulkDeleteBookmarks(ids);
+        fetchTags().then(setTags).catch(() => {});
+
+        if (deletedSlips.length > 0) {
+          if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+          setUndoToast({
+            id: ids[0],
+            title: ids.length === 1 ? (deletedSlips[0].title || 'Slip') : `${ids.length} Slips`,
+            bookmark: deletedSlips[0],
+            bulkBookmarks: deletedSlips
+          });
+          undoTimerRef.current = setTimeout(() => {
+            setUndoToast(null);
+          }, 6000);
+        }
+      } catch (err: any) {
+        alert(err.message || 'Failed to move slips to Recycle Clip');
+        loadData();
+      } finally {
+        setIsBulkOperating(false);
+      }
+    }
+  };
+
   useEffect(() => {
     return () => {
       if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
@@ -471,30 +544,40 @@ export const App: React.FC = () => {
     }
   };
 
+function mergeRestored(prev: Bookmark[], restoredItems: Bookmark[]): Bookmark[] {
+  const restoredList = restoredItems.map((b) => ({ ...b, deleted_at: null }));
+  const existingIds = new Set(restoredItems.map((b) => b.id));
+  const updated = [...restoredList, ...prev.filter((b) => !existingIds.has(b.id))];
+  return updated.sort((a, b) => {
+    const aPin = a.is_pinned ? 1 : 0;
+    const bPin = b.is_pinned ? 1 : 0;
+    if (aPin !== bPin) return bPin - aPin;
+    if (aPin && bPin) {
+      const aPinnedTime = a.pinned_at ? new Date(a.pinned_at).getTime() : 0;
+      const bPinnedTime = b.pinned_at ? new Date(b.pinned_at).getTime() : 0;
+      if (aPinnedTime !== bPinnedTime) return bPinnedTime - aPinnedTime;
+    }
+    return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+  });
+}
+
   const handleUndoDelete = async () => {
     if (!undoToast) return;
-    const { id, bookmark } = undoToast;
+    const { id, bookmark, bulkBookmarks } = undoToast;
     if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
     setUndoToast(null);
 
     try {
-      await restoreBookmark(id);
-      setRecycleCount((prev) => Math.max(0, prev - 1));
-      setBookmarks((prev) => {
-        const restored = { ...bookmark, deleted_at: null };
-        const updated = [restored, ...prev.filter((b) => b.id !== id)];
-        return updated.sort((a, b) => {
-          const aPin = a.is_pinned ? 1 : 0;
-          const bPin = b.is_pinned ? 1 : 0;
-          if (aPin !== bPin) return bPin - aPin;
-          if (aPin && bPin) {
-            const aPinnedTime = a.pinned_at ? new Date(a.pinned_at).getTime() : 0;
-            const bPinnedTime = b.pinned_at ? new Date(b.pinned_at).getTime() : 0;
-            if (aPinnedTime !== bPinnedTime) return bPinnedTime - aPinnedTime;
-          }
-          return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
-        });
-      });
+      if (bulkBookmarks && bulkBookmarks.length > 0) {
+        const ids = bulkBookmarks.map((b) => b.id);
+        await bulkRestoreBookmarks(ids);
+        setRecycleCount((prev) => Math.max(0, prev - ids.length));
+        setBookmarks((prev) => mergeRestored(prev, bulkBookmarks));
+      } else {
+        await restoreBookmark(id);
+        setRecycleCount((prev) => Math.max(0, prev - 1));
+        setBookmarks((prev) => mergeRestored(prev, [bookmark]));
+      }
       fetchTags().then(setTags).catch(() => {});
     } catch (err: any) {
       alert(err.message || 'Failed to undo deletion');
@@ -604,19 +687,38 @@ export const App: React.FC = () => {
               </div>
             </div>
           ) : bookmarks.length > 0 ? (
-            <MasonryGrid
-              bookmarks={bookmarks}
-              onOpenReader={setReaderBookmark}
-              onShare={setShareTargetBookmark}
-              onEdit={setEditingBookmark}
-              onRescrape={handleRescrapeBookmark}
-              onAutoTag={aiConfig.isConnected ? handleAutoTagBookmark : undefined}
-              onTogglePin={handleTogglePin}
-              isAIConnected={aiConfig.isConnected}
-              onDelete={handleDeleteBookmark}
-              onTagClick={(tagName) => setSelectedTag(tagName)}
-              onManageClips={setManagingClipsBookmark}
-            />
+            <>
+              <MasonryGrid
+                bookmarks={bookmarks}
+                onOpenReader={setReaderBookmark}
+                onShare={setShareTargetBookmark}
+                onEdit={setEditingBookmark}
+                onRescrape={handleRescrapeBookmark}
+                onAutoTag={aiConfig.isConnected ? handleAutoTagBookmark : undefined}
+                onTogglePin={handleTogglePin}
+                isAIConnected={aiConfig.isConnected}
+                onDelete={handleDeleteBookmark}
+                onTagClick={(tagName) => setSelectedTag(tagName)}
+                onManageClips={setManagingClipsBookmark}
+                selectedSlipIds={selectedSlipIds}
+                isSelectionMode={selectedSlipIds.size > 0}
+                onToggleSelectSlip={toggleSelectSlip}
+              />
+
+              {selectedSlipIds.size > 0 && (
+                <BulkActionBar
+                  selectedSlipCount={selectedSlipIds.size}
+                  selectedClipCount={0}
+                  totalSelectableCount={bookmarks.length}
+                  context="feed"
+                  onSelectAll={handleSelectAll}
+                  onClearSelection={clearSelection}
+                  isAllSelected={isAllSelected}
+                  onExecuteBulkAction={handleExecuteBulkAction}
+                  isProcessing={isBulkOperating}
+                />
+              )}
+            </>
           ) : (
             <div className="empty-state">
               <BookmarkPlus className="empty-icon" />

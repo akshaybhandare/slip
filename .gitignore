@@ -7,6 +7,8 @@ node_modules/
 dist/
 build/
 coverage/
+test-results/
+playwright-report/
 
 # Databases & Local Appdata Cache
 backend/db/*.db

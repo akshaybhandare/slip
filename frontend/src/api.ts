@@ -426,6 +426,13 @@ export async function removeBookmarkFromClip(clipId: number, bookmarkId: number)
   });
 }
 
+export async function removeBookmarksFromClip(clipId: number, bookmarkIds: number[]): Promise<{ message: string; removedCount: number }> {
+  return apiFetch<{ message: string; removedCount: number }>(`/clips/${clipId}/bookmarks`, {
+    method: 'DELETE',
+    body: JSON.stringify({ bookmarkIds })
+  });
+}
+
 export async function fetchBookmarkClips(bookmarkId: number): Promise<Clip[]> {
   return apiFetch<Clip[]>(`/clips/bookmark/${bookmarkId}`);
 }
@@ -463,6 +470,64 @@ export async function deleteAPIKey(id: number): Promise<{ message: string }> {
     method: 'DELETE'
   });
 }
+
+// --- Bulk Operations APIs ---
+
+export async function bulkAction(params: {
+  action: 'delete' | 'restore' | 'permanent_delete';
+  slipIds?: number[];
+  clipIds?: number[];
+  includeChildren?: boolean;
+}): Promise<{
+  message: string;
+  deletedSlipsCount?: number;
+  deletedClipsCount?: number;
+  restoredSlipsCount?: number;
+  restoredClipsCount?: number;
+  slipIds?: number[];
+  clipIds?: number[];
+}> {
+  const endpoint = `/bulk/${params.action === 'permanent_delete' ? 'permanent' : params.action}`;
+  return apiFetch<any>(endpoint, {
+    method: 'POST',
+    body: JSON.stringify({
+      slipIds: params.slipIds,
+      clipIds: params.clipIds,
+      include_children: params.includeChildren
+    })
+  });
+}
+
+export async function bulkDeleteBookmarks(ids: number[]): Promise<{ message: string; deletedCount: number; ids: number[] }> {
+  const res = await bulkAction({ action: 'delete', slipIds: ids });
+  return { message: res.message, deletedCount: res.deletedSlipsCount || 0, ids: res.slipIds || ids };
+}
+
+export async function bulkRestoreBookmarks(ids: number[]): Promise<{ message: string; restoredCount: number; ids: number[] }> {
+  const res = await bulkAction({ action: 'restore', slipIds: ids });
+  return { message: res.message, restoredCount: res.restoredSlipsCount || 0, ids: res.slipIds || ids };
+}
+
+export async function bulkPermanentlyDeleteBookmarks(ids: number[]): Promise<{ message: string; deletedCount: number; ids: number[] }> {
+  const res = await bulkAction({ action: 'permanent_delete', slipIds: ids });
+  return { message: res.message, deletedCount: res.deletedSlipsCount || 0, ids: res.slipIds || ids };
+}
+
+export async function bulkDeleteClips(ids: number[], includeChildren: boolean = true): Promise<{ message: string; deletedCount: number; ids: number[] }> {
+  const res = await bulkAction({ action: 'delete', clipIds: ids, includeChildren });
+  return { message: res.message, deletedCount: res.deletedClipsCount || 0, ids: res.clipIds || ids };
+}
+
+export async function bulkRestoreClips(ids: number[]): Promise<{ message: string; restoredCount: number; ids: number[] }> {
+  const res = await bulkAction({ action: 'restore', clipIds: ids });
+  return { message: res.message, restoredCount: res.restoredClipsCount || 0, ids: res.clipIds || ids };
+}
+
+export async function bulkPermanentlyDeleteClips(ids: number[]): Promise<{ message: string; deletedCount: number; ids: number[] }> {
+  const res = await bulkAction({ action: 'permanent_delete', clipIds: ids });
+  return { message: res.message, deletedCount: res.deletedClipsCount || 0, ids: res.clipIds || ids };
+}
+
 
 
 

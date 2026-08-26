@@ -258,6 +258,33 @@ describe('Clips Hierarchical Organization Integration Tests', () => {
     expect(bm1.tags.some((t: any) => t.name === '3d printing & cad')).toBe(false);
   });
 
+  test('DELETE /api/clips/:id/bookmarks should atomically remove multiple bookmarks from clip', async () => {
+    // Add bookmark 1 and 2 to hobbiesClipId
+    await request(app)
+      .post(`/api/clips/${hobbiesClipId}/bookmarks`)
+      .set('Cookie', userCookie)
+      .send({ bookmarkIds: [bookmark1Id, bookmark2Id] });
+
+    const checkBefore = await request(app)
+      .get(`/api/clips/${hobbiesClipId}`)
+      .set('Cookie', userCookie);
+    expect(checkBefore.body.bookmarks.length).toBe(2);
+
+    // Atomically bulk remove both
+    const unclipRes = await request(app)
+      .delete(`/api/clips/${hobbiesClipId}/bookmarks`)
+      .set('Cookie', userCookie)
+      .send({ bookmarkIds: [bookmark1Id, bookmark2Id] });
+
+    expect(unclipRes.status).toBe(200);
+    expect(unclipRes.body.removedCount).toBe(2);
+
+    const checkAfter = await request(app)
+      .get(`/api/clips/${hobbiesClipId}`)
+      .set('Cookie', userCookie);
+    expect(checkAfter.body.bookmarks.length).toBe(0);
+  });
+
   test('DELETE /api/clips/:id should soft delete clip, subclips, and slips within', async () => {
     // Attach bookmark1 to printingClipId first
     await request(app)

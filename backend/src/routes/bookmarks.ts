@@ -7,6 +7,7 @@ import { scrapeUrl, ScrapedMetadata, extractPlatformTag } from '../services/scra
 import { scrapeQueue } from '../services/queue';
 import { cacheThumbnail, saveUploadedFile, saveUploadedImage } from '../services/thumbnail';
 import { autoTagBookmark, performSmartSearch, getActiveAIConfig } from '../services/aiService';
+import { chunkArray } from '../utils';
 
 const router = Router();
 
@@ -15,20 +16,23 @@ router.use(authenticate);
 function attachTagsBatch(db: any, bookmarks: any[]): void {
   if (!bookmarks || bookmarks.length === 0) return;
   const bookmarkIds = bookmarks.map((b) => b.id);
-  const placeholders = bookmarkIds.map(() => '?').join(',');
-  const allTags = db.prepare(`
-    SELECT bt.bookmark_id, t.id, t.name 
-    FROM tags t
-    JOIN bookmark_tags bt ON t.id = bt.tag_id
-    WHERE bt.bookmark_id IN (${placeholders})
-  `).all(...bookmarkIds) as { bookmark_id: number; id: number; name: string }[];
-
   const tagMap = new Map<number, { id: number; name: string }[]>();
-  for (const t of allTags) {
-    if (!tagMap.has(t.bookmark_id)) {
-      tagMap.set(t.bookmark_id, []);
+
+  for (const chunk of chunkArray(bookmarkIds, 500)) {
+    const placeholders = chunk.map(() => '?').join(',');
+    const allTags = db.prepare(`
+      SELECT bt.bookmark_id, t.id, t.name 
+      FROM tags t
+      JOIN bookmark_tags bt ON t.id = bt.tag_id
+      WHERE bt.bookmark_id IN (${placeholders})
+    `).all(...chunk) as { bookmark_id: number; id: number; name: string }[];
+
+    for (const t of allTags) {
+      if (!tagMap.has(t.bookmark_id)) {
+        tagMap.set(t.bookmark_id, []);
+      }
+      tagMap.get(t.bookmark_id)!.push({ id: t.id, name: t.name });
     }
-    tagMap.get(t.bookmark_id)!.push({ id: t.id, name: t.name });
   }
 
   for (const b of bookmarks) {

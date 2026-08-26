@@ -13,6 +13,7 @@ import shareRouter from './routes/share';
 import ioRouter from './routes/io';
 import aiRouter from './routes/ai';
 import clipsRouter from './routes/clips';
+import bulkRouter from './routes/bulk';
 import { CACHE_DIR, isSafeFilename } from './services/thumbnail';
 
 // Load environmental variables from the project root
@@ -51,6 +52,7 @@ app.use((req, res, next) => {
 app.use('/api/auth', authRouter);
 app.use('/api/bookmarks', bookmarksRouter);
 app.use('/api/clips', clipsRouter);
+app.use('/api/bulk', bulkRouter);
 app.use('/api/share', shareRouter);
 app.use('/api/io', ioRouter);
 app.use('/api/ai', aiRouter);

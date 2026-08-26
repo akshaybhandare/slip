@@ -18,6 +18,9 @@ interface MasonryGridProps {
   isRecycleBin?: boolean;
   onRestore?: (id: number) => void;
   onPermanentDelete?: (id: number) => void;
+  selectedSlipIds?: Set<number>;
+  isSelectionMode?: boolean;
+  onToggleSelectSlip?: (id: number) => void;
 }
 
 export const MasonryGrid: React.FC<MasonryGridProps> = ({
@@ -35,7 +38,10 @@ export const MasonryGrid: React.FC<MasonryGridProps> = ({
   onRemoveFromClip,
   isRecycleBin = false,
   onRestore,
-  onPermanentDelete
+  onPermanentDelete,
+  selectedSlipIds,
+  isSelectionMode = false,
+  onToggleSelectSlip
 }) => {
   const [columnCount, setColumnCount] = useState(2);
 
@@ -84,6 +90,9 @@ export const MasonryGrid: React.FC<MasonryGridProps> = ({
               isRecycleBin={isRecycleBin}
               onRestore={onRestore}
               onPermanentDelete={onPermanentDelete}
+              isSelected={selectedSlipIds?.has(bookmark.id)}
+              isSelectionMode={isSelectionMode}
+              onToggleSelect={onToggleSelectSlip}
             />
           ))}
         </div>

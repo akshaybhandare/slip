@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { Bookmark } from '../types';
 import { renderFormattedNote, renderInlineMarkdown } from '../utils/markdown';
+import { isActionSupported, ActionContext } from '../config/actionRegistry';
 
 export const SlipPinIcon: React.FC<{ isPinned: boolean; isPinning?: boolean; size?: number }> = ({ isPinned, size = 15 }) => (
   <svg
@@ -85,6 +86,9 @@ interface BookmarkCardProps {
   isRecycleBin?: boolean;
   onRestore?: (id: number) => void;
   onPermanentDelete?: (id: number) => void;
+  isSelected?: boolean;
+  isSelectionMode?: boolean;
+  onToggleSelect?: (id: number) => void;
 }
 
 export const BookmarkCard: React.FC<BookmarkCardProps> = ({
@@ -102,7 +106,10 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
   onRemoveFromClip,
   isRecycleBin = false,
   onRestore,
-  onPermanentDelete
+  onPermanentDelete,
+  isSelected = false,
+  isSelectionMode = false,
+  onToggleSelect
 }) => {
   const [rescaping, setRescraping] = useState(false);
   const [autoTagging, setAutoTagging] = useState(false);
@@ -188,6 +195,37 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
     if (onShare) onShare(bookmark);
   };
 
+  const actionContext: ActionContext = isRecycleBin
+    ? 'recycle_clip'
+    : onRemoveFromClip
+    ? 'clip_detail'
+    : 'feed';
+
+  const actionTarget = {
+    itemType: 'slip' as const,
+    item: bookmark,
+    contentType: bookmark.content_type,
+    isPinned,
+    isRecycled: isRecycleBin,
+    url: bookmark.url,
+    isAIConnected,
+    context: actionContext
+  };
+
+  const canOpenReader = Boolean(onOpenReader && isActionSupported('open_reader', actionTarget));
+  const canToggleNote = isActionSupported('toggle_note', actionTarget);
+  const canShare = Boolean(onShare && isActionSupported('share', actionTarget));
+  const canEdit = Boolean(onEdit && isActionSupported('edit', actionTarget));
+  const canTogglePin = Boolean(onTogglePin && isActionSupported(isPinned ? 'unpin' : 'pin', actionTarget));
+  const canOrganizeInClip = Boolean(onManageClips && isActionSupported('organize_in_clip', actionTarget));
+  const canRemoveFromClip = Boolean(onRemoveFromClip && isActionSupported('remove_from_clip', actionTarget));
+  const canOpenLink = isActionSupported('open_link', actionTarget);
+  const canRescrape = Boolean(onRescrape && isActionSupported('rescrape', actionTarget));
+  const canAutoTag = Boolean(onAutoTag && isActionSupported('auto_tag', actionTarget));
+  const canDelete = Boolean(onDelete && isActionSupported('delete', actionTarget));
+  const canRestore = Boolean(onRestore && isActionSupported('restore', actionTarget));
+  const canPermanentDelete = Boolean(onPermanentDelete && isActionSupported('permanent_delete', actionTarget));
+
   const handleCardMediaClick = () => {
     if (isNote) {
       if (onOpenReader) onOpenReader(bookmark);
@@ -199,9 +237,42 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
   };
 
   return (
-    <article className={`bookmark-card ${isPinned ? 'is-pinned-card' : ''} ${isNote ? 'note-bookmark-card' : ''} ${isDocument ? 'doc-bookmark-card' : ''} ${isMenuOpen ? 'menu-active' : ''} ${autoTagging ? 'is-auto-tagging' : ''}`}>
+    <article
+      className={`bookmark-card ${isPinned ? 'is-pinned-card' : ''} ${isSelected ? 'is-selected-card' : ''} ${isSelectionMode ? 'selection-mode-card' : ''} ${isNote ? 'note-bookmark-card' : ''} ${isDocument ? 'doc-bookmark-card' : ''} ${isMenuOpen ? 'menu-active' : ''} ${autoTagging ? 'is-auto-tagging' : ''}`}
+      onClick={(e) => {
+        if (isSelectionMode && onToggleSelect) {
+          // If clicking card background while in selection mode, toggle selection
+          const target = e.target as HTMLElement;
+          if (!target.closest('a, button, input, .card-dropdown-menu, .tag-pill, .card-actions, .card-ai-match-badge')) {
+            onToggleSelect(bookmark.id);
+          }
+        }
+      }}
+    >
+      {/* Multi-selection Checkbox */}
+      {onToggleSelect && (
+        <button
+          type="button"
+          className={`card-select-checkbox-btn ${isSelected ? 'is-selected' : ''} ${isSelectionMode ? 'selection-mode' : ''}`}
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggleSelect(bookmark.id);
+          }}
+          title={isSelected ? 'Deselect this slip' : 'Select this slip'}
+          aria-label={isSelected ? 'Deselect this slip' : 'Select this slip'}
+        >
+          <div className={`card-select-checkbox-indicator ${isSelected ? 'checked' : ''}`}>
+            {isSelected ? (
+              <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="20 6 9 17 4 12" />
+              </svg>
+            ) : null}
+          </div>
+        </button>
+      )}
+
       {/* Refined Minimalist Pin Badge */}
-      {onTogglePin && (
+      {canTogglePin && (
         <button
           type="button"
           className={`slip-pushpin-btn slip-pin-btn ${isPinned ? 'is-pinned' : 'is-unpinned'} ${isPinning ? 'is-pinning' : ''}`}
@@ -530,28 +601,28 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
         <div className="card-actions">
           {isRecycleBin ? (
             <div className="recycle-card-actions">
-              {onRestore && (
+              {canRestore && (
                 <button
                   type="button"
                   className="btn btn-secondary btn-recycle-restore"
                   title="Restore Slip to active archive"
                   onClick={(e) => {
                     e.stopPropagation();
-                    onRestore(bookmark.id);
+                    if (onRestore) onRestore(bookmark.id);
                   }}
                 >
                   <RotateCcw size={13} style={{ color: 'var(--color-primary)' }} />
                   <span>Restore</span>
                 </button>
               )}
-              {onPermanentDelete && (
+              {canPermanentDelete && (
                 <button
                   type="button"
                   className="btn btn-secondary btn-recycle-delete-perm"
                   title="Permanently eradicate this slip"
                   onClick={(e) => {
                     e.stopPropagation();
-                    onPermanentDelete(bookmark.id);
+                    if (onPermanentDelete) onPermanentDelete(bookmark.id);
                   }}
                 >
                   <Trash2 size={13} style={{ color: '#ef4444' }} />
@@ -562,18 +633,18 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
           ) : (
             <>
               <div className="card-actions-left">
-                {(isArticle || isNote) && onOpenReader && (
+                {canOpenReader && (
                   <button
                     className="icon-btn"
                     title={isNote ? 'Open Full Note' : 'Reader Mode'}
                     aria-label={isNote ? 'Open Full Note' : 'Reader Mode'}
-                    onClick={() => onOpenReader(bookmark)}
+                    onClick={() => onOpenReader && onOpenReader(bookmark)}
                   >
                     <Eye size={16} />
                   </button>
                 )}
 
-                {!isNote && (
+                {canToggleNote && (
                   <button
                     className={`icon-btn ${bookmark.personal_note ? 'has-note-btn' : ''} ${showNote ? 'active-note-btn' : ''}`}
                     title={showNote ? 'Hide Personal Note' : 'View Personal Note'}
@@ -586,14 +657,16 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
               </div>
 
               <div className="card-actions-right">
-                <button
-                  className="icon-btn"
-                  title="Share Bookmark"
-                  aria-label="Share Bookmark"
-                  onClick={handleShareClick}
-                >
-                  <Share2 size={16} />
-                </button>
+                {canShare && (
+                  <button
+                    className="icon-btn"
+                    title="Share Bookmark"
+                    aria-label="Share Bookmark"
+                    onClick={handleShareClick}
+                  >
+                    <Share2 size={16} />
+                  </button>
+                )}
 
                 <div className="card-menu-container" ref={menuRef}>
                   <button
@@ -607,12 +680,12 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
 
                   {isMenuOpen && (
                     <div className="card-dropdown-menu">
-                      {onEdit && (
+                      {canEdit && (
                         <button
                           className="card-dropdown-item"
                           onClick={() => {
                             setIsMenuOpen(false);
-                            onEdit(bookmark);
+                            if (onEdit) onEdit(bookmark);
                           }}
                         >
                           <Edit3 size={15} />
@@ -620,7 +693,7 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
                         </button>
                       )}
 
-                      {onTogglePin && (
+                      {canTogglePin && (
                         <button
                           className="card-dropdown-item"
                           onClick={() => {
@@ -643,12 +716,12 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
                         </button>
                       )}
 
-                      {onManageClips && (
+                      {canOrganizeInClip && (
                         <button
                           className="card-dropdown-item"
                           onClick={() => {
                             setIsMenuOpen(false);
-                            onManageClips(bookmark);
+                            if (onManageClips) onManageClips(bookmark);
                           }}
                         >
                           <Paperclip size={15} />
@@ -656,12 +729,12 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
                         </button>
                       )}
 
-                      {onRemoveFromClip && (
+                      {canRemoveFromClip && (
                         <button
                           className="card-dropdown-item"
                           onClick={() => {
                             setIsMenuOpen(false);
-                            onRemoveFromClip(bookmark.id);
+                            if (onRemoveFromClip) onRemoveFromClip(bookmark.id);
                           }}
                         >
                           <Paperclip size={15} style={{ opacity: 0.6 }} />
@@ -669,7 +742,7 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
                         </button>
                       )}
 
-                      {!isNote && (
+                      {canOpenLink && (
                         <a
                           href={bookmark.url}
                           target="_blank"
@@ -682,7 +755,7 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
                         </a>
                       )}
 
-                      {!isNote && !isDocument && !isLocalImage && onRescrape && (
+                      {canRescrape && (
                         <button
                           className="card-dropdown-item"
                           onClick={() => {
@@ -696,7 +769,7 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
                         </button>
                       )}
 
-                      {isAIConnected && onAutoTag && !isDocument && !isLocalImage && (
+                      {canAutoTag && (
                         <button
                           className="card-dropdown-item"
                           onClick={() => {
@@ -706,18 +779,18 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
                           disabled={autoTagging}
                         >
                           <Sparkles size={15} className={autoTagging ? 'spin-animation' : ''} />
-                          <span>{autoTagging ? 'Auto-tagging...' : 'Auto-tag with AI'}</span>
+                          <span>{autoTagging ? 'Auto-tag...' : 'Auto-tag with AI'}</span>
                         </button>
                       )}
 
                       <div className="card-dropdown-divider" />
 
-                      {onDelete && (
+                      {canDelete && (
                         <button
                           className="card-dropdown-item card-dropdown-danger"
                           onClick={() => {
                             setIsMenuOpen(false);
-                            onDelete(bookmark.id);
+                            if (onDelete) onDelete(bookmark.id);
                           }}
                         >
                           <Trash2 size={15} />
