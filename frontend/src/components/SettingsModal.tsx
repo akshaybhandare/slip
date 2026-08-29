@@ -1264,17 +1264,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               >
                 Release Notes
               </a>
-              <span>•</span>
-              <a
-                href="https://github.com/akshaybhandare/slip"
-                target="_blank"
-                rel="noopener noreferrer"
-                style={{ color: 'var(--color-muted)', textDecoration: 'none' }}
-                onMouseEnter={(e) => (e.currentTarget.style.textDecoration = 'underline')}
-                onMouseLeave={(e) => (e.currentTarget.style.textDecoration = 'none')}
-              >
-                GitHub
-              </a>
             </div>
           </div>
 

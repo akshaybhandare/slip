@@ -264,7 +264,6 @@ describe('Frontend SPA Component Architecture & Mobile UI Interactions', () => {
     await waitFor(() => {
       expect(screen.getByText('Slip v1.1.1')).toBeInTheDocument();
       expect(screen.getByRole('link', { name: 'Release Notes' })).toHaveAttribute('href', 'https://github.com/akshaybhandare/slip/releases');
-      expect(screen.getByRole('link', { name: 'GitHub' })).toHaveAttribute('href', 'https://github.com/akshaybhandare/slip');
     });
 
     const dataTab = screen.getByRole('button', { name: 'Data & Sync' });
