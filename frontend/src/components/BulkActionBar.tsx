@@ -100,6 +100,8 @@ export const BulkActionBar: React.FC<BulkActionBarProps> = ({
                     ? `Restore (${totalSelected})`
                     : action.id === 'permanent_delete'
                     ? `Delete Forever (${totalSelected})`
+                    : action.id === 'organize_in_clip'
+                    ? `Clip (${totalSelected})`
                     : action.label}
                 </span>
               </button>

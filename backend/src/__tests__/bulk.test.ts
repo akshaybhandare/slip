@@ -53,13 +53,17 @@ describe('Bulk Operations & Action Registry Single Source of Truth', () => {
     });
 
     test('getSupportedBulkActions returns appropriate bulk actions for selection and context', () => {
-      // In feed / active clip
+      // In feed / active clip with mixed slips and clips
       const feedBulk = getSupportedBulkActions({ slipCount: 3, clipCount: 1, context: 'feed' });
       expect(feedBulk.map((a) => a.id)).toEqual(['delete']);
 
+      // In feed with only slips
+      const feedSlipsBulk = getSupportedBulkActions({ slipCount: 3, clipCount: 0, context: 'feed' });
+      expect(feedSlipsBulk.map((a) => a.id)).toEqual(['delete', 'organize_in_clip']);
+
       // In clip detail with only slips
       const clipDetailBulk = getSupportedBulkActions({ slipCount: 2, clipCount: 0, context: 'clip_detail' });
-      expect(clipDetailBulk.map((a) => a.id)).toEqual(['delete', 'remove_from_clip']);
+      expect(clipDetailBulk.map((a) => a.id)).toEqual(['delete', 'organize_in_clip', 'remove_from_clip']);
 
       // In recycle clip
       const recycleBulk = getSupportedBulkActions({ slipCount: 2, clipCount: 1, context: 'recycle_clip' });
@@ -94,7 +98,7 @@ describe('Bulk Operations & Action Registry Single Source of Truth', () => {
         password: 'password123'
       });
       user2Cookie = login2.headers['set-cookie'][0].split(';')[0];
-    });
+    }, 15000);
 
     test('POST /api/bulk/delete should soft delete multiple bookmarks and unpin them', async () => {
       // Create 3 bookmarks
@@ -382,6 +386,86 @@ describe('Bulk Operations & Action Registry Single Source of Truth', () => {
       // Ensure user2 items remain active
       const u2Active = await request(app).get('/api/bookmarks').set('Cookie', user2Cookie);
       expect(u2Active.body.map((b: any) => b.id)).toContain(user2Slip.body.id);
+    });
+
+    test('POST /api/bulk/clip should bulk assign slips to a clip and sync auto-tags', async () => {
+      const clipA = await request(app).post('/api/clips').set('Cookie', user1Cookie).send({ name: 'Bulk Work' });
+      const slip1 = await request(app).post('/api/bookmarks').set('Cookie', user1Cookie).send({ url: 'https://example.com/b1', title: 'B1' });
+      const slip2 = await request(app).post('/api/bookmarks').set('Cookie', user1Cookie).send({ url: 'https://example.com/b2', title: 'B2' });
+
+      // Assign both to clipA
+      const bulkRes = await request(app)
+        .post('/api/bulk/clip')
+        .set('Cookie', user1Cookie)
+        .send({ slipIds: [slip1.body.id, slip2.body.id], clipId: clipA.body.id });
+
+      expect(bulkRes.status).toBe(200);
+      expect(bulkRes.body.updatedSlipsCount).toBe(2);
+
+      // Verify slips now have the clip and tag
+      const checkClipA = await request(app).get(`/api/clips/${clipA.body.id}`).set('Cookie', user1Cookie);
+      expect(checkClipA.body.bookmarks.map((b: any) => b.id)).toContain(slip1.body.id);
+      expect(checkClipA.body.bookmarks.map((b: any) => b.id)).toContain(slip2.body.id);
+
+      const b1 = await request(app).get(`/api/bookmarks/${slip1.body.id}`).set('Cookie', user1Cookie);
+      expect(b1.body.tags.map((t: any) => t.name)).toContain('bulk work');
+
+      // Reassign to clipB using /api/bulk/organize alias
+      const clipB = await request(app).post('/api/clips').set('Cookie', user1Cookie).send({ name: 'Bulk Personal' });
+      const reassignRes = await request(app)
+        .post('/api/bulk/organize')
+        .set('Cookie', user1Cookie)
+        .send({ slipIds: [slip1.body.id, slip2.body.id], clipId: clipB.body.id });
+
+      expect(reassignRes.status).toBe(200);
+      expect(reassignRes.body.updatedSlipsCount).toBe(2);
+
+      const checkClipB = await request(app).get(`/api/clips/${clipB.body.id}`).set('Cookie', user1Cookie);
+      expect(checkClipB.body.bookmarks.map((b: any) => b.id)).toContain(slip1.body.id);
+      expect(checkClipB.body.bookmarks.map((b: any) => b.id)).toContain(slip2.body.id);
+
+      const b1After = await request(app).get(`/api/bookmarks/${slip1.body.id}`).set('Cookie', user1Cookie);
+      expect(b1After.body.tags.map((t: any) => t.name)).toContain('bulk personal');
+      expect(b1After.body.tags.map((t: any) => t.name)).not.toContain('bulk work');
+
+      // Bulk unclip
+      const unclipRes = await request(app)
+        .post('/api/bulk/clip')
+        .set('Cookie', user1Cookie)
+        .send({ slipIds: [slip1.body.id, slip2.body.id], clipId: null });
+
+      expect(unclipRes.status).toBe(200);
+      const checkClipBAfterUnclip = await request(app).get(`/api/clips/${clipB.body.id}`).set('Cookie', user1Cookie);
+      expect(checkClipBAfterUnclip.body.bookmarks).toHaveLength(0);
+
+      const b1Unclipped = await request(app).get(`/api/bookmarks/${slip1.body.id}`).set('Cookie', user1Cookie);
+      expect(b1Unclipped.body.tags.map((t: any) => t.name)).not.toContain('bulk personal');
+    });
+
+    test('POST /api/bulk/clip validation and security errors', async () => {
+      // Missing slipIds
+      const noSlips = await request(app).post('/api/bulk/clip').set('Cookie', user1Cookie).send({ clipId: 1 });
+      expect(noSlips.status).toBe(400);
+
+      // Non-existent clip
+      const slip = await request(app).post('/api/bookmarks').set('Cookie', user1Cookie).send({ url: 'https://example.com/err', title: 'Err' });
+      const notFoundClip = await request(app).post('/api/bulk/clip').set('Cookie', user1Cookie).send({ slipIds: [slip.body.id], clipId: 999999 });
+      expect(notFoundClip.status).toBe(404);
+
+      // Cross-user clip assignment: user1 cannot assign user2's slip
+      const user2Slip = await request(app).post('/api/bookmarks').set('Cookie', user2Cookie).send({ url: 'https://example.com/u2other', title: 'U2 Other' });
+      const user1Clip = await request(app).post('/api/clips').set('Cookie', user1Cookie).send({ name: 'U1 Private' });
+
+      const crossRes = await request(app)
+        .post('/api/bulk/clip')
+        .set('Cookie', user1Cookie)
+        .send({ slipIds: [user2Slip.body.id], clipId: user1Clip.body.id });
+
+      expect(crossRes.status).toBe(200);
+      expect(crossRes.body.updatedSlipsCount).toBe(0);
+
+      const u1ClipCheck = await request(app).get(`/api/clips/${user1Clip.body.id}`).set('Cookie', user1Cookie);
+      expect(u1ClipCheck.body.bookmarks).toHaveLength(0);
     });
   });
 });

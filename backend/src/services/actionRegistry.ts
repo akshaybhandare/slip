@@ -136,6 +136,9 @@ export function getSupportedBulkActions(params: {
   }
 
   const actions: ActionDefinition[] = [ACTION_DEFINITIONS.delete];
+  if (params.clipCount === 0 && params.slipCount > 0) {
+    actions.push(ACTION_DEFINITIONS.organize_in_clip);
+  }
   if (params.context === 'clip_detail' && params.clipCount === 0 && params.slipCount > 0) {
     actions.push(ACTION_DEFINITIONS.remove_from_clip);
   }

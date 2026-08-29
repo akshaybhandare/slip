@@ -1,7 +1,7 @@
 import { Router, Response } from 'express';
 import { getDb } from '../db';
 import { authenticate, AuthenticatedRequest } from '../middleware/auth';
-import { chunkArray } from '../utils';
+import { chunkArray, addTagToBookmark, removeTagFromBookmark } from '../utils';
 
 const router = Router();
 
@@ -68,34 +68,6 @@ function getBreadcrumbs(db: any, clipId: number, userId: number): { id: number; 
   }
 
   return crumbs;
-}
-
-// Helper: Add tag to bookmark by name
-function addTagToBookmark(db: any, bookmarkId: number, rawTagName: string) {
-  const cleanName = rawTagName.trim().toLowerCase().replace(/^#/, '');
-  if (!cleanName) return;
-
-  const findOrCreateTag = db.prepare(`
-    INSERT INTO tags (name) VALUES (?)
-    ON CONFLICT(name) DO UPDATE SET name=excluded.name
-    RETURNING id
-  `);
-  const tagRecord = findOrCreateTag.get(cleanName) as { id: number };
-
-  db.prepare(`
-    INSERT OR IGNORE INTO bookmark_tags (bookmark_id, tag_id) VALUES (?, ?)
-  `).run(bookmarkId, tagRecord.id);
-}
-
-// Helper: Remove tag from bookmark by name
-function removeTagFromBookmark(db: any, bookmarkId: number, rawTagName: string) {
-  const cleanName = rawTagName.trim().toLowerCase().replace(/^#/, '');
-  if (!cleanName) return;
-
-  const tagRecord = db.prepare('SELECT id FROM tags WHERE name = ?').get(cleanName) as { id: number } | undefined;
-  if (tagRecord) {
-    db.prepare('DELETE FROM bookmark_tags WHERE bookmark_id = ? AND tag_id = ?').run(bookmarkId, tagRecord.id);
-  }
 }
 
 // 1. GET /api/clips - List all active clips for current user

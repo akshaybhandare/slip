@@ -138,9 +138,13 @@ describe('Bulk Operations & Action Registry Single Source of Truth Tests', () =>
     });
 
     it('returns bulk actions dynamically for selection and context', () => {
-      // In feed
+      // In feed with mixed slips and clips
       const feedBulk = getSupportedBulkActions({ slipCount: 2, clipCount: 1, context: 'feed' });
       expect(feedBulk.map((a) => a.id)).toEqual(['delete']);
+
+      // In feed with slips only
+      const feedSlipsBulk = getSupportedBulkActions({ slipCount: 2, clipCount: 0, context: 'feed' });
+      expect(feedSlipsBulk.map((a) => a.id)).toEqual(['delete', 'organize_in_clip']);
 
       // In recycle clip
       const recycleBulk = getSupportedBulkActions({ slipCount: 2, clipCount: 1, context: 'recycle_clip' });
@@ -179,6 +183,25 @@ describe('Bulk Operations & Action Registry Single Source of Truth Tests', () =>
       const deleteBtn = screen.getByRole('button', { name: /Delete \(3\)/i });
       fireEvent.click(deleteBtn);
       expect(handleExecute).toHaveBeenCalledWith('delete');
+
+      // Re-render with slips only in feed: shows Clip (2)
+      rerender(
+        <BulkActionBar
+          selectedSlipCount={2}
+          selectedClipCount={0}
+          totalSelectableCount={5}
+          context="feed"
+          onSelectAll={handleSelectAll}
+          onClearSelection={handleClear}
+          isAllSelected={false}
+          onExecuteBulkAction={handleExecute}
+        />
+      );
+
+      const clipBtn = screen.getByRole('button', { name: /Clip \(2\)/i });
+      expect(clipBtn).toBeInTheDocument();
+      fireEvent.click(clipBtn);
+      expect(handleExecute).toHaveBeenCalledWith('organize_in_clip');
 
       // Click Close
       const closeBtn = screen.getByTitle('Cancel selection mode');

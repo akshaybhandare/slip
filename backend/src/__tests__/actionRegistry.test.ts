@@ -229,9 +229,14 @@ describe('Action Registry & Capability Matrix (Backend)', () => {
       expect(actions.map((a) => a.id)).toEqual(['delete']);
     });
 
-    it('returns delete and remove_from_clip when slips are selected inside clip_detail', () => {
+    it('returns delete and organize_in_clip for slips only in feed', () => {
+      const actions = getSupportedBulkActions({ slipCount: 3, clipCount: 0, context: 'feed' });
+      expect(actions.map((a) => a.id)).toEqual(['delete', 'organize_in_clip']);
+    });
+
+    it('returns delete, organize_in_clip, and remove_from_clip when slips are selected inside clip_detail', () => {
       const actions = getSupportedBulkActions({ slipCount: 4, clipCount: 0, context: 'clip_detail' });
-      expect(actions.map((a) => a.id)).toEqual(['delete', 'remove_from_clip']);
+      expect(actions.map((a) => a.id)).toEqual(['delete', 'organize_in_clip', 'remove_from_clip']);
     });
 
     it('returns restore and permanent_delete for selections inside recycle_clip', () => {

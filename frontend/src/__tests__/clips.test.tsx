@@ -16,6 +16,7 @@ vi.mock('../api', () => ({
   removeBookmarksFromClip: vi.fn(),
   fetchBookmarkClips: vi.fn(),
   setBookmarkClip: vi.fn(),
+  bulkSetClip: vi.fn(),
   fetchRecycleClip: vi.fn().mockResolvedValue([]),
   fetchRecycleClips: vi.fn().mockResolvedValue([]),
   restoreClip: vi.fn().mockResolvedValue({ message: 'Clip restored', clip: {} }),
@@ -272,6 +273,47 @@ describe('Clips Organization UI Components', () => {
 
       await waitFor(() => {
         expect(api.createClip).toHaveBeenCalledWith('3d-printing-clip', 1);
+      });
+    });
+
+    it('supports bulk slip assignment via bulkSetClip', async () => {
+      vi.mocked(api.fetchClips).mockResolvedValue(mockRootClips);
+      vi.mocked(api.bulkSetClip).mockResolvedValue({ message: 'Organized', updatedSlipsCount: 2 });
+
+      const mockBookmark2: Bookmark = {
+        ...mockBookmark,
+        id: 102,
+        title: 'Second Bookmark'
+      };
+
+      const onClose = vi.fn();
+      const onSuccess = vi.fn();
+
+      render(
+        <AddToClipModal
+          slips={[mockBookmark, mockBookmark2]}
+          onClose={onClose}
+          onSuccess={onSuccess}
+        />
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText('Target Slips:')).toBeInTheDocument();
+        expect(screen.getByText('2 slips selected')).toBeInTheDocument();
+        expect(screen.getByText('Movies Must Watch')).toBeInTheDocument();
+      });
+
+      // Select Movies Must Watch
+      const moviesRow = screen.getByText('Movies Must Watch');
+      fireEvent.click(moviesRow);
+
+      const applyBtn = screen.getByRole('button', { name: /Save to Clip \(2\)/i });
+      fireEvent.click(applyBtn);
+
+      await waitFor(() => {
+        expect(api.bulkSetClip).toHaveBeenCalledWith([101, 102], 2);
+        expect(onSuccess).toHaveBeenCalled();
+        expect(onClose).toHaveBeenCalled();
       });
     });
   });

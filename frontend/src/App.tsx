@@ -156,6 +156,18 @@ export const App: React.FC = () => {
   }, []);
 
   const [managingClipsBookmark, setManagingClipsBookmark] = useState<Bookmark | null>(null);
+  const [managingClipsSlips, setManagingClipsSlips] = useState<Bookmark[] | null>(null);
+  const [clipsViewRevision, setClipsViewRevision] = useState(0);
+
+  const handleManageBookmarkClips = useCallback((bookmark: Bookmark, bulkBookmarks?: Bookmark[]) => {
+    if (bulkBookmarks && bulkBookmarks.length > 0) {
+      setManagingClipsSlips(bulkBookmarks);
+      setManagingClipsBookmark(null);
+    } else {
+      setManagingClipsBookmark(bookmark);
+      setManagingClipsSlips(null);
+    }
+  }, []);
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [droppedFile, setDroppedFile] = useState<File | null>(null);
   const [isImportOpen, setIsImportOpen] = useState(false);
@@ -466,7 +478,7 @@ export const App: React.FC = () => {
     clearSelection();
   }, [activeType, selectedTag, searchQuery, isClipsView, clearSelection]);
 
-  const handleExecuteBulkAction = async (actionId: ActionId) => {
+    const handleExecuteBulkAction = async (actionId: ActionId) => {
     if (actionId === 'delete') {
       const ids = Array.from(selectedSlipIds);
       if (ids.length === 0) return;
@@ -499,6 +511,11 @@ export const App: React.FC = () => {
       } finally {
         setIsBulkOperating(false);
       }
+    } else if (actionId === 'organize_in_clip') {
+      const selectedSlips = bookmarks.filter((b) => selectedSlipIds.has(b.id));
+      if (selectedSlips.length === 0) return;
+      setManagingClipsSlips(selectedSlips);
+      setManagingClipsBookmark(null);
     }
   };
 
@@ -623,10 +640,11 @@ function mergeRestored(prev: Bookmark[], restoredItems: Bookmark[]): Bookmark[] 
             setSelectedTag(tagName);
             handleSetClipsView(false);
           }}
-          onManageBookmarkClips={setManagingClipsBookmark}
+          onManageBookmarkClips={handleManageBookmarkClips}
           initialViewRecycleClip={isDirectRecycleOpen}
           onRecycleCountChange={setRecycleCount}
           onRecycleClipViewChange={setIsDirectRecycleOpen}
+          key={clipsViewRevision}
         />
       ) : (
         <>
@@ -782,11 +800,21 @@ function mergeRestored(prev: Bookmark[], restoredItems: Bookmark[]): Bookmark[] 
         }}
       />
 
-      <AddToClipModal
-        bookmark={managingClipsBookmark}
-        onClose={() => setManagingClipsBookmark(null)}
-        onSuccess={() => loadData()}
-      />
+      {(managingClipsBookmark || (managingClipsSlips && managingClipsSlips.length > 0)) && (
+        <AddToClipModal
+          bookmark={managingClipsBookmark}
+          slips={managingClipsSlips}
+          onClose={() => {
+            setManagingClipsBookmark(null);
+            setManagingClipsSlips(null);
+          }}
+          onSuccess={() => {
+            clearSelection();
+            loadData();
+            setClipsViewRevision((r) => r + 1);
+          }}
+        />
+      )}
 
       <ReaderModal
         bookmark={readerBookmark}
