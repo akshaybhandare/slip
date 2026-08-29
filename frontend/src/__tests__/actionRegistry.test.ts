@@ -10,7 +10,7 @@ import { Bookmark, Clip } from '../types';
 
 describe('Action Registry & Capability Matrix (Frontend)', () => {
   describe('ACTION_REGISTRY integrity', () => {
-    it('contains metadata and icons for all 16 core actions', () => {
+    it('contains metadata and icons for all 17 core actions', () => {
       const actionIds: ActionId[] = [
         'open_reader',
         'open_link',
@@ -22,6 +22,7 @@ describe('Action Registry & Capability Matrix (Frontend)', () => {
         'remove_from_clip',
         'rescrape',
         'auto_tag',
+        'ai_summarize_pdf',
         'toggle_note',
         'delete',
         'restore',
@@ -130,9 +131,14 @@ describe('Action Registry & Capability Matrix (Frontend)', () => {
       expect(isActionSupported('organize_in_clip', target)).toBe(true);
       expect(isActionSupported('toggle_note', target)).toBe(true);
       expect(isActionSupported('delete', target)).toBe(true);
+      expect(isActionSupported('ai_summarize_pdf', target)).toBe(true);
 
-      // Documents do not support reader mode, rescraping, or auto-tagging
+      // AI summarize is disabled if AI is disconnected
+      expect(isActionSupported('ai_summarize_pdf', { ...target, isAIConnected: false })).toBe(false);
+
+      // Documents support reader mode only when description is summarized (>= 60 chars)
       expect(isActionSupported('open_reader', target)).toBe(false);
+      expect(isActionSupported('open_reader', { ...target, item: { ...docBookmark, description: '• AI generated summary bullet 1\n• AI generated summary bullet 2\n• AI generated summary bullet 3' } as Bookmark })).toBe(true);
       expect(isActionSupported('rescrape', target)).toBe(false);
       expect(isActionSupported('auto_tag', target)).toBe(false);
     });

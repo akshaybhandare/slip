@@ -42,6 +42,7 @@ import {
   fetchAppVersion
 } from '../api';
 import { copyToClipboard } from '../utils/clipboard';
+import { useEscapeKey } from '../hooks/useEscapeKey';
 
 export type SettingsTab = 'appearance' | 'ai' | 'keys' | 'data' | 'users';
 
@@ -168,7 +169,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         setSelectedUserId(String(user.id));
       }
     }
-  }, [isOpen, initialTab, aiConfig, user, isAdmin]);
+  }, [isOpen]);
+
+  useEscapeKey(onClose, isOpen);
 
   const loadKeys = async () => {
     try {

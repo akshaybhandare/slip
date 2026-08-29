@@ -231,6 +231,12 @@ export async function autoTagBookmark(id: number): Promise<Bookmark> {
   });
 }
 
+export async function summarizePdfBookmark(id: number): Promise<Bookmark> {
+  return apiFetch<Bookmark>(`/bookmarks/${id}/summarize-pdf`, {
+    method: 'POST'
+  });
+}
+
 export async function rescrapeAllBookmarks(): Promise<{ message: string; count: number }> {
   return apiFetch<{ message: string; count: number }>('/bookmarks/rescrape-all', {
     method: 'POST'

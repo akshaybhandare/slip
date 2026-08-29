@@ -17,6 +17,7 @@ export type ActionId =
   | 'remove_from_clip'
   | 'rescrape'
   | 'auto_tag'
+  | 'ai_summarize_pdf'
   | 'toggle_note'
   | 'delete'
   | 'restore'
@@ -55,6 +56,7 @@ export const ACTION_DEFINITIONS: Record<ActionId, ActionDefinition> = {
   remove_from_clip: { id: 'remove_from_clip', label: 'Unclip from this Stack', description: 'Remove slip from the active clip', isBulkSupported: true },
   rescrape: { id: 'rescrape', label: 'Re-scrape Metadata', description: 'Re-fetch title, description, and thumbnail from original URL', isBulkSupported: false },
   auto_tag: { id: 'auto_tag', label: 'Auto-tag with AI', description: 'Automatically generate tags using connected AI provider', isBulkSupported: false },
+  ai_summarize_pdf: { id: 'ai_summarize_pdf', label: 'AI Summarize', description: 'Summarize PDF, generate title, and auto-tag using AI', isBulkSupported: false },
   toggle_note: { id: 'toggle_note', label: 'Personal Note', description: 'Show or hide personal sticky note drawer', isBulkSupported: false },
   delete: { id: 'delete', label: 'Move to Recycle Clip', description: 'Soft delete item and move to Recycle Clip', isDestructive: true, isBulkSupported: true },
   restore: { id: 'restore', label: 'Restore', description: 'Restore item from Recycle Clip back to active archive', isBulkSupported: true },
@@ -99,7 +101,11 @@ export function isActionSupported(action: ActionId, target: ActionTarget): boole
 
   switch (action) {
     case 'open_reader':
-      return isNote || target.contentType === 'article' || Boolean(target.item?.reader_html);
+      return isNote || (!isLocalImg && (
+        target.contentType === 'article' ||
+        Boolean(target.item?.reader_html) ||
+        (isDoc && (target.item?.description?.trim()?.length || 0) >= 60)
+      ));
     case 'open_link':
       return !isNote && Boolean(targetUrl);
     case 'toggle_note':
@@ -108,6 +114,8 @@ export function isActionSupported(action: ActionId, target: ActionTarget): boole
       return !isNote && !isDoc && !isLocalImg && /^https?:\/\//i.test(targetUrl);
     case 'auto_tag':
       return Boolean(target.isAIConnected) && !isDoc && !isLocalImg;
+    case 'ai_summarize_pdf':
+      return Boolean(target.isAIConnected) && isDoc;
     default:
       return false;
   }
