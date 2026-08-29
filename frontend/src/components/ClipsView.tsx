@@ -44,6 +44,7 @@ interface ClipsViewProps {
   onEdit: (bookmark: Bookmark) => void;
   onRescrape: (id: number) => Promise<void>;
   onAutoTag?: (id: number) => Promise<void>;
+  onSummarizePdf?: (id: number) => Promise<void>;
   onTogglePin?: (id: number) => Promise<void>;
   isAIConnected?: boolean;
   onDeleteBookmark: (id: number) => void;
@@ -61,6 +62,7 @@ export const ClipsView: React.FC<ClipsViewProps> = ({
   onEdit,
   onRescrape,
   onAutoTag,
+  onSummarizePdf,
   onTogglePin,
   isAIConnected,
   onDeleteBookmark,
@@ -1007,6 +1009,7 @@ export const ClipsView: React.FC<ClipsViewProps> = ({
                         onEdit={onEdit}
                         onRescrape={onRescrape}
                         onAutoTag={onAutoTag}
+                        onSummarizePdf={onSummarizePdf}
                         onTogglePin={onTogglePin}
                         isAIConnected={isAIConnected}
                         onDelete={onDeleteBookmark}
@@ -1278,6 +1281,7 @@ export const ClipsView: React.FC<ClipsViewProps> = ({
                         onEdit={onEdit}
                         onRescrape={onRescrape}
                         onAutoTag={onAutoTag}
+                        onSummarizePdf={onSummarizePdf}
                         onTogglePin={onTogglePin}
                         isAIConnected={isAIConnected}
                         onDelete={handleDeleteBookmarkInClip}

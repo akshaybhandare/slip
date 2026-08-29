@@ -861,7 +861,8 @@ body {
   box-shadow: var(--shadow-card-hover);
 }
 
-.bookmark-card.is-auto-tagging {
+.bookmark-card.is-auto-tagging,
+.bookmark-card.is-summarizing {
   border-color: rgba(228, 43, 12, 0.45);
   box-shadow: 0 0 0 1px rgba(228, 43, 12, 0.2), 0 4px 18px rgba(228, 43, 12, 0.08);
 }

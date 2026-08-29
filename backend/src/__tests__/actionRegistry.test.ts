@@ -8,7 +8,7 @@ import {
 
 describe('Action Registry & Capability Matrix (Backend)', () => {
   describe('ACTION_DEFINITIONS completeness', () => {
-    it('defines all 16 required core actions', () => {
+    it('defines all 17 required core actions', () => {
       const expectedActions: ActionId[] = [
         'open_reader',
         'open_link',
@@ -20,6 +20,7 @@ describe('Action Registry & Capability Matrix (Backend)', () => {
         'remove_from_clip',
         'rescrape',
         'auto_tag',
+        'ai_summarize_pdf',
         'toggle_note',
         'delete',
         'restore',
@@ -28,10 +29,12 @@ describe('Action Registry & Capability Matrix (Backend)', () => {
         'rename_clip'
       ];
 
-      for (const actionId of expectedActions) {
-        expect(ACTION_DEFINITIONS[actionId]).toBeDefined();
-        expect(ACTION_DEFINITIONS[actionId].id).toBe(actionId);
-        expect(ACTION_DEFINITIONS[actionId].label).toBeTruthy();
+      expect(Object.keys(ACTION_DEFINITIONS)).toHaveLength(17);
+      for (const action of expectedActions) {
+        expect(ACTION_DEFINITIONS[action]).toBeDefined();
+        expect(ACTION_DEFINITIONS[action].id).toBe(action);
+        expect(ACTION_DEFINITIONS[action].label).toBeTruthy();
+        expect(ACTION_DEFINITIONS[action].description).toBeTruthy();
       }
     });
   });
@@ -71,7 +74,7 @@ describe('Action Registry & Capability Matrix (Backend)', () => {
       const target = {
         itemType: 'slip' as const,
         contentType: 'article',
-        url: 'https://example.com/blog/ai-future',
+        url: 'https://example.com/article/1',
         context: 'feed' as const,
         isAIConnected: true
       };
@@ -100,7 +103,7 @@ describe('Action Registry & Capability Matrix (Backend)', () => {
         isAIConnected: true
       };
 
-      it('supports open_link, share, edit, pin, organize_in_clip, toggle_note, delete', () => {
+      it('supports open_link, share, edit, pin, organize_in_clip, toggle_note, delete, ai_summarize_pdf', () => {
         expect(isActionSupported('open_link', target)).toBe(true);
         expect(isActionSupported('share', target)).toBe(true);
         expect(isActionSupported('edit', target)).toBe(true);
@@ -108,10 +111,20 @@ describe('Action Registry & Capability Matrix (Backend)', () => {
         expect(isActionSupported('organize_in_clip', target)).toBe(true);
         expect(isActionSupported('toggle_note', target)).toBe(true);
         expect(isActionSupported('delete', target)).toBe(true);
+        expect(isActionSupported('ai_summarize_pdf', target)).toBe(true);
       });
 
-      it('does not support open_reader, rescrape, or auto_tag on document/pdf', () => {
+      it('does not support ai_summarize_pdf when AI is disconnected', () => {
+        expect(isActionSupported('ai_summarize_pdf', { ...target, isAIConnected: false })).toBe(false);
+      });
+
+      it('does not support open_reader when description is empty or short, but supports it when summarized (>= 60 chars)', () => {
         expect(isActionSupported('open_reader', target)).toBe(false);
+        expect(isActionSupported('open_reader', { ...target, item: { id: 1, description: 'Short' } as any })).toBe(false);
+        expect(isActionSupported('open_reader', { ...target, item: { id: 1, description: '• First key takeaway from paper\n• Second key architectural improvement\n• Third benchmark result' } as any })).toBe(true);
+      });
+
+      it('does not support rescrape or auto_tag on document/pdf', () => {
         expect(isActionSupported('rescrape', target)).toBe(false);
         expect(isActionSupported('auto_tag', target)).toBe(false);
       });

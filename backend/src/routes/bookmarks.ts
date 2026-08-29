@@ -6,7 +6,7 @@ import { authenticate, AuthenticatedRequest } from '../middleware/auth';
 import { scrapeUrl, ScrapedMetadata, extractPlatformTag } from '../services/scraper';
 import { scrapeQueue } from '../services/queue';
 import { cacheThumbnail, saveUploadedFile, saveUploadedImage } from '../services/thumbnail';
-import { autoTagBookmark, performSmartSearch, getActiveAIConfig } from '../services/aiService';
+import { autoTagBookmark, performSmartSearch, getActiveAIConfig, summarizePdfBookmark } from '../services/aiService';
 import { chunkArray } from '../utils';
 
 const router = Router();
@@ -97,7 +97,9 @@ async function handleFileUpload(req: AuthenticatedRequest, res: Response) {
     }
 
     const finalUrl = filePath;
-    const finalDesc = description || `Uploaded ${contentType === 'document' ? 'document' : 'image'} (${(size / (1024 * 1024)).toFixed(2)} MB, ${mimeType})`;
+    const finalDesc = description || (filename
+      ? `Uploaded ${contentType === 'document' ? 'document' : 'image'}: ${filename} (${(size / (1024 * 1024)).toFixed(2)} MB, ${mimeType})`
+      : `Uploaded ${contentType === 'document' ? 'document' : 'image'} (${(size / (1024 * 1024)).toFixed(2)} MB, ${mimeType})`);
     const finalRawText = `${finalTitle} ${finalDesc} ${filename || ''}`;
 
     const db = getDb();
@@ -1159,6 +1161,32 @@ router.post('/:id/auto-tag', async (req: AuthenticatedRequest, res: Response) =>
   } catch (err: any) {
     console.error('Auto-tag bookmark error:', err);
     res.status(500).json({ message: err.message || 'Failed to auto-tag bookmark' });
+  }
+});
+
+// 7.6 Summarize PDF Document with AI
+router.post('/:id/summarize-pdf', async (req: AuthenticatedRequest, res: Response) => {
+  const userId = req.user!.id;
+  const { id } = req.params;
+
+  const activeConfig = getActiveAIConfig();
+  if (!activeConfig || !activeConfig.apiKey) {
+    return res.status(400).json({
+      message: 'AI provider is not connected. Please connect an AI provider in Settings.'
+    });
+  }
+
+  try {
+    const result = await summarizePdfBookmark({
+      bookmarkId: Number(id),
+      userId,
+      config: activeConfig
+    });
+
+    res.status(200).json(result.bookmark);
+  } catch (err: any) {
+    console.error('Summarize PDF error:', err);
+    res.status(500).json({ message: err.message || 'Failed to summarize PDF document' });
   }
 });
 

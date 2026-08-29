@@ -19,6 +19,7 @@ import {
   LucideIcon
 } from 'lucide-react';
 import { Bookmark, Clip, ContentType } from '../types';
+import { isNoteSlip, isDocumentSlip, isLocalImageSlip } from '../utils/bookmarkUtils';
 
 export type ActionContext = 'feed' | 'clip_detail' | 'recycle_clip';
 export type ItemType = 'slip' | 'clip';
@@ -34,6 +35,7 @@ export type ActionId =
   | 'remove_from_clip'
   | 'rescrape'
   | 'auto_tag'
+  | 'ai_summarize_pdf'
   | 'toggle_note'
   | 'delete'
   | 'restore'
@@ -74,6 +76,7 @@ export const ACTION_REGISTRY: Record<ActionId, ActionMetadata> = {
   remove_from_clip: { id: 'remove_from_clip', label: 'Unclip from this Stack', shortLabel: 'Unclip', description: 'Remove slip from the currently active clip', icon: Paperclip, isBulkSupported: true },
   rescrape: { id: 'rescrape', label: 'Re-scrape Metadata', shortLabel: 'Re-scrape', description: 'Re-fetch title, description, and thumbnail from original URL', icon: RefreshCw, isBulkSupported: false },
   auto_tag: { id: 'auto_tag', label: 'Auto-tag with AI', shortLabel: 'Auto-tag', description: 'Automatically generate relevant tags using connected AI provider', icon: Sparkles, isBulkSupported: false },
+  ai_summarize_pdf: { id: 'ai_summarize_pdf', label: 'AI Summarize', shortLabel: 'AI Summarize', description: 'Summarize PDF, generate title, and auto-tag using AI', icon: Sparkles, isBulkSupported: false },
   toggle_note: { id: 'toggle_note', label: 'Personal Note', shortLabel: 'Note', description: 'Show or hide personal sticky note drawer on slip card', icon: FileText, isBulkSupported: false },
   delete: { id: 'delete', label: 'Move to Recycle Clip', shortLabel: 'Delete', description: 'Soft delete item and move it to Recycle Clip', icon: Trash2, isDestructive: true, isBulkSupported: true },
   restore: { id: 'restore', label: 'Restore', shortLabel: 'Restore', description: 'Restore item from Recycle Clip back to active archive', icon: RotateCcw, isBulkSupported: true },
@@ -111,14 +114,19 @@ export function isActionSupported(action: ActionId, target: ActionTarget): boole
   if (action === 'remove_from_clip') return target.context === 'clip_detail';
 
   // Rule 5: Content-type specific slip actions
+  const itemObj = (target.item as Bookmark) || { content_type: target.contentType as any, url: target.url };
   const targetUrl = target.url || (target.item as any)?.url || '';
-  const isNote = target.contentType === 'note' || targetUrl.startsWith('slip://note/');
-  const isDoc = target.contentType === 'document' || targetUrl.endsWith('.pdf') || (target.item as any)?.image_path?.endsWith('.pdf');
-  const isLocalImg = target.contentType === 'image' && (targetUrl.startsWith('/api/cache') || targetUrl.startsWith('local://'));
+  const isNote = isNoteSlip(itemObj);
+  const isDoc = isDocumentSlip(itemObj);
+  const isLocalImg = isLocalImageSlip(itemObj);
 
   switch (action) {
     case 'open_reader':
-      return isNote || target.contentType === 'article' || Boolean((target.item as Bookmark)?.reader_html);
+      return isNote || (!isLocalImg && (
+        target.contentType === 'article' ||
+        Boolean((target.item as Bookmark)?.reader_html) ||
+        (isDoc && ((target.item as Bookmark)?.description?.trim()?.length || 0) >= 60)
+      ));
     case 'open_link':
       return !isNote && Boolean(targetUrl);
     case 'toggle_note':
@@ -127,6 +135,8 @@ export function isActionSupported(action: ActionId, target: ActionTarget): boole
       return !isNote && !isDoc && !isLocalImg && /^https?:\/\//i.test(targetUrl);
     case 'auto_tag':
       return Boolean(target.isAIConnected) && !isDoc && !isLocalImg;
+    case 'ai_summarize_pdf':
+      return Boolean(target.isAIConnected) && isDoc;
     default:
       return false;
   }

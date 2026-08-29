@@ -20,6 +20,7 @@ import {
 import { Bookmark } from '../types';
 import { renderFormattedNote, renderInlineMarkdown } from '../utils/markdown';
 import { isActionSupported, ActionContext } from '../config/actionRegistry';
+import { isNoteSlip, isDocumentSlip, isLocalImageSlip, extractPdfOriginalFilename } from '../utils/bookmarkUtils';
 
 export const SlipPinIcon: React.FC<{ isPinned: boolean; isPinning?: boolean; size?: number }> = ({ isPinned, size = 15 }) => (
   <svg
@@ -77,6 +78,7 @@ interface BookmarkCardProps {
   onEdit?: (bookmark: Bookmark) => void;
   onRescrape?: (id: number) => Promise<void>;
   onAutoTag?: (id: number) => Promise<void>;
+  onSummarizePdf?: (id: number) => Promise<void>;
   onTogglePin?: (id: number) => Promise<void>;
   isAIConnected?: boolean;
   onDelete?: (id: number) => void;
@@ -98,6 +100,7 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
   onEdit,
   onRescrape,
   onAutoTag,
+  onSummarizePdf,
   onTogglePin,
   isAIConnected = true,
   onDelete,
@@ -113,6 +116,7 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
 }) => {
   const [rescaping, setRescraping] = useState(false);
   const [autoTagging, setAutoTagging] = useState(false);
+  const [summarizing, setSummarizing] = useState(false);
   const [isPinning, setIsPinning] = useState(false);
   const [showNote, setShowNote] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -150,9 +154,10 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
     }
   };
 
-  const isNote = bookmark.content_type === 'note' || bookmark.url.startsWith('slip://note/');
-  const isDocument = bookmark.content_type === 'document' || bookmark.url.endsWith('.pdf') || (bookmark.image_path && bookmark.image_path.endsWith('.pdf'));
-  const isLocalImage = bookmark.content_type === 'image' && (bookmark.url.startsWith('/api/cache') || bookmark.url.startsWith('local://'));
+  const isNote = isNoteSlip(bookmark);
+  const isDocument = isDocumentSlip(bookmark);
+  const isLocalImage = isLocalImageSlip(bookmark);
+  const pdfFilename = isDocument ? extractPdfOriginalFilename(bookmark) : null;
 
   let hostname = '';
   if (isNote) {
@@ -191,6 +196,16 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
     }
   };
 
+  const handleSummarizePdfClick = async () => {
+    if (!onSummarizePdf) return;
+    setSummarizing(true);
+    try {
+      await onSummarizePdf(bookmark.id);
+    } finally {
+      setSummarizing(false);
+    }
+  };
+
   const handleShareClick = () => {
     if (onShare) onShare(bookmark);
   };
@@ -222,6 +237,7 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
   const canOpenLink = isActionSupported('open_link', actionTarget);
   const canRescrape = Boolean(onRescrape && isActionSupported('rescrape', actionTarget));
   const canAutoTag = Boolean(onAutoTag && isActionSupported('auto_tag', actionTarget));
+  const canSummarizePdf = Boolean(onSummarizePdf && isActionSupported('ai_summarize_pdf', actionTarget));
   const canDelete = Boolean(onDelete && isActionSupported('delete', actionTarget));
   const canRestore = Boolean(onRestore && isActionSupported('restore', actionTarget));
   const canPermanentDelete = Boolean(onPermanentDelete && isActionSupported('permanent_delete', actionTarget));
@@ -238,7 +254,7 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
 
   return (
     <article
-      className={`bookmark-card ${isPinned ? 'is-pinned-card' : ''} ${isSelected ? 'is-selected-card' : ''} ${isSelectionMode ? 'selection-mode-card' : ''} ${isNote ? 'note-bookmark-card' : ''} ${isDocument ? 'doc-bookmark-card' : ''} ${isMenuOpen ? 'menu-active' : ''} ${autoTagging ? 'is-auto-tagging' : ''}`}
+      className={`bookmark-card ${isPinned ? 'is-pinned-card' : ''} ${isSelected ? 'is-selected-card' : ''} ${isSelectionMode ? 'selection-mode-card' : ''} ${isNote ? 'note-bookmark-card' : ''} ${isDocument ? 'doc-bookmark-card' : ''} ${isMenuOpen ? 'menu-active' : ''} ${autoTagging ? 'is-auto-tagging' : ''} ${summarizing ? 'is-summarizing' : ''}`}
       onClick={(e) => {
         if (isSelectionMode && onToggleSelect) {
           // If clicking card background while in selection mode, toggle selection
@@ -285,8 +301,8 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
         </button>
       )}
 
-      {isAIConnected && autoTagging && (
-        <div className="card-ai-progress-bar" title="AI Auto-tagging in progress...">
+      {isAIConnected && (autoTagging || summarizing) && (
+        <div className="card-ai-progress-bar" title={summarizing ? "AI Summarizing PDF in progress..." : "AI Auto-tagging in progress..."}>
           <div className="card-ai-progress-pulse" />
         </div>
       )}
@@ -359,15 +375,33 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
               flexShrink: 0
             }}
           >
-            <FileCode2 size={22} />
+            {summarizing ? (
+              <Sparkles size={22} className="spin-animation" />
+            ) : (
+              <FileCode2 size={22} />
+            )}
           </div>
-          <div style={{ overflow: 'hidden' }}>
+          <div style={{ overflow: 'hidden', flex: 1, minWidth: 0 }}>
             <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--color-secondary)', display: 'block', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
               {renderInlineMarkdown(bookmark.title)}
             </span>
-            <span style={{ fontSize: '11px', color: 'var(--color-primary)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-              PDF Document
-            </span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '2px', overflow: 'hidden' }}>
+              <span style={{ fontSize: '11px', color: 'var(--color-primary)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em', flexShrink: 0 }}>
+                {summarizing ? 'Analyzing & Summarizing PDF...' : 'PDF Document'}
+              </span>
+              {pdfFilename && !summarizing && (
+                <>
+                  <span style={{ fontSize: '10px', color: 'var(--color-muted)', opacity: 0.6 }}>•</span>
+                  <span
+                    className="pdf-filename-tag"
+                    title={`File: ${pdfFilename}`}
+                    style={{ fontSize: '11px', color: 'var(--color-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                  >
+                    {pdfFilename}
+                  </span>
+                </>
+              )}
+            </div>
           </div>
         </div>
       ) : bookmark.image_path ? (
@@ -570,7 +604,7 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
           </div>
         )}
 
-        {((bookmark.tags && bookmark.tags.length > 0) || autoTagging) && (
+        {((bookmark.tags && bookmark.tags.length > 0) || autoTagging || summarizing) && (
           <div className="card-tags">
             {bookmark.tags && bookmark.tags.slice(0, 3).map((t) => (
               <span
@@ -593,6 +627,12 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
               <span className="tag-pill tag-pill-ai-loading">
                 <Sparkles size={11} className="spin-animation" />
                 <span>Auto-tagging...</span>
+              </span>
+            )}
+            {isAIConnected && summarizing && (
+              <span className="tag-pill tag-pill-ai-loading">
+                <Sparkles size={11} className="spin-animation" />
+                <span>Summarizing PDF...</span>
               </span>
             )}
           </div>
@@ -636,8 +676,8 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
                 {canOpenReader && (
                   <button
                     className="icon-btn"
-                    title={isNote ? 'Open Full Note' : 'Reader Mode'}
-                    aria-label={isNote ? 'Open Full Note' : 'Reader Mode'}
+                    title={isNote ? 'Open Full Note' : isDocument ? 'Read Summary' : 'Reader Mode'}
+                    aria-label={isNote ? 'Open Full Note' : isDocument ? 'Read Summary' : 'Reader Mode'}
                     onClick={() => onOpenReader && onOpenReader(bookmark)}
                   >
                     <Eye size={16} />
@@ -780,6 +820,20 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
                         >
                           <Sparkles size={15} className={autoTagging ? 'spin-animation' : ''} />
                           <span>{autoTagging ? 'Auto-tag...' : 'Auto-tag with AI'}</span>
+                        </button>
+                      )}
+
+                      {canSummarizePdf && (
+                        <button
+                          className="card-dropdown-item"
+                          onClick={() => {
+                            setIsMenuOpen(false);
+                            handleSummarizePdfClick();
+                          }}
+                          disabled={summarizing}
+                        >
+                          <Sparkles size={15} className={summarizing ? 'spin-animation' : ''} />
+                          <span>{summarizing ? 'Summarizing PDF...' : 'AI Summarize'}</span>
                         </button>
                       )}
 

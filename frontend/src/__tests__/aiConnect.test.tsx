@@ -425,6 +425,106 @@ describe('BookmarkCard AI Auto-Tag Action', () => {
   });
 });
 
+describe('BookmarkCard AI Summarize PDF Action', () => {
+  const mockPdfBookmark = {
+    id: 99,
+    user_id: 1,
+    url: 'https://example.com/research-paper.pdf',
+    title: 'Research Paper.pdf',
+    description: 'Uploaded PDF document',
+    content_type: 'document' as const,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+    tags: [{ id: 1, name: 'document' }, { id: 2, name: 'pdf' }]
+  };
+
+  it('renders "AI Summarize" in dropdown menu on PDF cards when AI is connected, keeping card actions uniform', async () => {
+    const mockOnSummarizePdf = vi.fn().mockImplementation(() => Promise.resolve());
+    const { BookmarkCard } = await import('../components/BookmarkCard');
+
+    render(
+      <BookmarkCard
+        bookmark={mockPdfBookmark}
+        onOpenReader={vi.fn()}
+        onShare={vi.fn()}
+        onEdit={vi.fn()}
+        onRescrape={vi.fn()}
+        onSummarizePdf={mockOnSummarizePdf}
+        isAIConnected={true}
+        onDelete={vi.fn()}
+        onTagClick={vi.fn()}
+      />
+    );
+
+    // 1. Card level quick action button should NOT exist (keeping quick actions clean and uniform)
+    expect(screen.queryByRole('button', { name: /AI Summarize PDF/i })).not.toBeInTheDocument();
+
+    // 2. Dropdown menu item exists
+    const moreBtn = screen.getByRole('button', { name: /More actions/i });
+    fireEvent.click(moreBtn);
+
+    const dropdownItem = screen.getByText('AI Summarize');
+    expect(dropdownItem).toBeInTheDocument();
+
+    // 3. Trigger summarize action
+    await fireEvent.click(dropdownItem);
+    expect(mockOnSummarizePdf).toHaveBeenCalledWith(99);
+  });
+
+  it('renders Eye-icon Reader button on PDF slip when description is summarized (>= 60 chars)', async () => {
+    const { BookmarkCard } = await import('../components/BookmarkCard');
+    const mockOnOpenReader = vi.fn();
+
+    const summarizedPdf = {
+      ...mockPdfBookmark,
+      description: '• Introduces revolutionary attention mechanism without recurrent networks\n• Scales sequence transductions across translation tasks efficiently'
+    };
+
+    render(
+      <BookmarkCard
+        bookmark={summarizedPdf}
+        onOpenReader={mockOnOpenReader}
+        onShare={vi.fn()}
+        onEdit={vi.fn()}
+        onRescrape={vi.fn()}
+        onSummarizePdf={vi.fn()}
+        isAIConnected={true}
+        onDelete={vi.fn()}
+        onTagClick={vi.fn()}
+      />
+    );
+
+    const readerBtn = screen.getByRole('button', { name: /Read Summary|Reader Mode/i });
+    expect(readerBtn).toBeInTheDocument();
+
+    fireEvent.click(readerBtn);
+    expect(mockOnOpenReader).toHaveBeenCalledWith(summarizedPdf);
+  });
+
+  it('does NOT render AI Summarize in dropdown menu when AI is disconnected', async () => {
+    const { BookmarkCard } = await import('../components/BookmarkCard');
+
+    render(
+      <BookmarkCard
+        bookmark={mockPdfBookmark}
+        onOpenReader={vi.fn()}
+        onShare={vi.fn()}
+        onEdit={vi.fn()}
+        onRescrape={vi.fn()}
+        onSummarizePdf={vi.fn()}
+        isAIConnected={false}
+        onDelete={vi.fn()}
+        onTagClick={vi.fn()}
+      />
+    );
+
+    const moreBtn = screen.getByRole('button', { name: /More actions/i });
+    fireEvent.click(moreBtn);
+
+    expect(screen.queryByText('AI Summarize')).not.toBeInTheDocument();
+  });
+});
+
 describe('AI Smart Search UI & Interactions', () => {
   it('renders Smart Search toggle button in Navbar and toggles placeholder text', async () => {
     const { Navbar } = await import('../components/Navbar');

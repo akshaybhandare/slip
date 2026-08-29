@@ -8,6 +8,7 @@ import {
 import { Tag } from '../types';
 import { TagInput } from './TagInput';
 import { NoteEditor } from './NoteEditor';
+import { useEscapeKey } from '../hooks/useEscapeKey';
 
 interface AddBookmarkModalProps {
   isOpen: boolean;
@@ -79,6 +80,8 @@ export const AddBookmarkModal: React.FC<AddBookmarkModalProps> = ({
       handleFileSelected(initialFile);
     }
   }, [initialFile, isOpen]);
+
+  useEscapeKey(onClose, isOpen);
 
   const handleFileSelected = (file: File) => {
     const isImage = file.type.startsWith('image/');
