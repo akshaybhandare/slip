@@ -48,7 +48,8 @@ vi.mock('../api', () => ({
   removeBookmarkFromClip: vi.fn(),
   removeBookmarksFromClip: vi.fn(),
   fetchBookmarkClips: vi.fn(),
-  setBookmarkClip: vi.fn()
+  setBookmarkClip: vi.fn(),
+  fetchAppVersion: vi.fn().mockResolvedValue({ version: '1.1.1', name: 'slip', node_env: 'test' })
 }));
 
 describe('Story 14: Recycle Clip Frontend UX & Components', () => {

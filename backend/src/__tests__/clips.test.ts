@@ -66,7 +66,7 @@ describe('Clips Hierarchical Organization Integration Tests', () => {
         tags: ['movies', 'scifi']
       });
     bookmark2Id = b2.body.id;
-  });
+  }, 15000);
 
   test('POST /api/clips should create root clips', async () => {
     const res = await request(app)

@@ -155,6 +155,9 @@ export function getSupportedBulkActions(params: {
   }
 
   const actions: ActionMetadata[] = [ACTION_REGISTRY.delete];
+  if (params.clipCount === 0 && params.slipCount > 0) {
+    actions.push(ACTION_REGISTRY.organize_in_clip);
+  }
   if (params.context === 'clip_detail' && params.clipCount === 0 && params.slipCount > 0) {
     actions.push(ACTION_REGISTRY.remove_from_clip);
   }

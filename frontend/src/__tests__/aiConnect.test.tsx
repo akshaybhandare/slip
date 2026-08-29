@@ -43,7 +43,8 @@ vi.mock('../api', () => ({
   fetchPinConfig: vi.fn().mockResolvedValue({ maxPinnedSlips: 5 }),
   togglePinBookmark: vi.fn(),
   fetchRecycleClip: vi.fn().mockResolvedValue([]),
-  fetchRecycleClips: vi.fn().mockResolvedValue([])
+  fetchRecycleClips: vi.fn().mockResolvedValue([]),
+  fetchAppVersion: vi.fn().mockResolvedValue({ version: '1.1.1', name: 'slip', node_env: 'test' })
 }));
 
 describe('AI Config Module & Helpers', () => {

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Bookmark, Clip } from '../types';
-import { fetchClips, fetchBookmarkClips, setBookmarkClip, createClip } from '../api';
+import { fetchClips, fetchBookmarkClips, setBookmarkClip, bulkSetClip, createClip } from '../api';
 import {
   X,
   Paperclip,
@@ -14,7 +14,9 @@ import {
 } from 'lucide-react';
 
 interface AddToClipModalProps {
-  bookmark: Bookmark | null;
+  bookmark?: Bookmark | null;
+  slips?: Bookmark[] | null;
+  slipIds?: number[] | null;
   onClose: () => void;
   onSuccess?: () => void;
 }
@@ -26,6 +28,8 @@ interface TreeNode {
 
 export const AddToClipModal: React.FC<AddToClipModalProps> = ({
   bookmark,
+  slips,
+  slipIds,
   onClose,
   onSuccess
 }) => {
@@ -45,23 +49,39 @@ export const AddToClipModal: React.FC<AddToClipModalProps> = ({
   const [inlineClipName, setInlineClipName] = useState('');
   const [creatingClip, setCreatingClip] = useState(false);
 
+  const targetSlips = useMemo<Bookmark[]>(() => {
+    if (slips && slips.length > 0) return slips;
+    if (bookmark) return [bookmark];
+    return [];
+  }, [bookmark, slips]);
+
+  const targetIds = useMemo<number[]>(() => {
+    if (slipIds && slipIds.length > 0) return slipIds;
+    return targetSlips.map((s) => s.id);
+  }, [slipIds, targetSlips]);
+
+  const isBulk = targetIds.length > 1;
+  const isSingle = targetIds.length === 1;
+
   useEffect(() => {
-    if (!bookmark) return;
+    if (targetIds.length === 0) return;
 
     setLoading(true);
     setError(null);
     setCreatingForParentId(null);
     setInlineClipName('');
 
-    Promise.all([
+    const fetchPromises: [Promise<Clip[]>, Promise<Clip[]>] = [
       fetchClips(),
-      fetchBookmarkClips(bookmark.id)
-    ])
+      isSingle ? fetchBookmarkClips(targetIds[0]) : Promise.resolve([])
+    ];
+
+    Promise.all(fetchPromises)
       .then(([allClips, assignedClips]) => {
         setClips(allClips);
-        const currentId = assignedClips.length > 0 ? assignedClips[0].id : null;
+        const currentId = isSingle && assignedClips.length > 0 ? assignedClips[0].id : null;
         setSelectedClipId(currentId);
-        setInitialClipId(currentId);
+        setInitialClipId(isSingle ? currentId : null);
 
         // Expand path to currently selected clip & all top-level clips by default
         const toExpand = new Set<number>();
@@ -84,7 +104,7 @@ export const AddToClipModal: React.FC<AddToClipModalProps> = ({
       .finally(() => {
         setLoading(false);
       });
-  }, [bookmark]);
+  }, [targetIds.join(',')]);
 
   // Build tree from flat list
   const tree = useMemo(() => {
@@ -129,11 +149,15 @@ export const AddToClipModal: React.FC<AddToClipModalProps> = ({
   };
 
   const handleSave = async () => {
-    if (!bookmark) return;
+    if (targetIds.length === 0) return;
     setSaving(true);
     setError(null);
     try {
-      await setBookmarkClip(bookmark.id, selectedClipId);
+      if (isSingle) {
+        await setBookmarkClip(targetIds[0], selectedClipId);
+      } else {
+        await bulkSetClip(targetIds, selectedClipId);
+      }
       onSuccess?.();
       onClose();
     } catch (err: any) {
@@ -185,7 +209,7 @@ export const AddToClipModal: React.FC<AddToClipModalProps> = ({
     return parts.join(' ➔ ');
   };
 
-  if (!bookmark) return null;
+  if (targetIds.length === 0) return null;
 
   // Recursive tree node renderer with in-place nested sub-clip creation
   const renderTreeNode = (node: TreeNode, depth = 0) => {
@@ -326,9 +350,9 @@ export const AddToClipModal: React.FC<AddToClipModalProps> = ({
 
         {/* Target Slip Card Banner */}
         <div className="clip-target-card-banner">
-          <span className="clip-target-label">Target Slip:</span>
-          <span className="clip-target-title" title={bookmark.title || bookmark.url}>
-            {bookmark.title || bookmark.url}
+          <span className="clip-target-label">{isBulk ? 'Target Slips:' : 'Target Slip:'}</span>
+          <span className="clip-target-title" title={isBulk ? `${targetIds.length} slips selected` : (targetSlips[0]?.title || targetSlips[0]?.url || `Slip #${targetIds[0]}`)}>
+            {isBulk ? `${targetIds.length} slips selected` : (targetSlips[0]?.title || targetSlips[0]?.url || `Slip #${targetIds[0]}`)}
           </span>
         </div>
 
@@ -473,9 +497,9 @@ export const AddToClipModal: React.FC<AddToClipModalProps> = ({
               type="button"
               className="btn btn-primary"
               onClick={handleSave}
-              disabled={saving || loading || selectedClipId === initialClipId}
+              disabled={saving || loading || (isSingle && selectedClipId === initialClipId)}
             >
-              {saving ? 'Applying...' : selectedClipId === null ? 'Unclip' : 'Save to Clip'}
+              {saving ? 'Applying...' : selectedClipId === null ? (isBulk ? 'Unclip All' : 'Unclip') : (isBulk ? `Save to Clip (${targetIds.length})` : 'Save to Clip')}
             </button>
           </div>
         </div>

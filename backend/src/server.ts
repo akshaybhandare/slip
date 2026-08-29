@@ -5,7 +5,7 @@ import dotenv from 'dotenv';
 import path from 'path';
 import fs from 'fs';
 import { initDb, getDb, getDbPath, closeDb } from './db';
-import { getInstanceId } from './config';
+import { getInstanceId, getAppVersion } from './config';
 import { startTelemetry } from './services/telemetryService';
 import authRouter from './routes/auth';
 import bookmarksRouter from './routes/bookmarks';
@@ -73,15 +73,26 @@ app.get('/api/cache/:filename', (req, res) => {
   res.sendFile(filePath);
 });
 
-// Health check endpoint
-app.get('/health', (req, res) => {
+// Health check & version endpoints
+const handleHealth = (req: express.Request, res: express.Response) => {
   try {
     const db = getDb();
     db.prepare('SELECT 1').get();
-    res.status(200).json({ status: 'healthy', database: 'connected' });
+    res.status(200).json({ status: 'healthy', database: 'connected', version: getAppVersion() });
   } catch (err: any) {
-    res.status(500).json({ status: 'error', database: 'disconnected', message: err.message });
+    res.status(500).json({ status: 'error', database: 'disconnected', version: getAppVersion(), message: err.message });
   }
+};
+
+app.get('/health', handleHealth);
+app.get('/api/health', handleHealth);
+
+app.get('/api/version', (req, res) => {
+  res.status(200).json({
+    version: getAppVersion(),
+    name: 'slip',
+    node_env: process.env.NODE_ENV || 'development'
+  });
 });
 
 // Serve frontend static build if it exists

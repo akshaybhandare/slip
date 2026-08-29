@@ -48,7 +48,7 @@ interface ClipsViewProps {
   isAIConnected?: boolean;
   onDeleteBookmark: (id: number) => void;
   onTagClick: (tagName: string) => void;
-  onManageBookmarkClips: (bookmark: Bookmark) => void;
+  onManageBookmarkClips: (bookmark: Bookmark, bulkBookmarks?: Bookmark[]) => void;
   initialViewRecycleClip?: boolean;
   onRecycleCountChange?: (count: number) => void;
   onRecycleClipViewChange?: (isViewing: boolean) => void;
@@ -259,6 +259,11 @@ export const ClipsView: React.FC<ClipsViewProps> = ({
       }
     } else if (actionId === 'remove_from_clip') {
       await handleBulkRemoveFromCurrentClip();
+    } else if (actionId === 'organize_in_clip') {
+      const selectedSlips = currentClipDetail ? currentClipDetail.bookmarks.filter((b) => selectedSlipIds.has(b.id)) : [];
+      if (selectedSlips.length > 0) {
+        onManageBookmarkClips(selectedSlips[0], selectedSlips);
+      }
     }
   };
 

@@ -1,7 +1,7 @@
 import { Router, Response } from 'express';
 import { getDb } from '../db';
 import { authenticate, AuthenticatedRequest } from '../middleware/auth';
-import { chunkArray } from '../utils';
+import { chunkArray, parseIds, addTagToBookmark, removeTagFromBookmark } from '../utils';
 
 const router = Router();
 router.use(authenticate);
@@ -23,28 +23,6 @@ function getDescendantClipIds(db: any, rootClipId: number, userId: number): numb
     }
   }
   return allClipIds;
-}
-
-// Helper: Add tag to bookmark by name
-function addTagToBookmark(db: any, bookmarkId: number, rawTagName: string) {
-  const cleanName = rawTagName.trim().toLowerCase().replace(/^#/, '');
-  if (!cleanName) return;
-
-  const findOrCreateTag = db.prepare(`
-    INSERT INTO tags (name) VALUES (?)
-    ON CONFLICT(name) DO UPDATE SET name=excluded.name
-    RETURNING id
-  `);
-  const tagRecord = findOrCreateTag.get(cleanName) as { id: number };
-
-  db.prepare(`
-    INSERT OR IGNORE INTO bookmark_tags (bookmark_id, tag_id) VALUES (?, ?)
-  `).run(bookmarkId, tagRecord.id);
-}
-
-function parseIds(arr: any): number[] {
-  if (!Array.isArray(arr)) return [];
-  return Array.from(new Set(arr.map(Number))).filter((n) => !isNaN(n) && n > 0);
 }
 
 // POST /api/bulk/delete or DELETE /api/bulk/delete - Bulk soft delete slips and/or clips
@@ -355,5 +333,104 @@ const handleBulkPermanent = (req: AuthenticatedRequest, res: Response) => {
 
 router.post('/permanent', handleBulkPermanent);
 router.delete('/permanent', handleBulkPermanent);
+
+// POST /api/bulk/clip or POST /api/bulk/organize - Bulk assign slips to a clip (or unclip if clipId is null)
+const handleBulkClip = (req: AuthenticatedRequest, res: Response) => {
+  const userId = req.user!.id;
+  const slipIds = parseIds(req.body?.slipIds || req.body?.slip_ids || req.body?.bookmarkIds || req.body?.bookmark_ids || req.body?.ids);
+  const rawClipId = req.body?.clipId !== undefined ? req.body.clipId : req.body?.clip_id;
+  const targetClipId = (rawClipId === null || rawClipId === undefined || rawClipId === '' || rawClipId === 0 || rawClipId === '0') ? null : Number(rawClipId);
+
+  if (slipIds.length === 0) {
+    return res.status(400).json({ message: 'No slip IDs provided for bulk clip assignment' });
+  }
+
+  if (targetClipId !== null && (isNaN(targetClipId) || targetClipId <= 0)) {
+    return res.status(400).json({ message: 'Invalid clip ID' });
+  }
+
+  try {
+    const db = getDb();
+    let targetClip: { id: number; name: string } | undefined;
+
+    if (targetClipId !== null) {
+      targetClip = db.prepare('SELECT id, name FROM clips WHERE id = ? AND user_id = ? AND deleted_at IS NULL').get(targetClipId, userId) as { id: number; name: string } | undefined;
+      if (!targetClip) {
+        return res.status(404).json({ message: 'Clip not found' });
+      }
+    }
+
+    const organizeTx = db.transaction(() => {
+      let updatedSlipsCount = 0;
+
+      for (const chunk of chunkArray(slipIds, 500)) {
+        const placeholders = chunk.map(() => '?').join(',');
+
+        // 1. Fetch valid slips belonging to user and not deleted
+        const validSlips = db.prepare(`
+          SELECT id FROM bookmarks 
+          WHERE id IN (${placeholders}) AND user_id = ? AND deleted_at IS NULL
+        `).all(...chunk, userId) as { id: number }[];
+
+        if (validSlips.length === 0) continue;
+
+        const validIds = validSlips.map((s) => s.id);
+        const validPlaceholders = validIds.map(() => '?').join(',');
+
+        // 2. Fetch old clips for these valid slips to remove outdated tags
+        const oldClips = db.prepare(`
+          SELECT cb.bookmark_id, c.id AS clip_id, c.name AS clip_name
+          FROM clip_bookmarks cb
+          JOIN clips c ON cb.clip_id = c.id
+          WHERE cb.bookmark_id IN (${validPlaceholders}) AND c.user_id = ?
+        `).all(...validIds, userId) as { bookmark_id: number; clip_id: number; clip_name: string }[];
+
+        for (const oc of oldClips) {
+          if (targetClipId === null || oc.clip_id !== targetClipId) {
+            removeTagFromBookmark(db, oc.bookmark_id, oc.clip_name);
+          }
+        }
+
+        if (targetClipId === null) {
+          // Remove from clip_bookmarks
+          db.prepare(`
+            DELETE FROM clip_bookmarks 
+            WHERE bookmark_id IN (${validPlaceholders})
+          `).run(...validIds);
+        } else {
+          // Upsert into clip_bookmarks and add target clip tag
+          const insertStmt = db.prepare(`
+            INSERT INTO clip_bookmarks (clip_id, bookmark_id) 
+            VALUES (?, ?)
+            ON CONFLICT(bookmark_id) DO UPDATE SET clip_id = excluded.clip_id
+          `);
+
+          for (const bId of validIds) {
+            insertStmt.run(targetClipId, bId);
+            addTagToBookmark(db, bId, targetClip!.name);
+          }
+        }
+
+        updatedSlipsCount += validIds.length;
+      }
+
+      return { updatedSlipsCount };
+    });
+
+    const result = organizeTx();
+    res.status(200).json({
+      message: targetClipId === null ? 'Slips unclipped successfully' : 'Slips organized in clip successfully',
+      ...result,
+      slipIds,
+      clipId: targetClipId
+    });
+  } catch (err) {
+    console.error('Bulk clip organize error:', err);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+};
+
+router.post('/clip', handleBulkClip);
+router.post('/organize', handleBulkClip);
 
 export default router;

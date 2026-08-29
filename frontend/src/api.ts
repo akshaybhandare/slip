@@ -528,6 +528,24 @@ export async function bulkPermanentlyDeleteClips(ids: number[]): Promise<{ messa
   return { message: res.message, deletedCount: res.deletedClipsCount || 0, ids: res.clipIds || ids };
 }
 
+export async function bulkSetClip(slipIds: number[], clipId: number | null): Promise<{
+  message: string;
+  updatedSlipsCount?: number;
+  slipIds?: number[];
+  clipId?: number | null;
+}> {
+  return apiFetch<{
+    message: string;
+    updatedSlipsCount?: number;
+    slipIds?: number[];
+    clipId?: number | null;
+  }>('/bulk/clip', {
+    method: 'POST',
+    body: JSON.stringify({ slipIds, clipId })
+  });
+}
 
-
+export async function fetchAppVersion(): Promise<{ version: string; name?: string; node_env?: string }> {
+  return apiFetch<{ version: string; name?: string; node_env?: string }>('/version');
+}
 
