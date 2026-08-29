@@ -47,7 +47,8 @@ vi.mock('../api', () => ({
   permanentlyDeleteClip: vi.fn().mockResolvedValue({ message: 'Clip permanently deleted' }),
   restoreBookmark: vi.fn().mockResolvedValue({ message: 'Bookmark restored successfully', bookmark: {} }),
   permanentlyDeleteBookmark: vi.fn().mockResolvedValue({ message: 'Bookmark permanently deleted' }),
-  emptyRecycleClip: vi.fn().mockResolvedValue({ message: 'Recycle clip emptied', deletedCount: 0 })
+  emptyRecycleClip: vi.fn().mockResolvedValue({ message: 'Recycle clip emptied', deletedCount: 0 }),
+  fetchAppVersion: vi.fn().mockResolvedValue({ version: '1.1.1', name: 'slip', node_env: 'test' })
 }));
 
 describe('Frontend SPA Component Architecture & Mobile UI Interactions', () => {
@@ -252,6 +253,24 @@ describe('Frontend SPA Component Architecture & Mobile UI Interactions', () => {
     await waitFor(() => {
       expect(screen.queryByText('Create New User')).not.toBeInTheDocument();
     });
+  });
+
+  it('displays application version badge and release notes link inside Settings modal', async () => {
+    render(<App />);
+
+    const settingsBtn = screen.getByRole('button', { name: 'Settings' });
+    fireEvent.click(settingsBtn);
+
+    await waitFor(() => {
+      expect(screen.getByText('Slip v1.1.1')).toBeInTheDocument();
+      expect(screen.getByRole('link', { name: 'Release Notes' })).toHaveAttribute('href', 'https://github.com/akshaybhandare/slip/releases');
+      expect(screen.getByRole('link', { name: 'GitHub' })).toHaveAttribute('href', 'https://github.com/akshaybhandare/slip');
+    });
+
+    const dataTab = screen.getByRole('button', { name: 'Data & Sync' });
+    fireEvent.click(dataTab);
+
+    expect(screen.getByText('About Slip & System Info')).toBeInTheDocument();
   });
 
   it('renders Notes and Documents categories in filter tabs and switches to them', async () => {

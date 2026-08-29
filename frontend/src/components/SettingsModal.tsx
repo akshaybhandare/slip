@@ -38,7 +38,8 @@ import {
   deleteAPIKey,
   APIKeyListItem,
   getTelemetryStatus,
-  updateTelemetryStatus
+  updateTelemetryStatus,
+  fetchAppVersion
 } from '../api';
 import { copyToClipboard } from '../utils/clipboard';
 
@@ -124,6 +125,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [userError, setUserError] = useState('');
   const [userSuccess, setUserSuccess] = useState('');
   const [telemetryDisabled, setTelemetryDisabled] = useState(false);
+  const [appVersion, setAppVersion] = useState<string>('1.1.1');
+  const [systemEnv, setSystemEnv] = useState<string>('production');
 
   const isAdmin = Boolean(user?.isAdmin || user?.id === 1);
 
@@ -143,6 +146,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       setAiFormError('');
       setAiIsConnecting(false);
       setAiIsTesting(false);
+
+      // Load App Version & Info
+      fetchAppVersion()
+        .then((res) => {
+          if (res && res.version) setAppVersion(res.version);
+          if (res && res.node_env) setSystemEnv(res.node_env);
+        })
+        .catch(() => {});
 
       // Load Keys
       loadKeys();
@@ -1054,6 +1065,27 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     </label>
                   </div>
                 )}
+
+                {/* About Slip & System Info */}
+                <div className="settings-action-card">
+                  <div className="settings-action-card-text">
+                    <div className="settings-action-card-title">
+                      About Slip & System Info
+                    </div>
+                    <div className="settings-action-card-desc">
+                      Version <strong style={{ color: 'var(--color-secondary)' }}>v{appVersion}</strong> • Runtime: <code style={{ fontSize: '11px', background: 'var(--color-tertiary)', padding: '2px 6px', borderRadius: '4px' }}>SQLite WAL</code> • <code style={{ fontSize: '11px', background: 'var(--color-tertiary)', padding: '2px 6px', borderRadius: '4px' }}>Self-Hosted ({systemEnv})</code>
+                    </div>
+                  </div>
+                  <a
+                    href="https://github.com/akshaybhandare/slip/releases"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="btn btn-secondary"
+                    style={{ flexShrink: 0, height: '40px', fontSize: '13.5px', textDecoration: 'none' }}
+                  >
+                    <span>Release Notes</span>
+                  </a>
+                </div>
               </div>
             </div>
           )}
@@ -1180,32 +1212,71 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         </div>
 
         {/* Footer with quick logout and Done */}
+        {/* Footer with quick logout, version badge, and Done */}
         <div
           style={{
             display: 'flex',
-            justifyContent: user ? 'space-between' : 'flex-end',
+            justifyContent: 'space-between',
             alignItems: 'center',
             paddingTop: '14px',
             borderTop: '1px solid var(--color-border)',
             marginTop: '14px',
-            flexShrink: 0
+            flexShrink: 0,
+            flexWrap: 'wrap',
+            gap: '10px'
           }}
         >
-          {user && (
-            <button
-              type="button"
-              className="btn btn-secondary btn-danger"
-              onClick={() => {
-                onClose();
-                onLogoutClick();
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            {user && (
+              <button
+                type="button"
+                className="btn btn-secondary btn-danger"
+                onClick={() => {
+                  onClose();
+                  onLogoutClick();
+                }}
+                style={{ height: '36px', padding: '0 14px', fontSize: '13px' }}
+                title={`Log out (@${user.username})`}
+              >
+                <LogOut size={14} />
+                <span>Log out</span>
+              </button>
+            )}
+
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                fontSize: '12px',
+                color: 'var(--color-muted)'
               }}
-              style={{ height: '36px', padding: '0 14px', fontSize: '13px' }}
-              title={`Log out (@${user.username})`}
             >
-              <LogOut size={14} />
-              <span>Log out</span>
-            </button>
-          )}
+              <span style={{ fontWeight: 500, color: 'var(--color-secondary)' }}>Slip v{appVersion}</span>
+              <span>•</span>
+              <a
+                href="https://github.com/akshaybhandare/slip/releases"
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{ color: 'var(--color-muted)', textDecoration: 'none' }}
+                onMouseEnter={(e) => (e.currentTarget.style.textDecoration = 'underline')}
+                onMouseLeave={(e) => (e.currentTarget.style.textDecoration = 'none')}
+              >
+                Release Notes
+              </a>
+              <span>•</span>
+              <a
+                href="https://github.com/akshaybhandare/slip"
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{ color: 'var(--color-muted)', textDecoration: 'none' }}
+                onMouseEnter={(e) => (e.currentTarget.style.textDecoration = 'underline')}
+                onMouseLeave={(e) => (e.currentTarget.style.textDecoration = 'none')}
+              >
+                GitHub
+              </a>
+            </div>
+          </div>
 
           <button
             type="button"

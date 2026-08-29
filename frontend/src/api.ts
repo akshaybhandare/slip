@@ -544,3 +544,8 @@ export async function bulkSetClip(slipIds: number[], clipId: number | null): Pro
     body: JSON.stringify({ slipIds, clipId })
   });
 }
+
+export async function fetchAppVersion(): Promise<{ version: string; name?: string; node_env?: string }> {
+  return apiFetch<{ version: string; name?: string; node_env?: string }>('/version');
+}
+

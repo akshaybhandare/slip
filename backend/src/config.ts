@@ -142,3 +142,32 @@ export function getInstanceId(): string {
     return cachedInstanceId;
   }
 }
+
+let cachedAppVersion: string | null = null;
+
+export function getAppVersion(): string {
+  if (cachedAppVersion) {
+    return cachedAppVersion;
+  }
+  try {
+    const candidatePaths = [
+      path.resolve(__dirname, '../package.json'),
+      path.resolve(__dirname, '../../package.json'),
+      path.resolve(process.cwd(), 'package.json'),
+      path.resolve(projectRoot, 'backend/package.json')
+    ];
+    for (const p of candidatePaths) {
+      if (fs.existsSync(p)) {
+        const pkg = JSON.parse(fs.readFileSync(p, 'utf-8'));
+        if (pkg && pkg.version) {
+          const v = String(pkg.version);
+          cachedAppVersion = v;
+          return v;
+        }
+      }
+    }
+  } catch {}
+  cachedAppVersion = '1.1.1';
+  return '1.1.1';
+}
+

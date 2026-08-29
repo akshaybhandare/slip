@@ -23,7 +23,8 @@ vi.mock('../api', () => ({
   permanentlyDeleteClip: vi.fn().mockResolvedValue({ message: 'Clip permanently deleted' }),
   restoreBookmark: vi.fn().mockResolvedValue({ message: 'Bookmark restored successfully', bookmark: {} }),
   permanentlyDeleteBookmark: vi.fn().mockResolvedValue({ message: 'Bookmark permanently deleted' }),
-  emptyRecycleClip: vi.fn().mockResolvedValue({ message: 'Recycle clip emptied', deletedCount: 0 })
+  emptyRecycleClip: vi.fn().mockResolvedValue({ message: 'Recycle clip emptied', deletedCount: 0 }),
+  fetchAppVersion: vi.fn().mockResolvedValue({ version: '1.1.1', name: 'slip', node_env: 'test' })
 }));
 
 describe('Clips Organization UI Components', () => {
