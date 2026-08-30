@@ -231,6 +231,7 @@ export async function indexBookmark(bookmarkId: number): Promise<boolean> {
   if (!vector) return false;
 
   saveBookmarkEmbedding(db, bookmarkId, vector);
+  console.log(`[Embeddings] Slip #${bookmarkId} indexed successfully.`);
   return true;
 }
 

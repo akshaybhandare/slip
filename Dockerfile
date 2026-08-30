@@ -52,8 +52,11 @@ COPY slip.config.json ./slip.config.json
 RUN chmod +x ./docker-entrypoint.sh
 
 # Pre-download default embedding model for 100% offline runtime into image seed cache
+WORKDIR /app/backend
 RUN mkdir -p /app/models && \
-    (node -e "import('@huggingface/transformers').then(async m => { m.env.cacheDir = '/app/models'; await m.pipeline('feature-extraction', 'Xenova/bge-small-en-v1.5', { dtype: 'fp32' }); });" || true)
+    node --input-type=module -e "import { pipeline, env } from '@huggingface/transformers'; env.cacheDir = '/app/models'; await pipeline('feature-extraction', 'Xenova/bge-small-en-v1.5', { dtype: 'fp32' }); console.log('[Build] Successfully downloaded Xenova/bge-small-en-v1.5 into /app/models');"
+
+WORKDIR /app
 
 # Unraid and Docker environment defaults
 ENV NODE_ENV=production \

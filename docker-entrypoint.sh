@@ -29,10 +29,13 @@ fi
 mkdir -p /config/cache/models
 mkdir -p /app/backend/data/cache/models
 
-# If /config/cache/models is empty and pre-baked /app/models exists, seed model into cache
-if [ -d "/app/models" ] && [ -z "$(ls -A /config/cache/models 2>/dev/null)" ]; then
-    echo "[Slip] Seeding pre-baked embedding models into /config/cache/models..."
-    cp -r /app/models/* /config/cache/models/ 2>/dev/null || true
+# If /config/cache/models is empty or missing Xenova model, copy pre-baked model from /app/models
+if [ -d "/app/models/Xenova" ] || [ -d "/app/models" ]; then
+    if [ ! -d "/config/cache/models/Xenova" ]; then
+        echo "[Slip] Seeding pre-baked embedding models into /config/cache/models..."
+        cp -r /app/models/* /config/cache/models/ 2>/dev/null || true
+        echo "[Slip] Embedding models seeded successfully into /config/cache/models."
+    fi
 fi
 
 # Fix directory ownership for Unraid / persistent storage

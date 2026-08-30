@@ -17,7 +17,8 @@ import embeddingsRouter from './routes/embeddings';
 import clipsRouter from './routes/clips';
 import bulkRouter from './routes/bulk';
 import { CACHE_DIR, isSafeFilename } from './services/thumbnail';
-import { queueBookmarkIndex } from './services/embeddingService';
+import { queueBookmarkIndex, getEmbeddingPipeline } from './services/embeddingService';
+import { getResolvedModelsDir } from './paths';
 
 // Load environmental variables from the project root
 const projectRoot = path.resolve(__dirname, '../..');
@@ -125,8 +126,25 @@ if (process.env.NODE_ENV !== 'test') {
     startTelemetry();
     app.listen(PORT, HOST, () => {
       console.log(`Slip server running on http://${HOST}:${PORT}`);
-      // Automatic background backfill for unindexed slips (non-blocking)
+
+      // Warmup on-device embedding model in background
+      getEmbeddingPipeline()
+        .then(() => {
+          console.log(`[Embeddings] Model ready at: ${getResolvedModelsDir()}`);
+        })
+        .catch((err) => {
+          console.warn(`[Embeddings] Model initialization warning:`, err?.message || err);
+        });
+
+      // Library indexing status and automatic background backfill for unindexed slips
       try {
+        const totalRow = db.prepare(`SELECT count(*) as count FROM bookmarks WHERE deleted_at IS NULL`).get() as { count: number };
+        const indexedRow = db.prepare(`SELECT count(*) as count FROM slip_embeddings`).get() as { count: number };
+        const total = totalRow?.count || 0;
+        const indexed = indexedRow?.count || 0;
+
+        console.log(`[Embeddings] Library status: ${indexed}/${total} slips indexed.`);
+
         const unindexed = db.prepare(`
           SELECT id FROM bookmarks 
           WHERE deleted_at IS NULL 
