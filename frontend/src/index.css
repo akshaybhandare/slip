@@ -1987,6 +1987,218 @@ body {
   background: rgba(0, 0, 0, 0.06);
 }
 
+/* ==========================================================================
+   Reader Mode Tags Bar (Issue #36)
+   ========================================================================== */
+
+.reader-tags-section {
+  margin-top: 32px;
+  padding-top: 20px;
+  border-top: 1px solid var(--color-border);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.reader-tags-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.reader-tags-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-secondary);
+}
+
+.reader-tags-icon {
+  color: var(--color-primary);
+}
+
+.reader-add-tag-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--color-primary);
+  background: transparent;
+  border: 1px dashed var(--color-border);
+  padding: 3px 10px;
+  border-radius: var(--radius-full);
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.reader-add-tag-btn:hover {
+  background: var(--color-tertiary);
+  border-color: var(--color-primary);
+}
+
+.reader-tags-list {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.reader-tag-pill {
+  display: inline-flex;
+  align-items: center;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-full);
+  padding: 2px 4px 2px 10px;
+  font-size: 12.5px;
+  color: var(--color-secondary);
+  transition: var(--transition);
+}
+
+.reader-tag-pill:hover {
+  border-color: var(--color-primary);
+}
+
+.reader-tag-pill-btn {
+  background: transparent;
+  border: none;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: inherit;
+  cursor: pointer;
+  padding: 0 4px 0 0;
+  font-family: inherit;
+}
+
+.reader-tag-pill-btn:hover {
+  color: var(--color-primary);
+}
+
+.reader-tag-pill-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: transparent;
+  border: none;
+  color: var(--color-muted);
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.reader-tag-pill-remove:hover {
+  background: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+}
+
+.reader-tag-input-wrap {
+  display: inline-flex;
+  align-items: center;
+  height: 28px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-primary);
+  border-radius: var(--radius-full);
+  padding: 0 6px 0 8px;
+  gap: 4px;
+}
+
+.reader-tag-prefix {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-primary);
+}
+
+.reader-tag-input {
+  border: none;
+  background: transparent;
+  outline: none;
+  font-size: 12px;
+  color: var(--color-on-surface);
+  width: 100px;
+  font-family: inherit;
+}
+
+.reader-tag-save-btn,
+.reader-tag-cancel-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  color: var(--color-muted);
+  transition: var(--transition);
+}
+
+.reader-tag-save-btn:hover:not(:disabled) {
+  color: #16a34a;
+  background: rgba(22, 163, 74, 0.15);
+}
+
+.reader-tag-save-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.reader-tag-cancel-btn:hover {
+  color: #ef4444;
+  background: rgba(239, 68, 68, 0.15);
+}
+
+.reader-no-tags-hint {
+  font-size: 12.5px;
+  color: var(--color-muted);
+  font-style: italic;
+}
+
+.reader-tag-suggestions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+}
+
+.reader-suggestions-label {
+  color: var(--color-muted);
+  font-size: 11.5px;
+}
+
+.reader-suggestions-pills {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.reader-suggestion-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  background: var(--color-tertiary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-full);
+  padding: 1px 8px;
+  font-size: 11.5px;
+  color: var(--color-muted);
+  cursor: pointer;
+  transition: var(--transition);
+  font-family: inherit;
+}
+
+.reader-suggestion-pill:hover {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(4px); }
   to { opacity: 1; transform: translateY(0); }

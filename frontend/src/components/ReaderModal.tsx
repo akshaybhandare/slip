@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, ExternalLink, Highlighter, Trash2, Copy, Check } from 'lucide-react';
-import { Bookmark, Highlight } from '../types';
+import { X, ExternalLink, Highlighter, Trash2, Copy, Check, Tag as TagIcon, Plus } from 'lucide-react';
+import { Bookmark, Highlight, Tag } from '../types';
 import { fetchHighlights, createHighlight, deleteHighlight } from '../api';
 import { renderFormattedNote, renderInlineMarkdown } from '../utils/markdown';
 import { copyToClipboard } from '../utils/clipboard';
@@ -8,29 +8,141 @@ import { copyToClipboard } from '../utils/clipboard';
 interface ReaderModalProps {
   bookmark: Bookmark | null;
   onClose: () => void;
+  onTagClick?: (tagName: string) => void;
+  onUpdateTags?: (bookmarkId: number, tags: string[]) => Promise<void>;
+  availableTags?: Tag[];
 }
 
-export const ReaderModal: React.FC<ReaderModalProps> = ({ bookmark, onClose }) => {
+export const ReaderModal: React.FC<ReaderModalProps> = ({
+  bookmark,
+  onClose,
+  onTagClick,
+  onUpdateTags,
+  availableTags = []
+}) => {
+  const [currentBookmark, setCurrentBookmark] = useState<Bookmark | null>(bookmark);
   const [highlights, setHighlights] = useState<Highlight[]>([]);
   const [selectedText, setSelectedText] = useState('');
   const [floatingToolbarPos, setFloatingToolbarPos] = useState<{ x: number; y: number } | null>(null);
   const [copiedId, setCopiedId] = useState<number | null>(null);
   const [activeTab, setActiveTab] = useState<'article' | 'highlights'>('article');
+  const [isAddingTag, setIsAddingTag] = useState(false);
+  const [newTagInput, setNewTagInput] = useState('');
+  const [isSubmittingTag, setIsSubmittingTag] = useState(false);
   const articleRef = useRef<HTMLDivElement>(null);
+  const tagInputRef = useRef<HTMLInputElement>(null);
 
-  const isNote = bookmark ? (bookmark.content_type === 'note' || bookmark.url.startsWith('slip://note/')) : false;
+  const isNote = currentBookmark ? (currentBookmark.content_type === 'note' || currentBookmark.url.startsWith('slip://note/')) : false;
 
   useEffect(() => {
     if (bookmark) {
+      setCurrentBookmark(bookmark);
       fetchHighlights(bookmark.id)
         .then(setHighlights)
         .catch(() => setHighlights([]));
       setSelectedText('');
       setFloatingToolbarPos(null);
+      setIsAddingTag(false);
+      setNewTagInput('');
+    } else {
+      setCurrentBookmark(null);
     }
   }, [bookmark]);
 
-  if (!bookmark) return null;
+  if (!currentBookmark) return null;
+
+  const handleAddTagSubmit = async () => {
+    const clean = newTagInput.trim().replace(/^#/, '').toLowerCase();
+    if (!clean || !currentBookmark) return;
+
+    const currentTagNames = (currentBookmark.tags || []).map((t) => t.name.toLowerCase());
+    if (currentTagNames.includes(clean)) {
+      setIsAddingTag(false);
+      setNewTagInput('');
+      return;
+    }
+
+    const updatedTagNames = [...currentTagNames, clean];
+    setIsSubmittingTag(true);
+
+    const optimisticTags = [...(currentBookmark.tags || []), { id: Date.now(), name: clean, count: 1 }];
+    setCurrentBookmark((prev) => (prev ? { ...prev, tags: optimisticTags } : null));
+    setIsAddingTag(false);
+    setNewTagInput('');
+
+    try {
+      if (onUpdateTags) {
+        await onUpdateTags(currentBookmark.id, updatedTagNames);
+      }
+    } catch (err) {
+      console.error('Failed to add tag in reader mode:', err);
+      setCurrentBookmark(bookmark);
+    } finally {
+      setIsSubmittingTag(false);
+    }
+  };
+
+  const handleAddSuggestedTag = async (tagName: string) => {
+    const clean = tagName.trim().replace(/^#/, '').toLowerCase();
+    if (!clean || !currentBookmark) return;
+
+    const currentTagNames = (currentBookmark.tags || []).map((t) => t.name.toLowerCase());
+    if (currentTagNames.includes(clean)) return;
+
+    const updatedTagNames = [...currentTagNames, clean];
+    setIsSubmittingTag(true);
+
+    const optimisticTags = [...(currentBookmark.tags || []), { id: Date.now(), name: clean, count: 1 }];
+    setCurrentBookmark((prev) => (prev ? { ...prev, tags: optimisticTags } : null));
+    setIsAddingTag(false);
+    setNewTagInput('');
+
+    try {
+      if (onUpdateTags) {
+        await onUpdateTags(currentBookmark.id, updatedTagNames);
+      }
+    } catch (err) {
+      console.error('Failed to add suggested tag:', err);
+      setCurrentBookmark(bookmark);
+    } finally {
+      setIsSubmittingTag(false);
+    }
+  };
+
+  const handleRemoveTag = async (tagNameToRemove: string) => {
+    if (!currentBookmark) return;
+    const clean = tagNameToRemove.toLowerCase();
+    const updatedTags = (currentBookmark.tags || []).filter((t) => t.name.toLowerCase() !== clean);
+    const updatedTagNames = updatedTags.map((t) => t.name);
+
+    setCurrentBookmark((prev) => (prev ? { ...prev, tags: updatedTags } : null));
+
+    try {
+      if (onUpdateTags) {
+        await onUpdateTags(currentBookmark.id, updatedTagNames);
+      }
+    } catch (err) {
+      console.error('Failed to remove tag in reader mode:', err);
+      setCurrentBookmark(bookmark);
+    }
+  };
+
+  const handleTagInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter' || e.key === ',') {
+      e.preventDefault();
+      handleAddTagSubmit();
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      setIsAddingTag(false);
+      setNewTagInput('');
+    }
+  };
+
+  const currentTagNames = new Set((currentBookmark.tags || []).map((t) => t.name.toLowerCase()));
+  const filteredSuggestions = availableTags
+    .filter((t) => !currentTagNames.has(t.name.toLowerCase()))
+    .filter((t) => !newTagInput.trim() || t.name.toLowerCase().includes(newTagInput.trim().toLowerCase()))
+    .slice(0, 8);
 
   const handleTextSelection = () => {
     const selection = window.getSelection();
@@ -57,10 +169,10 @@ export const ReaderModal: React.FC<ReaderModalProps> = ({ bookmark, onClose }) =
   };
 
   const handleSaveHighlight = async (color: 'yellow' | 'green' = 'yellow') => {
-    if (!selectedText || !bookmark) return;
+    if (!selectedText || !currentBookmark) return;
 
     try {
-      const newHl = await createHighlight(bookmark.id, {
+      const newHl = await createHighlight(currentBookmark.id, {
         text: selectedText,
         color
       });
@@ -74,9 +186,9 @@ export const ReaderModal: React.FC<ReaderModalProps> = ({ bookmark, onClose }) =
   };
 
   const handleDeleteHighlight = async (hlId: number) => {
-    if (!bookmark) return;
+    if (!currentBookmark) return;
     try {
-      await deleteHighlight(bookmark.id, hlId);
+      await deleteHighlight(currentBookmark.id, hlId);
       setHighlights((prev) => prev.filter((h) => h.id !== hlId));
     } catch (err) {
       console.error('Failed to delete highlight:', err);
@@ -130,13 +242,13 @@ export const ReaderModal: React.FC<ReaderModalProps> = ({ bookmark, onClose }) =
               {isNote ? '📝 Markdown Note' : 'Reader Mode'}
             </span>
             <h1 className="reader-title">
-              {renderInlineMarkdown(bookmark.title)}
+              {renderInlineMarkdown(currentBookmark.title)}
             </h1>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             {!isNote && (
               <a
-                href={bookmark.url}
+                href={currentBookmark.url}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="btn btn-secondary"
@@ -170,24 +282,147 @@ export const ReaderModal: React.FC<ReaderModalProps> = ({ bookmark, onClose }) =
         </div>
 
         {activeTab === 'article' ? (
-          <div
-            ref={articleRef}
-            className="reader-article"
-            onMouseUp={handleTextSelection}
-            onTouchEnd={handleTextSelection}
-          >
-            {isNote ? (
-              <div style={{ fontSize: '16px', lineHeight: 1.7, color: 'var(--color-on-surface)' }}>
-                {renderFormattedNote(bookmark.personal_note || bookmark.description || '')}
+          <>
+            <div
+              ref={articleRef}
+              className="reader-article"
+              onMouseUp={handleTextSelection}
+              onTouchEnd={handleTextSelection}
+            >
+              {isNote ? (
+                <div style={{ fontSize: '16px', lineHeight: 1.7, color: 'var(--color-on-surface)' }}>
+                  {renderFormattedNote(currentBookmark.personal_note || currentBookmark.description || '')}
+                </div>
+              ) : currentBookmark.reader_html ? (
+                <div dangerouslySetInnerHTML={{ __html: currentBookmark.reader_html }} />
+              ) : (
+                <div style={{ padding: '2rem 0', color: 'var(--color-muted)' }}>
+                  <p>{currentBookmark.description || 'No reader view content available for this bookmark.'}</p>
+                </div>
+              )}
+            </div>
+
+            {/* Reader Mode Tags Section */}
+            <div className="reader-tags-section" data-testid="reader-tags-section">
+              <div className="reader-tags-header">
+                <div className="reader-tags-label">
+                  <TagIcon size={13} className="reader-tags-icon" />
+                  <span>Tags ({currentBookmark.tags?.length || 0})</span>
+                </div>
+                {!isAddingTag && onUpdateTags && (
+                  <button
+                    type="button"
+                    className="reader-add-tag-btn"
+                    onClick={() => {
+                      setIsAddingTag(true);
+                      setTimeout(() => tagInputRef.current?.focus(), 50);
+                    }}
+                    title="Add a tag to this slip"
+                    data-testid="reader-add-tag-btn"
+                  >
+                    <Plus size={12} />
+                    <span>Add Tag</span>
+                  </button>
+                )}
               </div>
-            ) : bookmark.reader_html ? (
-              <div dangerouslySetInnerHTML={{ __html: bookmark.reader_html }} />
-            ) : (
-              <div style={{ padding: '2rem 0', color: 'var(--color-muted)' }}>
-                <p>{bookmark.description || 'No reader view content available for this bookmark.'}</p>
+
+              <div className="reader-tags-list">
+                {currentBookmark.tags && currentBookmark.tags.map((t) => (
+                  <span
+                    key={t.id || t.name}
+                    className="reader-tag-pill"
+                    data-testid={`reader-tag-pill-${t.name}`}
+                  >
+                    <button
+                      type="button"
+                      className="reader-tag-pill-btn"
+                      onClick={() => {
+                        if (onTagClick) {
+                          onTagClick(t.name);
+                        }
+                      }}
+                      title={`Filter by #${t.name}`}
+                    >
+                      #{t.name}
+                    </button>
+                    {onUpdateTags && (
+                      <button
+                        type="button"
+                        className="reader-tag-pill-remove"
+                        onClick={() => handleRemoveTag(t.name)}
+                        aria-label={`Remove tag ${t.name}`}
+                        title={`Remove #${t.name}`}
+                      >
+                        <X size={11} />
+                      </button>
+                    )}
+                  </span>
+                ))}
+
+                {isAddingTag && (
+                  <div className="reader-tag-input-wrap">
+                    <span className="reader-tag-prefix">#</span>
+                    <input
+                      type="text"
+                      ref={tagInputRef}
+                      className="reader-tag-input"
+                      placeholder="tag-name..."
+                      value={newTagInput}
+                      onChange={(e) => setNewTagInput(e.target.value)}
+                      onKeyDown={handleTagInputKeyDown}
+                      autoFocus
+                      data-testid="reader-tag-input"
+                    />
+                    <button
+                      type="button"
+                      className="reader-tag-save-btn"
+                      onClick={handleAddTagSubmit}
+                      disabled={!newTagInput.trim() || isSubmittingTag}
+                      title="Save tag"
+                      data-testid="reader-tag-save-btn"
+                    >
+                      <Check size={12} />
+                    </button>
+                    <button
+                      type="button"
+                      className="reader-tag-cancel-btn"
+                      onClick={() => {
+                        setIsAddingTag(false);
+                        setNewTagInput('');
+                      }}
+                      title="Cancel"
+                    >
+                      <X size={12} />
+                    </button>
+                  </div>
+                )}
+
+                {(!currentBookmark.tags || currentBookmark.tags.length === 0) && !isAddingTag && (
+                  <span className="reader-no-tags-hint">No tags attached. Click "+ Add Tag" to categorize.</span>
+                )}
               </div>
-            )}
-          </div>
+
+              {/* Tag Suggestions when adding a tag */}
+              {isAddingTag && filteredSuggestions.length > 0 && (
+                <div className="reader-tag-suggestions">
+                  <span className="reader-suggestions-label">Suggestions:</span>
+                  <div className="reader-suggestions-pills">
+                    {filteredSuggestions.map((st) => (
+                      <button
+                        key={st.id || st.name}
+                        type="button"
+                        className="reader-suggestion-pill"
+                        onClick={() => handleAddSuggestedTag(st.name)}
+                      >
+                        <Plus size={10} />
+                        <span>#{st.name}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </>
         ) : (
           <div className="reader-highlights-list">
             {highlights.length === 0 ? (

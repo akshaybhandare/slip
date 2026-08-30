@@ -865,6 +865,25 @@ function mergeRestored(prev: Bookmark[], restoredItems: Bookmark[], activeSortBy
       <ReaderModal
         bookmark={readerBookmark}
         onClose={() => setReaderBookmark(null)}
+        onTagClick={(tagName) => {
+          setSelectedTag(tagName);
+          setReaderBookmark(null);
+        }}
+        onUpdateTags={async (id, tagNames) => {
+          const target = bookmarks.find((b) => b.id === id) || readerBookmark;
+          if (!target) return;
+          const updated = await updateBookmark(id, {
+            title: target.title,
+            description: target.description,
+            personalNote: target.personal_note || undefined,
+            contentType: target.content_type || 'website',
+            tags: tagNames
+          });
+          setBookmarks((prev) => prev.map((b) => (b.id === id ? updated : b)));
+          setReaderBookmark(updated);
+          fetchTags().then(setTags).catch(() => {});
+        }}
+        availableTags={tags}
       />
 
       <ShareModal
