@@ -51,8 +51,7 @@ COPY docker-entrypoint.sh ./docker-entrypoint.sh
 COPY slip.config.json ./slip.config.json
 RUN chmod +x ./docker-entrypoint.sh
 
-# Pre-download default embedding model for 100% offline runtime
-ENV MODELS_DIR=/app/models
+# Pre-download default embedding model for 100% offline runtime into image seed cache
 RUN mkdir -p /app/models && \
     (node -e "import('@huggingface/transformers').then(async m => { m.env.cacheDir = '/app/models'; await m.pipeline('feature-extraction', 'Xenova/bge-small-en-v1.5', { dtype: 'fp32' }); });" || true)
 
@@ -62,12 +61,12 @@ ENV NODE_ENV=production \
     HOST=0.0.0.0 \
     DB_PATH=/config/bookmarks.db \
     CACHE_DIR=/config/cache \
-    MODELS_DIR=/app/models \
+    MODELS_DIR=/config/cache/models \
     FRONTEND_DIST=/app/frontend/dist \
     PUID=99 \
     PGID=100
 
-# Persistent storage volume for SQLite DB and cached thumbnails
+# Persistent storage volume for SQLite DB and cached thumbnails & models
 VOLUME ["/config"]
 
 EXPOSE 3000

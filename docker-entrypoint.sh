@@ -26,12 +26,17 @@ if ! getent passwd slipuser >/dev/null 2>&1; then
 fi
 
 # Ensure storage directories exist
-mkdir -p /config/cache
-mkdir -p /app/backend/data/cache
-mkdir -p /app/models
+mkdir -p /config/cache/models
+mkdir -p /app/backend/data/cache/models
+
+# If /config/cache/models is empty and pre-baked /app/models exists, seed model into cache
+if [ -d "/app/models" ] && [ -z "$(ls -A /config/cache/models 2>/dev/null)" ]; then
+    echo "[Slip] Seeding pre-baked embedding models into /config/cache/models..."
+    cp -r /app/models/* /config/cache/models/ 2>/dev/null || true
+fi
 
 # Fix directory ownership for Unraid / persistent storage
-chown -R "${PUID}:${PGID}" /config /app/backend/data /app/models 2>/dev/null || true
+chown -R "${PUID}:${PGID}" /config /app/backend/data 2>/dev/null || true
 
 # Execute process as specified user/group using gosu or su-exec
 if [ "$(id -u)" = "0" ]; then

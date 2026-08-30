@@ -5,6 +5,7 @@ import {
   getSlipDir,
   getResolvedDbPath,
   getResolvedCacheDir,
+  getResolvedModelsDir,
   getResolvedFrontendDist,
   getSlipPidPath,
   getSlipLogDir,
@@ -80,6 +81,19 @@ describe('Universal Paths Resolution & Precedence Architecture', () => {
       delete process.env.CACHE_DIR;
       process.env.SLIP_DIR = '/var/lib/slip';
       expect(getResolvedCacheDir()).toBe(path.join('/var/lib/slip', 'data', 'cache'));
+    });
+  });
+
+  describe('3.5 getResolvedModelsDir (Default to <CACHE_DIR>/models)', () => {
+    it('defaults to <CACHE_DIR>/models when MODELS_DIR is not set', () => {
+      process.env.CACHE_DIR = '/config/cache';
+      delete process.env.MODELS_DIR;
+      expect(getResolvedModelsDir()).toBe('/config/cache/models');
+    });
+
+    it('honors explicit MODELS_DIR when set', () => {
+      process.env.MODELS_DIR = '/custom/models/path';
+      expect(getResolvedModelsDir()).toBe('/custom/models/path');
     });
   });
 
