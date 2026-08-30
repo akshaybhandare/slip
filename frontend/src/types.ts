@@ -48,6 +48,7 @@ export interface Bookmark {
   snippet?: string;
   matchScore?: number;
   matchReason?: string;
+  similarityScore?: number;
 }
 
 export interface PinConfig {

@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Slip — Visual Web Clipper",
-  "version": "1.1.1",
+  "version": "1.2.0",
   "description": "1-click visual bookmark archive clipper for your self-hosted Slip instance.",
   "action": {
     "default_popup": "popup.html",

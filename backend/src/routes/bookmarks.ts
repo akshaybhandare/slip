@@ -7,6 +7,14 @@ import { scrapeUrl, ScrapedMetadata, extractPlatformTag } from '../services/scra
 import { scrapeQueue } from '../services/queue';
 import { cacheThumbnail, saveUploadedFile, saveUploadedImage } from '../services/thumbnail';
 import { autoTagBookmark, performSmartSearch, getActiveAIConfig, summarizePdfBookmark } from '../services/aiService';
+import {
+  queueBookmarkIndex,
+  findRelatedBookmarks,
+  suggestTagsForBookmark,
+  getAllUserEmbeddings,
+  computeCosineSimilarity,
+  generateEmbedding
+} from '../services/embeddingService';
 import { chunkArray } from '../utils';
 
 const router = Router();
@@ -166,6 +174,8 @@ async function handleFileUpload(req: AuthenticatedRequest, res: Response) {
 
     const { bookmarkId, tagSet } = insertTransaction();
 
+    queueBookmarkIndex(Number(bookmarkId));
+
     const createdBookmark = db.prepare(`
       SELECT id, user_id, url, title, description, personal_note, content_type, 
              image_path, favicon_path, is_pinned, pinned_at, created_at, updated_at
@@ -259,6 +269,8 @@ async function handleNoteCreation(req: AuthenticatedRequest, res: Response) {
 
     const { bookmarkId, tagSet } = insertTransaction();
     const finalTagSet = new Set<string>(tagSet);
+
+    queueBookmarkIndex(Number(bookmarkId));
 
     // Queue background async auto-tagging for untagged notes (non-blocking)
     const hasCustomTags = Array.isArray(tags) ? tags.length > 0 : Boolean(tags && String(tags).trim());
@@ -433,7 +445,7 @@ router.get('/search', async (req: AuthenticatedRequest, res: Response) => {
 
     const sanitizedTerms = terms.map(term => `${term}*`).join(' ');
 
-    let bookmarks: any[] = [];
+    let ftsBookmarks: any[] = [];
 
     if (sanitizedTerms) {
       try {
@@ -448,13 +460,13 @@ router.get('/search', async (req: AuthenticatedRequest, res: Response) => {
           ORDER BY b.is_pinned DESC, rank ASC
           LIMIT ? OFFSET ?
         `;
-        bookmarks = db.prepare(ftsQuery).all(sanitizedTerms, userId, Number(limit), Number(offset)) as any[];
+        ftsBookmarks = db.prepare(ftsQuery).all(sanitizedTerms, userId, Number(limit), Number(offset)) as any[];
       } catch (ftsErr) {
         console.warn('FTS5 query error, falling back to LIKE:', ftsErr);
       }
     }
 
-    if (bookmarks.length === 0 && terms.length > 0) {
+    if (ftsBookmarks.length === 0 && terms.length > 0) {
       const conditions = terms.map(() => '(b.title LIKE ? OR b.description LIKE ? OR b.personal_note LIKE ? OR b.raw_text LIKE ?)').join(' AND ');
       const params: any[] = [userId];
       for (const w of terms) {
@@ -471,13 +483,86 @@ router.get('/search', async (req: AuthenticatedRequest, res: Response) => {
         ORDER BY b.is_pinned DESC, b.pinned_at DESC, b.created_at DESC
         LIMIT ? OFFSET ?
       `;
-      bookmarks = db.prepare(likeQuery).all(...params) as any[];
+      ftsBookmarks = db.prepare(likeQuery).all(...params) as any[];
     }
 
-    // Attach tags in a single batch query
-    attachTagsBatch(db, bookmarks);
+    // 2. On-Device Semantic Vector Search (MiniLM / BGE)
+    let vectorMatches: { id: number; score: number }[] = [];
+    try {
+      const queryVector = await generateEmbedding(cleanQuery, true);
+      if (queryVector) {
+        const userEmbeddings = getAllUserEmbeddings(db, userId);
+        for (const item of userEmbeddings) {
+          const sim = computeCosineSimilarity(queryVector, item.embedding);
+          if (sim >= 0.35) {
+            vectorMatches.push({ id: item.bookmark_id, score: sim });
+          }
+        }
+        vectorMatches.sort((a, b) => b.score - a.score);
+      }
+    } catch (embErr) {
+      console.warn('Semantic vector search fallback:', embErr);
+    }
 
-    res.status(200).json(bookmarks);
+    // 3. Merge & Hybrid Rank
+    const bookmarkMap = new Map<number, any>();
+    for (let i = 0; i < ftsBookmarks.length; i++) {
+      const b = ftsBookmarks[i];
+      b.is_pinned = Boolean(b.is_pinned);
+      b.ftsScore = Math.max(0.1, 1 - (i / Math.max(ftsBookmarks.length, 1)));
+      bookmarkMap.set(b.id, b);
+    }
+
+    const semanticOnlyIds: number[] = [];
+    for (const vm of vectorMatches) {
+      const existing = bookmarkMap.get(vm.id);
+      const scorePct = Math.round(vm.score * 100);
+      if (existing) {
+        existing.semanticScore = vm.score;
+        existing.matchScore = scorePct;
+      } else if (ftsBookmarks.length === 0 && vm.score >= 0.40) {
+        semanticOnlyIds.push(vm.id);
+      } else if (vm.score >= 0.60) {
+        semanticOnlyIds.push(vm.id);
+      }
+    }
+
+    if (semanticOnlyIds.length > 0) {
+      const placeholders = semanticOnlyIds.map(() => '?').join(',');
+      const semanticSlips = db.prepare(`
+        SELECT b.id, b.user_id, b.url, b.title, b.description, b.personal_note, b.content_type, 
+               b.image_path, b.favicon_path, b.is_pinned, b.pinned_at, b.deleted_at, b.created_at, b.updated_at
+        FROM bookmarks b
+        WHERE b.id IN (${placeholders}) AND b.deleted_at IS NULL
+      `).all(...semanticOnlyIds) as any[];
+
+      const vecScoreMap = new Map(vectorMatches.map(v => [v.id, v.score]));
+      for (const s of semanticSlips) {
+        s.is_pinned = Boolean(s.is_pinned);
+        const sim = vecScoreMap.get(s.id) || 0;
+        s.semanticScore = sim;
+        s.matchScore = Math.round(sim * 100);
+        bookmarkMap.set(s.id, s);
+      }
+    }
+
+    const combinedBookmarks = Array.from(bookmarkMap.values());
+    for (const b of combinedBookmarks) {
+      const ftsVal = b.ftsScore || 0;
+      const semVal = b.semanticScore || 0;
+      b.hybridRank = (ftsVal * 0.6) + (semVal * 0.4);
+    }
+
+    combinedBookmarks.sort((a, b) => {
+      if (Number(b.is_pinned) !== Number(a.is_pinned)) {
+        return Number(b.is_pinned) - Number(a.is_pinned);
+      }
+      return (b.hybridRank || 0) - (a.hybridRank || 0);
+    });
+
+    const finalResults = combinedBookmarks.slice(Number(offset), Number(offset) + Number(limit));
+    attachTagsBatch(db, finalResults);
+    res.status(200).json(finalResults);
   } catch (err) {
     console.error('Search bookmarks error:', err);
     res.status(500).json({ message: 'Internal server error' });
@@ -510,6 +595,44 @@ router.get('/smart-search', async (req: AuthenticatedRequest, res: Response) => 
   } catch (err: any) {
     console.error('Smart search error:', err);
     return res.status(500).json({ message: err.message || 'Smart search failed' });
+  }
+});
+
+// Issue #40: Get top semantically related slips for a bookmark
+router.get('/:id/related', async (req: AuthenticatedRequest, res: Response) => {
+  const userId = req.user!.id;
+  const bookmarkId = Number(req.params.id);
+  const limit = Math.min(20, Math.max(1, Number(req.query.limit) || 3));
+
+  if (!bookmarkId || isNaN(bookmarkId)) {
+    return res.status(400).json({ message: 'Invalid bookmark ID' });
+  }
+
+  try {
+    const related = await findRelatedBookmarks(bookmarkId, userId, limit);
+    return res.status(200).json(related.map((r) => r.bookmark));
+  } catch (err: any) {
+    console.error('Fetch related bookmarks error:', err);
+    return res.status(500).json({ message: err.message || 'Failed to fetch related bookmarks' });
+  }
+});
+
+// Issue #40: Suggest tags for a bookmark using offline tag centroid embeddings
+router.get('/:id/suggest-tags', async (req: AuthenticatedRequest, res: Response) => {
+  const userId = req.user!.id;
+  const bookmarkId = Number(req.params.id);
+  const limit = Math.min(10, Math.max(1, Number(req.query.limit) || 5));
+
+  if (!bookmarkId || isNaN(bookmarkId)) {
+    return res.status(400).json({ message: 'Invalid bookmark ID' });
+  }
+
+  try {
+    const suggestions = await suggestTagsForBookmark(bookmarkId, userId, limit);
+    return res.status(200).json(suggestions);
+  } catch (err: any) {
+    console.error('Suggest tags error:', err);
+    return res.status(500).json({ message: err.message || 'Failed to suggest tags' });
   }
 });
 
@@ -704,6 +827,8 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
 
     const newBookmarkId = insertTransaction();
 
+    queueBookmarkIndex(Number(newBookmarkId));
+
     // Queue background async auto-tagging for untagged bookmarks (non-blocking)
     const hasCustomTags = Array.isArray(tags) ? tags.length > 0 : Boolean(tags && String(tags).trim());
     if (!hasCustomTags) {
@@ -818,6 +943,8 @@ router.put('/:id', (req: AuthenticatedRequest, res: Response) => {
     });
 
     updateTransaction();
+
+    queueBookmarkIndex(Number(id));
 
     const updated = db.prepare(`SELECT * FROM bookmarks WHERE id = ?`).get(id) as any;
     const attachedTags = db.prepare(`
@@ -1142,6 +1269,7 @@ router.post('/:id/rescrape', async (req: AuthenticatedRequest, res: Response) =>
     `).all(id);
 
     updated.tags = attachedTags;
+    queueBookmarkIndex(Number(id));
     res.status(200).json(updated);
   } catch (err: any) {
     console.error('Rescrape bookmark error:', err);
@@ -1295,6 +1423,9 @@ router.post('/rescrape-all', async (req: AuthenticatedRequest, res: Response) =>
           } catch (aiErr) {
             console.warn(`Auto-tag during sync-all failed for bookmark ${b.id}:`, aiErr);
           }
+
+          // Queue embedding update
+          queueBookmarkIndex(b.id);
         } catch (queueErr) {
           console.error(`Failed to rescrape bookmark ID ${b.id}:`, queueErr);
         }
@@ -1318,6 +1449,15 @@ router.post('/rescrape-all', async (req: AuthenticatedRequest, res: Response) =>
           }
         });
       }
+    }
+
+    // Queue non-web slips (notes, documents, images) for embedding refresh
+    const otherSlips = db.prepare(`
+      SELECT id FROM bookmarks
+      WHERE user_id = ? AND content_type IN ('note', 'document', 'image') AND deleted_at IS NULL
+    `).all(userId) as { id: number }[];
+    for (const item of otherSlips) {
+      queueBookmarkIndex(item.id);
     }
 
     const totalCount = userBookmarks.length + (aiConfig ? untaggedNotes.length : 0);

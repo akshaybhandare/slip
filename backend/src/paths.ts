@@ -105,6 +105,20 @@ export function getResolvedCacheDir(): string {
 }
 
 /**
+ * 4.5 Embedding Models Directory Resolution:
+ * Precedence:
+ *  1. Explicit process.env.MODELS_DIR (e.g. /app/models or /config/cache/models)
+ *  2. Default: <CACHE_DIR>/models
+ */
+export function getResolvedModelsDir(): string {
+  if (process.env.MODELS_DIR && process.env.MODELS_DIR.trim() !== '') {
+    const raw = process.env.MODELS_DIR;
+    return path.isAbsolute(raw) ? raw : path.resolve(projectRoot, raw);
+  }
+  return path.join(getResolvedCacheDir(), 'models');
+}
+
+/**
  * 5. Frontend Static Dist Directory Resolution:
  * Precedence:
  *  1. Explicit process.env.FRONTEND_DIST (e.g. /app/frontend/dist in Docker)

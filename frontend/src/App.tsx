@@ -282,14 +282,16 @@ export const App: React.FC = () => {
       });
   }, []);
 
-  const loadData = useCallback(async (queryOverride?: string, smartOverride?: boolean) => {
+  const loadData = useCallback(async (queryOverride?: string, smartOverride?: boolean, silent?: boolean) => {
     if (needsAuth) return;
 
     const targetQuery = typeof queryOverride === 'string' ? queryOverride : searchQuery;
     const targetSmart = aiConfig.isConnected && (typeof smartOverride === 'boolean' ? smartOverride : isSmartSearch);
     const cleanQ = targetQuery.trim();
 
-    setLoading(true);
+    if (!silent) {
+      setLoading(true);
+    }
     try {
       if (cleanQ.length > 0) {
         if (targetSmart) {
@@ -324,7 +326,9 @@ export const App: React.FC = () => {
         setNeedsAuth(true);
       }
     } finally {
-      setLoading(false);
+      if (!silent) {
+        setLoading(false);
+      }
     }
   }, [activeType, selectedTag, searchQuery, isSmartSearch, aiConfig.isConnected, needsAuth, sortBy, sortOrder]);
 
@@ -450,13 +454,13 @@ export const App: React.FC = () => {
     setIsRescrapingAll(true);
     try {
       await rescrapeAllBookmarks();
-      // Poll a few times to show fresh data
+      // Silently refresh data in background to prevent feed flashing/unmounting
       if (rescrapeIntervalRef.current) {
         clearInterval(rescrapeIntervalRef.current);
       }
       let checks = 0;
       rescrapeIntervalRef.current = setInterval(() => {
-        loadData();
+        loadData(undefined, undefined, true);
         checks++;
         if (checks > 4) {
           clearInterval(rescrapeIntervalRef.current);

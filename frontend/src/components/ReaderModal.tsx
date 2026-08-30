@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, ExternalLink, Highlighter, Trash2, Copy, Check, Tag as TagIcon, Plus } from 'lucide-react';
+import { X, ExternalLink, Highlighter, Trash2, Copy, Check, Tag as TagIcon, Plus, Sparkles } from 'lucide-react';
 import { Bookmark, Highlight, Tag } from '../types';
-import { fetchHighlights, createHighlight, deleteHighlight } from '../api';
+import { fetchHighlights, createHighlight, deleteHighlight, fetchRelatedBookmarks } from '../api';
 import { renderFormattedNote, renderInlineMarkdown } from '../utils/markdown';
 import { copyToClipboard } from '../utils/clipboard';
 import { isNoteSlip, isDocumentSlip, extractPdfOriginalFilename } from '../utils/bookmarkUtils';
@@ -24,6 +24,7 @@ export const ReaderModal: React.FC<ReaderModalProps> = ({
 }) => {
   const [currentBookmark, setCurrentBookmark] = useState<Bookmark | null>(bookmark);
   const [highlights, setHighlights] = useState<Highlight[]>([]);
+  const [relatedSlips, setRelatedSlips] = useState<Bookmark[]>([]);
   const [selectedText, setSelectedText] = useState('');
   const [floatingToolbarPos, setFloatingToolbarPos] = useState<{ x: number; y: number } | null>(null);
   const [copiedId, setCopiedId] = useState<number | null>(null);
@@ -43,17 +44,34 @@ export const ReaderModal: React.FC<ReaderModalProps> = ({
   useEffect(() => {
     if (bookmark) {
       setCurrentBookmark(bookmark);
-      fetchHighlights(bookmark.id)
+      Promise.resolve(fetchHighlights(bookmark.id))
         .then(setHighlights)
         .catch(() => setHighlights([]));
+      Promise.resolve(fetchRelatedBookmarks(bookmark.id, 3))
+        .then((res) => setRelatedSlips(Array.isArray(res) ? res.slice(0, 3) : []))
+        .catch(() => setRelatedSlips([]));
       setSelectedText('');
       setFloatingToolbarPos(null);
       setIsAddingTag(false);
       setNewTagInput('');
     } else {
       setCurrentBookmark(null);
+      setRelatedSlips([]);
     }
   }, [bookmark]);
+
+  const handleSelectRelatedSlip = (rel: Bookmark) => {
+    setCurrentBookmark(rel);
+    Promise.resolve(fetchHighlights(rel.id))
+      .then(setHighlights)
+      .catch(() => setHighlights([]));
+    Promise.resolve(fetchRelatedBookmarks(rel.id, 3))
+      .then((res) => setRelatedSlips(Array.isArray(res) ? res.slice(0, 3) : []))
+      .catch(() => setRelatedSlips([]));
+    if (articleRef.current) {
+      articleRef.current.scrollTop = 0;
+    }
+  };
 
   if (!currentBookmark) return null;
 
@@ -428,6 +446,49 @@ export const ReaderModal: React.FC<ReaderModalProps> = ({
                         <Plus size={10} />
                         <span>#{st.name}</span>
                       </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Issue #40: Related Slips Section */}
+              {relatedSlips.length > 0 && (
+                <div className="reader-related-section" data-testid="reader-related-section">
+                  <div className="reader-related-header">
+                    <Sparkles size={14} style={{ color: 'var(--color-primary)' }} />
+                    <span className="reader-related-title">Related Slips</span>
+                  </div>
+                  <div className="reader-related-grid">
+                    {relatedSlips.map((rel) => (
+                      <div
+                        key={rel.id}
+                        className="reader-related-card"
+                        onClick={() => handleSelectRelatedSlip(rel)}
+                        role="button"
+                        tabIndex={0}
+                        data-testid={`reader-related-card-${rel.id}`}
+                      >
+                        <div className="reader-related-card-header">
+                          <span className="reader-related-card-title">{rel.title}</span>
+                          {rel.similarityScore !== undefined && (
+                            <span className="reader-related-score" title="Semantic Similarity">
+                              {rel.similarityScore}%
+                            </span>
+                          )}
+                        </div>
+                        {rel.description && (
+                          <p className="reader-related-card-desc">{rel.description.slice(0, 90)}...</p>
+                        )}
+                        {rel.tags && rel.tags.length > 0 && (
+                          <div className="reader-related-card-tags">
+                            {rel.tags.slice(0, 3).map((t) => (
+                              <span key={t.id || t.name} className="reader-related-tag">
+                                #{t.name}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
                     ))}
                   </div>
                 </div>

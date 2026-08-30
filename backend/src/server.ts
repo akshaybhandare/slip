@@ -13,9 +13,11 @@ import bookmarksRouter from './routes/bookmarks';
 import shareRouter from './routes/share';
 import ioRouter from './routes/io';
 import aiRouter from './routes/ai';
+import embeddingsRouter from './routes/embeddings';
 import clipsRouter from './routes/clips';
 import bulkRouter from './routes/bulk';
 import { CACHE_DIR, isSafeFilename } from './services/thumbnail';
+import { queueBookmarkIndex } from './services/embeddingService';
 
 // Load environmental variables from the project root
 const projectRoot = path.resolve(__dirname, '../..');
@@ -52,6 +54,7 @@ app.use((req, res, next) => {
 // Routes
 app.use('/api/auth', authRouter);
 app.use('/api/bookmarks', bookmarksRouter);
+app.use('/api/embeddings', embeddingsRouter);
 app.use('/api/clips', clipsRouter);
 app.use('/api/bulk', bulkRouter);
 app.use('/api/share', shareRouter);
@@ -122,6 +125,23 @@ if (process.env.NODE_ENV !== 'test') {
     startTelemetry();
     app.listen(PORT, HOST, () => {
       console.log(`Slip server running on http://${HOST}:${PORT}`);
+      // Automatic background backfill for unindexed slips (non-blocking)
+      try {
+        const unindexed = db.prepare(`
+          SELECT id FROM bookmarks 
+          WHERE deleted_at IS NULL 
+            AND id NOT IN (SELECT bookmark_id FROM slip_embeddings)
+        `).all() as { id: number }[];
+
+        if (unindexed.length > 0) {
+          console.log(`[Embeddings] Found ${unindexed.length} unindexed slips. Queuing background embedding generation...`);
+          for (const item of unindexed) {
+            queueBookmarkIndex(item.id);
+          }
+        }
+      } catch (embErr) {
+        console.warn('[Embeddings] Startup backfill check warning:', embErr);
+      }
     });
   } catch (err) {
     console.error('Failed to initialize database and start server:', err);

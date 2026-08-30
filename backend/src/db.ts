@@ -149,10 +149,33 @@ export function initDb(dbPath = getDbPath()): Database.Database {
       FOREIGN KEY(bookmark_id) REFERENCES bookmarks(id) ON DELETE CASCADE
     );
 
+    CREATE TABLE IF NOT EXISTS slip_embeddings (
+      bookmark_id INTEGER PRIMARY KEY,
+      embedding BLOB NOT NULL,
+      model TEXT NOT NULL DEFAULT 'bge-small-en-v1.5',
+      updated_at TEXT DEFAULT (datetime('now')),
+      FOREIGN KEY(bookmark_id) REFERENCES bookmarks(id) ON DELETE CASCADE
+    );
+
     CREATE INDEX IF NOT EXISTS idx_clip_bookmarks_clip ON clip_bookmarks(clip_id);
+    CREATE INDEX IF NOT EXISTS idx_slip_embeddings_updated ON slip_embeddings(updated_at);
   `);
 
   // Safe schema migration for existing databases
+  try {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS slip_embeddings (
+        bookmark_id INTEGER PRIMARY KEY,
+        embedding BLOB NOT NULL,
+        model TEXT NOT NULL DEFAULT 'bge-small-en-v1.5',
+        updated_at TEXT DEFAULT (datetime('now')),
+        FOREIGN KEY(bookmark_id) REFERENCES bookmarks(id) ON DELETE CASCADE
+      );
+      CREATE INDEX IF NOT EXISTS idx_slip_embeddings_updated ON slip_embeddings(updated_at);
+    `);
+  } catch {
+    // Table already present
+  }
   try {
     db.exec(`ALTER TABLE bookmarks ADD COLUMN personal_note TEXT;`);
   } catch {
