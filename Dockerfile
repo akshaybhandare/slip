@@ -1,7 +1,7 @@
 # ==============================================================================
 # Stage 1: Build Frontend Single Page App
 # ==============================================================================
-FROM node:20-alpine AS frontend-builder
+FROM node:20-bookworm-slim AS frontend-builder
 WORKDIR /app/frontend
 
 COPY frontend/package*.json ./
@@ -13,11 +13,11 @@ RUN npm run build
 # ==============================================================================
 # Stage 2: Build Backend TypeScript Server
 # ==============================================================================
-FROM node:20-alpine AS backend-builder
+FROM node:20-bookworm-slim AS backend-builder
 WORKDIR /app/backend
 
 # Install build tools for native dependencies (better-sqlite3)
-RUN apk add --no-cache python3 make g++
+RUN apt-get update && apt-get install -y --no-install-recommends python3 make g++ && rm -rf /var/lib/apt/lists/*
 
 COPY backend/package*.json ./
 RUN npm ci --legacy-peer-deps || npm install --legacy-peer-deps
@@ -28,18 +28,19 @@ RUN npm run build
 # ==============================================================================
 # Stage 3: Production Runtime Container
 # ==============================================================================
-FROM node:20-alpine AS runner
+FROM node:20-bookworm-slim AS runner
 WORKDIR /app
 
-# Install runtime utilities: su-exec (for PUID/PGID), shadow (for useradd), wget (healthcheck)
-RUN apk add --no-cache su-exec shadow wget
+# Install runtime utilities: gosu (for PUID/PGID), wget (healthcheck), ca-certificates
+RUN apt-get update && apt-get install -y --no-install-recommends gosu wget ca-certificates && rm -rf /var/lib/apt/lists/*
 
-# Install production backend dependencies (compiling native better-sqlite3)
+# Install production backend dependencies (compiling native better-sqlite3 and glibc onnxruntime)
 COPY backend/package*.json ./backend/
 WORKDIR /app/backend
-RUN apk add --no-cache --virtual .build-deps python3 make g++ && \
+RUN apt-get update && apt-get install -y --no-install-recommends python3 make g++ && \
     (npm ci --omit=dev --legacy-peer-deps || npm install --omit=dev --legacy-peer-deps) && \
-    apk del .build-deps
+    apt-get purge -y --auto-remove python3 make g++ && \
+    rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
