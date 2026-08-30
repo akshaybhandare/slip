@@ -601,5 +601,118 @@ describe('Bookmark CRUD & Local Thumbnail Cache Integrations', () => {
       expect(retryRes.body.is_pinned).toBe(true);
     });
   });
+
+  describe('Feed Sorting & Query Order Options', () => {
+    let sortUserCookie: string;
+    let alphaId: number;
+    let betaId: number;
+    let gammaId: number;
+
+    beforeAll(async () => {
+      await request(app)
+        .post('/api/auth/register')
+        .set('Cookie', user1Cookie)
+        .send({
+          username: 'sort_user',
+          password: 'password123'
+        });
+
+      const loginRes = await request(app).post('/api/auth/login').send({
+        username: 'sort_user',
+        password: 'password123'
+      });
+      sortUserCookie = loginRes.headers['set-cookie'][0].split(';')[0];
+
+      // Create three bookmarks in order
+      const res1 = await request(app)
+        .post('/api/bookmarks')
+        .set('Cookie', sortUserCookie)
+        .send({ url: 'https://alpha.example.com', title: 'Alpha Slip', contentType: 'article' });
+      alphaId = res1.body.id;
+
+      const res2 = await request(app)
+        .post('/api/bookmarks')
+        .set('Cookie', sortUserCookie)
+        .send({ url: 'https://gamma.example.com', title: 'Gamma Slip', contentType: 'note' });
+      gammaId = res2.body.id;
+
+      const res3 = await request(app)
+        .post('/api/bookmarks')
+        .set('Cookie', sortUserCookie)
+        .send({ url: 'https://beta.example.com', title: 'Beta Slip', contentType: 'image' });
+      betaId = res3.body.id;
+    });
+
+    test('should sort bookmarks by created_at DESC by default', async () => {
+      const res = await request(app)
+        .get('/api/bookmarks')
+        .set('Cookie', sortUserCookie);
+
+      expect(res.status).toBe(200);
+      const unpinned = res.body.filter((b: any) => !b.is_pinned);
+      const relevant = unpinned.filter((b: any) => [alphaId, betaId, gammaId].includes(b.id));
+      expect(relevant.map((b: any) => b.id)).toEqual([betaId, gammaId, alphaId]);
+    });
+
+    test('should sort bookmarks by created_at ASC (Oldest First)', async () => {
+      const res = await request(app)
+        .get('/api/bookmarks?sortBy=created_at&order=asc')
+        .set('Cookie', sortUserCookie);
+
+      expect(res.status).toBe(200);
+      const unpinned = res.body.filter((b: any) => !b.is_pinned);
+      const relevant = unpinned.filter((b: any) => [alphaId, betaId, gammaId].includes(b.id));
+      expect(relevant.map((b: any) => b.id)).toEqual([alphaId, gammaId, betaId]);
+    });
+
+    test('should sort bookmarks by title ASC and DESC', async () => {
+      const resAsc = await request(app)
+        .get('/api/bookmarks?sortBy=title&order=asc')
+        .set('Cookie', sortUserCookie);
+
+      expect(resAsc.status).toBe(200);
+      const unpinnedAsc = resAsc.body.filter((b: any) => !b.is_pinned);
+      const relevantAsc = unpinnedAsc.filter((b: any) => [alphaId, betaId, gammaId].includes(b.id));
+      expect(relevantAsc.map((b: any) => b.title)).toEqual(['Alpha Slip', 'Beta Slip', 'Gamma Slip']);
+
+      const resDesc = await request(app)
+        .get('/api/bookmarks?sortBy=title&order=desc')
+        .set('Cookie', sortUserCookie);
+
+      expect(resDesc.status).toBe(200);
+      const unpinnedDesc = resDesc.body.filter((b: any) => !b.is_pinned);
+      const relevantDesc = unpinnedDesc.filter((b: any) => [alphaId, betaId, gammaId].includes(b.id));
+      expect(relevantDesc.map((b: any) => b.title)).toEqual(['Gamma Slip', 'Beta Slip', 'Alpha Slip']);
+    });
+
+    test('pinned slips always remain at the top regardless of sort order', async () => {
+      // Pin Gamma slip
+      const pinRes = await request(app)
+        .put(`/api/bookmarks/${gammaId}/pin`)
+        .set('Cookie', sortUserCookie)
+        .send({ pinned: true });
+      expect(pinRes.status).toBe(200);
+      expect(pinRes.body.is_pinned).toBe(true);
+
+      const resAsc = await request(app)
+        .get('/api/bookmarks?sortBy=created_at&order=asc')
+        .set('Cookie', sortUserCookie);
+
+      expect(resAsc.status).toBe(200);
+      // Pinned items come first
+      const pinned = resAsc.body.filter((b: any) => b.is_pinned);
+      const unpinned = resAsc.body.filter((b: any) => !b.is_pinned);
+      expect(pinned.some((b: any) => b.id === gammaId)).toBe(true);
+
+      const relevantUnpinned = unpinned.filter((b: any) => [alphaId, betaId].includes(b.id));
+      expect(relevantUnpinned.map((b: any) => b.id)).toEqual([alphaId, betaId]);
+
+      // Unpin Gamma
+      await request(app)
+        .put(`/api/bookmarks/${gammaId}/pin`)
+        .set('Cookie', sortUserCookie)
+        .send({ pinned: false });
+    });
+  });
 });
 

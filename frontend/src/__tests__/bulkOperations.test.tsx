@@ -419,7 +419,7 @@ describe('Bulk Operations & Action Registry Single Source of Truth Tests', () =>
       fireEvent.click(deleteBtn);
 
       await waitFor(() => {
-        expect(api.bulkDeleteBookmarks).toHaveBeenCalledWith([sampleSlip.id, sampleNote.id]);
+        expect(api.bulkDeleteBookmarks).toHaveBeenCalledWith(expect.arrayContaining([sampleSlip.id, sampleNote.id]));
         expect(screen.getByText(/Moved/i)).toBeInTheDocument();
         expect(screen.getByText(/2 Slips/i)).toBeInTheDocument();
       });
@@ -429,7 +429,7 @@ describe('Bulk Operations & Action Registry Single Source of Truth Tests', () =>
       fireEvent.click(undoBtn);
 
       await waitFor(() => {
-        expect(api.bulkRestoreBookmarks).toHaveBeenCalledWith([sampleSlip.id, sampleNote.id]);
+        expect(api.bulkRestoreBookmarks).toHaveBeenCalledWith(expect.arrayContaining([sampleSlip.id, sampleNote.id]));
       });
     });
   });

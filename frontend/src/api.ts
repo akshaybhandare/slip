@@ -1,4 +1,4 @@
-import { Bookmark, ContentType, Tag, User, UserListItem, Clip, ClipDetail, PinConfig } from './types';
+import { Bookmark, ContentType, Tag, User, UserListItem, Clip, ClipDetail, PinConfig, SortBy, SortOrder } from './types';
 
 const API_BASE = '/api';
 
@@ -101,10 +101,17 @@ export async function getAuthStatus(): Promise<{ initialized: boolean }> {
 
 // --- Bookmarks APIs ---
 
-export async function fetchBookmarks(contentType?: ContentType, tag?: string): Promise<Bookmark[]> {
+export async function fetchBookmarks(
+  contentType?: ContentType,
+  tag?: string,
+  sortBy?: SortBy,
+  order?: SortOrder
+): Promise<Bookmark[]> {
   const params = new URLSearchParams();
   if (contentType && contentType !== 'all') params.append('contentType', contentType);
   if (tag) params.append('tag', tag);
+  if (sortBy) params.append('sortBy', sortBy);
+  if (order) params.append('order', order);
 
   const queryStr = params.toString() ? `?${params.toString()}` : '';
   return apiFetch<Bookmark[]>(`/bookmarks${queryStr}`);

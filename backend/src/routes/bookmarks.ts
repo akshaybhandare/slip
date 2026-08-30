@@ -303,10 +303,10 @@ router.get('/pin-config', (req: AuthenticatedRequest, res: Response) => {
   }
 });
 
-// 1. Get All Bookmarks (Filtered by user, optional contentType or tag; Pinned slips ordered first)
+// 1. Get All Bookmarks (Filtered by user, optional contentType, tag, sortBy, or order; Pinned slips ordered first)
 router.get('/', (req: AuthenticatedRequest, res: Response) => {
   const userId = req.user!.id;
-  const { contentType, tag, limit = 50, offset = 0 } = req.query;
+  const { contentType, tag, limit = 50, offset = 0, sortBy = 'created_at', order = 'desc' } = req.query;
 
   try {
     const db = getDb();
@@ -333,7 +333,25 @@ router.get('/', (req: AuthenticatedRequest, res: Response) => {
       params.push(contentType);
     }
 
-    query += ` ORDER BY b.is_pinned DESC, b.pinned_at DESC, b.created_at DESC LIMIT ? OFFSET ?`;
+    // Determine sort column and direction safely
+    const sortField = typeof sortBy === 'string' ? sortBy.trim().toLowerCase() : 'created_at';
+    const sortOrder = typeof order === 'string' && order.trim().toLowerCase() === 'asc' ? 'ASC' : 'DESC';
+
+    let orderClause = '';
+    if (sortField === 'title') {
+      orderClause = `b.is_pinned DESC, b.title COLLATE NOCASE ${sortOrder}, b.created_at DESC, b.id DESC`;
+    } else if (sortField === 'updated_at') {
+      orderClause = `b.is_pinned DESC, b.updated_at ${sortOrder}, b.created_at DESC, b.id DESC`;
+    } else {
+      // Default to created_at
+      if (sortOrder === 'ASC') {
+        orderClause = `b.is_pinned DESC, b.created_at ASC, b.id ASC`;
+      } else {
+        orderClause = `b.is_pinned DESC, b.pinned_at DESC, b.created_at DESC, b.id DESC`;
+      }
+    }
+
+    query += ` ORDER BY ${orderClause} LIMIT ? OFFSET ?`;
     params.push(Number(limit), Number(offset));
 
     const bookmarks = db.prepare(query).all(...params) as any[];

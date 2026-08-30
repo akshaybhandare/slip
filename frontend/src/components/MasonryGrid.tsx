@@ -1,6 +1,28 @@
 import React, { useState, useEffect } from 'react';
-import { Bookmark } from '../types';
+import { Bookmark, ContentType, GroupBy, SortBy, SortOrder } from '../types';
 import { BookmarkCard } from './BookmarkCard';
+import { groupBookmarksByType } from '../utils/feedUtils';
+import {
+  FileText,
+  Image as ImageIcon,
+  ShoppingBag,
+  Video,
+  Globe,
+  StickyNote,
+  FileCode2,
+  ChevronDown,
+  ChevronRight
+} from 'lucide-react';
+
+const TYPE_ICONS: Record<string, React.ReactNode> = {
+  article: <FileText size={15} />,
+  note: <StickyNote size={15} />,
+  document: <FileCode2 size={15} />,
+  image: <ImageIcon size={15} />,
+  product: <ShoppingBag size={15} />,
+  video: <Video size={15} />,
+  website: <Globe size={15} />
+};
 
 interface MasonryGridProps {
   bookmarks: Bookmark[];
@@ -21,6 +43,9 @@ interface MasonryGridProps {
   selectedSlipIds?: Set<number>;
   isSelectionMode?: boolean;
   onToggleSelectSlip?: (id: number) => void;
+  groupBy?: GroupBy;
+  sortBy?: SortBy;
+  sortOrder?: SortOrder;
 }
 
 export const MasonryGrid: React.FC<MasonryGridProps> = ({
@@ -41,9 +66,13 @@ export const MasonryGrid: React.FC<MasonryGridProps> = ({
   onPermanentDelete,
   selectedSlipIds,
   isSelectionMode = false,
-  onToggleSelectSlip
+  onToggleSelectSlip,
+  groupBy = 'none',
+  sortBy = 'created_at',
+  sortOrder = 'desc'
 }) => {
   const [columnCount, setColumnCount] = useState(2);
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     const updateColumns = () => {
@@ -62,41 +91,103 @@ export const MasonryGrid: React.FC<MasonryGridProps> = ({
     return () => window.removeEventListener('resize', updateColumns);
   }, []);
 
-  // Partition bookmarks into independent column streams
-  const columns: Bookmark[][] = Array.from({ length: columnCount }, () => []);
-  bookmarks.forEach((b, index) => {
-    columns[index % columnCount].push(b);
-  });
+  const toggleGroupCollapse = (typeKey: string) => {
+    setCollapsedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(typeKey)) {
+        next.delete(typeKey);
+      } else {
+        next.add(typeKey);
+      }
+      return next;
+    });
+  };
 
-  return (
-    <div className="stable-masonry-container">
-      {columns.map((colBookmarks, colIdx) => (
-        <div key={colIdx} className="masonry-stream-col">
-          {colBookmarks.map((bookmark) => (
-            <BookmarkCard
-              key={bookmark.id}
-              bookmark={bookmark}
-              onOpenReader={onOpenReader}
-              onShare={onShare}
-              onEdit={onEdit}
-              onRescrape={onRescrape}
-              onAutoTag={onAutoTag}
-              onTogglePin={onTogglePin}
-              isAIConnected={isAIConnected}
-              onDelete={onDelete}
-              onTagClick={onTagClick}
-              onManageClips={onManageClips}
-              onRemoveFromClip={onRemoveFromClip}
-              isRecycleBin={isRecycleBin}
-              onRestore={onRestore}
-              onPermanentDelete={onPermanentDelete}
-              isSelected={selectedSlipIds?.has(bookmark.id)}
-              isSelectionMode={isSelectionMode}
-              onToggleSelect={onToggleSelectSlip}
-            />
-          ))}
-        </div>
-      ))}
-    </div>
-  );
+  const renderMasonryStream = (items: Bookmark[]) => {
+    const columns: Bookmark[][] = Array.from({ length: columnCount }, () => []);
+    items.forEach((b, index) => {
+      columns[index % columnCount].push(b);
+    });
+
+    return (
+      <div className="stable-masonry-container">
+        {columns.map((colBookmarks, colIdx) => (
+          <div key={colIdx} className="masonry-stream-col">
+            {colBookmarks.map((bookmark) => (
+              <BookmarkCard
+                key={bookmark.id}
+                bookmark={bookmark}
+                onOpenReader={onOpenReader}
+                onShare={onShare}
+                onEdit={onEdit}
+                onRescrape={onRescrape}
+                onAutoTag={onAutoTag}
+                onTogglePin={onTogglePin}
+                isAIConnected={isAIConnected}
+                onDelete={onDelete}
+                onTagClick={onTagClick}
+                onManageClips={onManageClips}
+                onRemoveFromClip={onRemoveFromClip}
+                isRecycleBin={isRecycleBin}
+                onRestore={onRestore}
+                onPermanentDelete={onPermanentDelete}
+                isSelected={selectedSlipIds?.has(bookmark.id)}
+                isSelectionMode={isSelectionMode}
+                onToggleSelect={onToggleSelectSlip}
+              />
+            ))}
+          </div>
+        ))}
+      </div>
+    );
+  };
+
+  if (groupBy === 'type') {
+    const groups = groupBookmarksByType(bookmarks, sortBy, sortOrder);
+
+    return (
+      <div className="feed-groups-container">
+        {groups.map((group) => {
+          const isCollapsed = collapsedGroups.has(group.type);
+          return (
+            <section key={group.type} className="feed-group-section" aria-labelledby={`group-header-${group.type}`}>
+              <button
+                type="button"
+                id={`group-header-${group.type}`}
+                className={`feed-group-header ${isCollapsed ? 'is-collapsed' : ''}`}
+                onClick={() => toggleGroupCollapse(group.type)}
+                aria-expanded={!isCollapsed}
+                data-testid={`group-header-${group.type}`}
+              >
+                <div className="feed-group-header-left">
+                  <span className="feed-group-chevron">
+                    {isCollapsed ? <ChevronRight size={16} /> : <ChevronDown size={16} />}
+                  </span>
+                  <span className="feed-group-icon">
+                    {TYPE_ICONS[group.type] || <Globe size={15} />}
+                  </span>
+                  <span className="feed-group-title">{group.label}</span>
+                  <span className="feed-group-count">{group.bookmarks.length}</span>
+                </div>
+                <div className="feed-group-header-right">
+                  <span className="feed-group-toggle-hint">
+                    {isCollapsed ? 'Expand' : 'Collapse'}
+                  </span>
+                </div>
+              </button>
+
+              {!isCollapsed && (
+                <div className="feed-group-content">
+                  {renderMasonryStream(group.bookmarks)}
+                </div>
+              )}
+            </section>
+          );
+        })}
+      </div>
+    );
+  }
+
+  // Flat Masonry Grid
+  return renderMasonryStream(bookmarks);
 };

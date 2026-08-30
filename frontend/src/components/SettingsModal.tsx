@@ -25,7 +25,7 @@ import {
   CheckCircle2,
   Sliders
 } from 'lucide-react';
-import { User, UserListItem } from '../types';
+import { User, UserListItem, SortBy, SortOrder, GroupBy } from '../types';
 import { ThemeMode, ThemePreset, THEME_PRESETS } from '../config/themeConfig';
 import { normalizeHex } from '../utils/themeUtils';
 import { AIConfig, AIProviderId, AI_PROVIDERS, maskApiKey } from '../config/aiConfig';
@@ -58,6 +58,12 @@ export interface SettingsModalProps {
   onSelectPreset: (preset: ThemePreset) => void;
   onSetCustomAccent: (accent: string | null) => void;
   onResetTheme: () => void;
+  // View & Feed Preferences
+  sortBy?: SortBy;
+  sortOrder?: SortOrder;
+  groupBy?: GroupBy;
+  onSelectSort?: (sortBy: SortBy, sortOrder: SortOrder) => void;
+  onSelectGroupBy?: (groupBy: GroupBy) => void;
   // Data / Sync props
   onImportClick: () => void;
   onRescrapeAllClick: () => void;
@@ -83,6 +89,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onSelectPreset,
   onSetCustomAccent,
   onResetTheme,
+  sortBy = 'created_at',
+  sortOrder = 'desc',
+  groupBy = 'none',
+  onSelectSort,
+  onSelectGroupBy,
   onImportClick,
   onRescrapeAllClick,
   isRescrapingAll,
@@ -560,6 +571,72 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       aria-label="Pick custom primary color"
                     />
                     <span className="theme-mini-picker-plus">+</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Feed & View Preferences */}
+              <div style={{ marginBottom: '20px' }}>
+                <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--color-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '8px' }}>
+                  Feed & View Preferences
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  {/* Default Sort Order */}
+                  <div className="settings-action-card" style={{ padding: '12px 14px' }}>
+                    <div className="settings-action-card-text">
+                      <div className="settings-action-card-title" style={{ fontSize: '13.5px' }}>
+                        Default Sort Order
+                      </div>
+                      <div className="settings-action-card-desc">
+                        Choose how slips are ordered in your feed by default.
+                      </div>
+                    </div>
+                    <select
+                      className="form-input"
+                      style={{ width: 'auto', height: '36px', fontSize: '13px', padding: '0 10px', minWidth: '150px' }}
+                      value={`${sortBy}:${sortOrder}`}
+                      onChange={(e) => {
+                        if (onSelectSort) {
+                          const [s, o] = e.target.value.split(':') as [SortBy, SortOrder];
+                          onSelectSort(s, o);
+                        }
+                      }}
+                      aria-label="Default sort order"
+                      data-testid="settings-sort-select"
+                    >
+                      <option value="created_at:desc">Newest First</option>
+                      <option value="created_at:asc">Oldest First</option>
+                      <option value="title:asc">Title (A to Z)</option>
+                      <option value="title:desc">Title (Z to A)</option>
+                      <option value="updated_at:desc">Recently Updated</option>
+                    </select>
+                  </div>
+
+                  {/* Default Grouping */}
+                  <div className="settings-action-card" style={{ padding: '12px 14px' }}>
+                    <div className="settings-action-card-text">
+                      <div className="settings-action-card-title" style={{ fontSize: '13.5px' }}>
+                        Default Feed Grouping
+                      </div>
+                      <div className="settings-action-card-desc">
+                        Organize slips into collapsible sections by type or keep flat stream.
+                      </div>
+                    </div>
+                    <select
+                      className="form-input"
+                      style={{ width: 'auto', height: '36px', fontSize: '13px', padding: '0 10px', minWidth: '150px' }}
+                      value={groupBy}
+                      onChange={(e) => {
+                        if (onSelectGroupBy) {
+                          onSelectGroupBy(e.target.value as GroupBy);
+                        }
+                      }}
+                      aria-label="Default feed grouping"
+                      data-testid="settings-group-select"
+                    >
+                      <option value="none">No Grouping (Flat)</option>
+                      <option value="type">Group by Type</option>
+                    </select>
                   </div>
                 </div>
               </div>
