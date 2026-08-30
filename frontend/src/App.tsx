@@ -890,11 +890,6 @@ function mergeRestored(prev: Bookmark[], restoredItems: Bookmark[], activeSortBy
         onSelectPreset={setThemePreset}
         onSetCustomAccent={setCustomAccent}
         onResetTheme={resetTheme}
-        sortBy={sortBy}
-        sortOrder={sortOrder}
-        groupBy={groupBy}
-        onSelectSort={handleSortChange}
-        onSelectGroupBy={handleGroupByChange}
         onImportClick={() => setIsImportOpen(true)}
         onRescrapeAllClick={handleRescrapeAll}
         isRescrapingAll={isRescrapingAll}

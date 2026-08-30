@@ -287,17 +287,8 @@ describe('Feed Controls & View Preferences (Sort & Group By)', () => {
       expect(localStorage.getItem('slip_group_by')).toBe('type');
       expect(screen.getByTestId('group-header-article')).toBeInTheDocument();
 
-      // Open settings modal
-      const settingsBtn = screen.getByRole('button', { name: /Settings/i });
-      fireEvent.click(settingsBtn);
-
-      await waitFor(() => {
-        expect(screen.getByTestId('settings-sort-select')).toHaveValue('created_at:asc');
-        expect(screen.getByTestId('settings-group-select')).toHaveValue('type');
-      });
-
-      // Change in settings modal
-      fireEvent.change(screen.getByTestId('settings-sort-select'), { target: { value: 'title:asc' } });
+      // Change sort in toolbar to Title (A to Z)
+      fireEvent.change(sortSelect, { target: { value: 'title:asc' } });
       expect(localStorage.getItem('slip_sort_by')).toBe('title');
       expect(localStorage.getItem('slip_sort_order')).toBe('asc');
     });
