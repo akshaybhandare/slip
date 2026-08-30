@@ -169,4 +169,37 @@ describe('Reader Mode Tags Display & Management (Issue #36)', () => {
       expect(screen.getByText('#react')).toBeInTheDocument();
     });
   });
+
+  it('renders full multi-line personal_note for a big note instead of truncated description in Reader Mode', () => {
+    const bigNoteBookmark: Bookmark = {
+      id: 99,
+      user_id: 1,
+      url: 'slip://note/99',
+      title: 'Comprehensive Engineering Strategy',
+      description: 'First 200 chars preview of the note for cards...',
+      personal_note: '# Executive Summary\n\nThis is paragraph 1 of the full note.\n\n## Section 1: Architecture\n- Scalable SQLite with WAL\n- Float32 cosine dot-products in RAM\n\n## Section 2: Implementation Details\nFull paragraph 2 with **important bold points** and more details.',
+      content_type: 'note',
+      is_pinned: false,
+      created_at: '2026-08-30T10:00:00Z',
+      updated_at: '2026-08-30T10:00:00Z',
+      tags: []
+    };
+
+    render(
+      <ReaderModal
+        bookmark={bigNoteBookmark}
+        onClose={vi.fn()}
+      />
+    );
+
+    // Full note headers and contents must be rendered, not the 200-char preview description
+    expect(screen.getByText('Executive Summary')).toBeInTheDocument();
+    expect(screen.getByText('This is paragraph 1 of the full note.')).toBeInTheDocument();
+    expect(screen.getByText('Section 1: Architecture')).toBeInTheDocument();
+    expect(screen.getByText(/Scalable SQLite with WAL/i)).toBeInTheDocument();
+    expect(screen.getByText(/Float32 cosine dot-products in RAM/i)).toBeInTheDocument();
+    expect(screen.getByText('Section 2: Implementation Details')).toBeInTheDocument();
+    expect(screen.getByText(/important bold points/i)).toBeInTheDocument();
+    expect(screen.queryByText('First 200 chars preview of the note for cards...')).not.toBeInTheDocument();
+  });
 });

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { X, ExternalLink, Highlighter, Trash2, Copy, Check, Tag as TagIcon, Plus, Sparkles } from 'lucide-react';
 import { Bookmark, Highlight, Tag } from '../types';
-import { fetchHighlights, createHighlight, deleteHighlight, fetchRelatedBookmarks } from '../api';
+import { fetchHighlights, createHighlight, deleteHighlight, fetchRelatedBookmarks, fetchBookmarkById } from '../api';
 import { renderFormattedNote, renderInlineMarkdown } from '../utils/markdown';
 import { copyToClipboard } from '../utils/clipboard';
 import { isNoteSlip, isDocumentSlip, extractPdfOriginalFilename } from '../utils/bookmarkUtils';
@@ -50,6 +50,13 @@ export const ReaderModal: React.FC<ReaderModalProps> = ({
       Promise.resolve(fetchRelatedBookmarks(bookmark.id, 3))
         .then((res) => setRelatedSlips(Array.isArray(res) ? res.slice(0, 3) : []))
         .catch(() => setRelatedSlips([]));
+      Promise.resolve(fetchBookmarkById(bookmark.id))
+        .then((fullBookmark) => {
+          if (fullBookmark) {
+            setCurrentBookmark((prev) => (prev && prev.id === fullBookmark.id ? { ...prev, ...fullBookmark } : prev));
+          }
+        })
+        .catch(() => {});
       setSelectedText('');
       setFloatingToolbarPos(null);
       setIsAddingTag(false);
@@ -68,6 +75,13 @@ export const ReaderModal: React.FC<ReaderModalProps> = ({
     Promise.resolve(fetchRelatedBookmarks(rel.id, 3))
       .then((res) => setRelatedSlips(Array.isArray(res) ? res.slice(0, 3) : []))
       .catch(() => setRelatedSlips([]));
+    Promise.resolve(fetchBookmarkById(rel.id))
+      .then((fullBookmark) => {
+        if (fullBookmark) {
+          setCurrentBookmark((prev) => (prev && prev.id === fullBookmark.id ? { ...prev, ...fullBookmark } : prev));
+        }
+      })
+      .catch(() => {});
     if (articleRef.current) {
       articleRef.current.scrollTop = 0;
     }
@@ -318,9 +332,13 @@ export const ReaderModal: React.FC<ReaderModalProps> = ({
               onMouseUp={handleTextSelection}
               onTouchEnd={handleTextSelection}
             >
-              {isNote || isDoc ? (
+              {isNote ? (
                 <div style={{ fontSize: '16px', lineHeight: 1.7, color: 'var(--color-on-surface)' }}>
-                  {renderFormattedNote(currentBookmark.description || currentBookmark.personal_note || '')}
+                  {renderFormattedNote(currentBookmark.personal_note || currentBookmark.raw_text || currentBookmark.description || '')}
+                </div>
+              ) : isDoc ? (
+                <div style={{ fontSize: '16px', lineHeight: 1.7, color: 'var(--color-on-surface)' }}>
+                  {renderFormattedNote(currentBookmark.description || currentBookmark.personal_note || currentBookmark.raw_text || '')}
                 </div>
               ) : currentBookmark.reader_html ? (
                 <div dangerouslySetInnerHTML={{ __html: currentBookmark.reader_html }} />

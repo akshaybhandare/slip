@@ -117,6 +117,10 @@ export async function fetchBookmarks(
   return apiFetch<Bookmark[]>(`/bookmarks${queryStr}`);
 }
 
+export async function fetchBookmarkById(id: number): Promise<Bookmark> {
+  return apiFetch<Bookmark>(`/bookmarks/${id}`);
+}
+
 export async function searchBookmarks(query: string): Promise<Bookmark[]> {
   return apiFetch<Bookmark[]>(`/bookmarks/search?q=${encodeURIComponent(query)}`);
 }
