@@ -2,16 +2,10 @@ import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
 import axios from 'axios';
+import { getResolvedCacheDir, ensureDirSync } from '../paths';
 
-// Resolve cache directory relative to project root
-const projectRoot = path.resolve(__dirname, '../../..');
-const rawCacheDir = process.env.CACHE_DIR || 'backend/data/cache';
-export const CACHE_DIR = path.isAbsolute(rawCacheDir) ? rawCacheDir : path.resolve(projectRoot, rawCacheDir);
-
-// Ensure cache directory exists
-if (!fs.existsSync(CACHE_DIR)) {
-  fs.mkdirSync(CACHE_DIR, { recursive: true });
-}
+export const CACHE_DIR = getResolvedCacheDir();
+ensureDirSync(CACHE_DIR);
 
 export function isSafeFilename(filename: string): boolean {
   if (!filename || typeof filename !== 'string') return false;

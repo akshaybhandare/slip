@@ -7,6 +7,7 @@ import fs from 'fs';
 import { initDb, getDb, getDbPath, closeDb } from './db';
 import { getInstanceId, getAppVersion } from './config';
 import { startTelemetry } from './services/telemetryService';
+import { getResolvedFrontendDist } from './paths';
 import authRouter from './routes/auth';
 import bookmarksRouter from './routes/bookmarks';
 import shareRouter from './routes/share';
@@ -96,8 +97,7 @@ app.get('/api/version', (req, res) => {
 });
 
 // Serve frontend static build if it exists
-const rawDist = process.env.FRONTEND_DIST || 'frontend/dist';
-const frontendDist = path.isAbsolute(rawDist) ? rawDist : path.resolve(projectRoot, rawDist);
+const frontendDist = getResolvedFrontendDist();
 if (fs.existsSync(frontendDist)) {
   app.use(express.static(frontendDist));
   app.get('*', (req, res, next) => {

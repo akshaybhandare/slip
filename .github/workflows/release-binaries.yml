@@ -1,0 +1,122 @@
+name: Release Standalone Binaries
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-package:
+    name: Build ${{ matrix.platform }} (${{ matrix.arch }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            platform: linux
+            arch: x64
+            archive_name: slip-linux-x64.tar.gz
+          - os: ubuntu-24.04-arm
+            platform: linux
+            arch: arm64
+            archive_name: slip-linux-arm64.tar.gz
+          - os: macos-latest
+            platform: darwin
+            arch: arm64
+            archive_name: slip-darwin-arm64.tar.gz
+          - os: macos-13
+            platform: darwin
+            arch: x64
+            archive_name: slip-darwin-x64.tar.gz
+          - os: windows-latest
+            platform: windows
+            arch: x64
+            archive_name: slip-windows-x64.zip
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      # 1. Build Frontend SPA
+      - name: Build Frontend
+        run: |
+          cd frontend
+          npm ci --legacy-peer-deps
+          npm run build
+
+      # 2. Build Backend TypeScript
+      - name: Build Backend
+        run: |
+          cd backend
+          npm ci --legacy-peer-deps
+          npm run build
+
+      # 3. Assemble Standalone Release Bundle
+      - name: Assemble Unix Release Bundle
+        if: runner.os != 'Windows'
+        run: |
+          mkdir -p bundle/backend bundle/frontend-dist bundle/bin
+          cp -r backend/dist bundle/backend/
+          cp -r backend/package*.json bundle/backend/
+          cp -r frontend/dist/* bundle/frontend-dist/
+          
+          # Install production dependencies with native addon compilation
+          cd bundle/backend
+          npm install --omit=dev --legacy-peer-deps
+          cd ../..
+
+          # Create CLI wrapper script
+          cat << 'EOF' > bundle/bin/slip
+          #!/usr/bin/env bash
+          BUNDLE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+          export FRONTEND_DIST="${FRONTEND_DIST:-$BUNDLE_DIR/frontend-dist}"
+          export SLIP_DIR="${SLIP_DIR:-$HOME/.slip}"
+          exec node "$BUNDLE_DIR/backend/dist/cli.js" "$@"
+          EOF
+          chmod +x bundle/bin/slip
+
+          # Create tar.gz archive
+          tar -czf ${{ matrix.archive_name }} -C bundle .
+        shell: bash
+
+      - name: Assemble Windows Release Bundle
+        if: runner.os == 'Windows'
+        run: |
+          New-Item -ItemType Directory -Force -Path bundle\backend, bundle\frontend-dist, bundle\bin | Out-Null
+          Copy-Item -Recurse backend\dist bundle\backend\
+          Copy-Item backend\package*.json bundle\backend\
+          Copy-Item -Recurse frontend\dist\* bundle\frontend-dist\
+          
+          Set-Location -Path bundle\backend
+          npm install --omit=dev --legacy-peer-deps
+          Set-Location -Path ..\..
+
+          @"
+          @echo off
+          set "BUNDLE_DIR=%~dp0\.."
+          if not defined FRONTEND_DIST set "FRONTEND_DIST=%BUNDLE_DIR%\frontend-dist"
+          if not defined SLIP_DIR set "SLIP_DIR=%USERPROFILE%\.slip"
+          node "%BUNDLE_DIR%\backend\dist\cli.js" %*
+          "@ | Set-Content -Path bundle\bin\slip.cmd
+
+          Compress-Archive -Path bundle\* -DestinationPath ${{ matrix.archive_name }} -Force
+        shell: pwsh
+
+      # 4. Upload Assets to GitHub Release
+      - name: Upload Release Asset
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: ${{ matrix.archive_name }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
