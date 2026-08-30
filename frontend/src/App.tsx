@@ -17,6 +17,7 @@ import {
   bulkRestoreBookmarks,
   rescrapeBookmark,
   autoTagBookmark,
+  summarizePdfBookmark,
   rescrapeAllBookmarks,
   fetchPinConfig,
   togglePinBookmark,
@@ -435,6 +436,16 @@ export const App: React.FC = () => {
     }
   };
 
+  const handleSummarizePdfSlip = async (id: number) => {
+    try {
+      const refreshed = await summarizePdfBookmark(id);
+      setBookmarks((prev) => prev.map((b) => (b.id === id ? refreshed : b)));
+      fetchTags().then(setTags).catch(() => {});
+    } catch (err: any) {
+      alert(err.message || 'Failed to AI summarize PDF');
+    }
+  };
+
   const handleRescrapeAll = async () => {
     setIsRescrapingAll(true);
     try {
@@ -664,6 +675,7 @@ function mergeRestored(prev: Bookmark[], restoredItems: Bookmark[], activeSortBy
           onEdit={setEditingBookmark}
           onRescrape={handleRescrapeBookmark}
           onAutoTag={aiConfig.isConnected ? handleAutoTagBookmark : undefined}
+          onSummarizePdf={aiConfig.isConnected ? handleSummarizePdfSlip : undefined}
           onTogglePin={handleTogglePin}
           isAIConnected={aiConfig.isConnected}
           onDeleteBookmark={handleDeleteBookmark}
@@ -756,6 +768,7 @@ function mergeRestored(prev: Bookmark[], restoredItems: Bookmark[], activeSortBy
                 onEdit={setEditingBookmark}
                 onRescrape={handleRescrapeBookmark}
                 onAutoTag={aiConfig.isConnected ? handleAutoTagBookmark : undefined}
+                onSummarizePdf={aiConfig.isConnected ? handleSummarizePdfSlip : undefined}
                 onTogglePin={handleTogglePin}
                 isAIConnected={aiConfig.isConnected}
                 onDelete={handleDeleteBookmark}

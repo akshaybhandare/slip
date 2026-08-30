@@ -791,4 +791,149 @@ describe('AI Backend Encryption, Authorization & Database Persistence', () => {
       expect(res2.body.proposedTitle).toBe('LLM Latency & Caching Strategies');
     });
   });
+
+  describe('PDF Document Fast Extraction & AI Summarization', () => {
+    // Valid minimal single-page PDF with text
+    const samplePdfBuffer = Buffer.from(
+      '%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj 2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj 3 0 obj<</Type/Page/MediaBox[0 0 612 792]/Parent 2 0 R/Contents 4 0 R/Resources<<>>>>endobj 4 0 obj<</Length 44>>stream\nBT /F1 12 Tf 100 700 Td (Hello PDF World) Tj ET\nendstream\nendobj\nxref\n0 5\n0000000000 65535 f \n0000000009 00000 n \n0000000058 00000 n \n0000000115 00000 n \n0000000216 00000 n \ntrailer<</Size 5/Root 1 0 R>>\nstartxref\n310\n%%EOF'
+    );
+
+    it('extracts text from PDF buffer and limits to first 5 pages / 8000 chars', async () => {
+      const result = await aiService.extractPdfText(samplePdfBuffer, 5, 8000);
+      expect(result.text).toContain('Hello PDF World');
+      expect(result.pagesCount).toBe(1);
+      expect(result.totalPages).toBe(1);
+    });
+
+    it('handles corrupted PDF buffer gracefully by returning empty text', async () => {
+      const corruptBuffer = Buffer.from('NOT_A_VALID_PDF_DATA');
+      const result = await aiService.extractPdfText(corruptBuffer, 5, 8000);
+      expect(result.text).toBe('');
+      expect(result.pagesCount).toBe(0);
+    });
+
+    it('successfully summarizes a PDF document slip and persists title, description, and tags', async () => {
+      const db = getDb();
+      db.prepare("INSERT OR IGNORE INTO tags (name) VALUES ('machine-learning'), ('neural-networks')").run();
+
+      const insertPdf = db.prepare(`
+        INSERT INTO bookmarks (user_id, url, title, description, content_type, image_path, raw_text)
+        VALUES (?, ?, ?, ?, 'document', ?, ?)
+      `).run(
+        2, // regular user id
+        'https://example.com/research-paper.pdf',
+        'research-paper.pdf',
+        'Uploaded document (2.4 MB)',
+        null,
+        'research-paper.pdf'
+      );
+      const pdfBookmarkId = Number(insertPdf.lastInsertRowid);
+
+      // Mock axios.get for PDF download
+      jest.spyOn(axios, 'get').mockResolvedValueOnce({
+        data: samplePdfBuffer,
+        headers: { 'content-type': 'application/pdf' }
+      } as any);
+
+      // Mock LLM summarization response
+      jest.spyOn(axios, 'post').mockResolvedValueOnce({
+        data: {
+          choices: [
+            {
+              message: {
+                content: JSON.stringify({
+                  title: 'Deep Residual Learning Overview',
+                  description: '• Introduces residual connections\n• Achieves state-of-the-art accuracy\n• Solves vanishing gradient problem',
+                  tags: ['machine-learning', 'neural-networks'],
+                  newTags: ['deep-residual-learning']
+                })
+              }
+            }
+          ]
+        }
+      } as any);
+
+      const res = await request(app)
+        .post('/api/ai/summarize-pdf')
+        .set('Authorization', `Bearer ${regularToken}`)
+        .send({ bookmarkId: pdfBookmarkId });
+
+      expect(res.status).toBe(200);
+      expect(res.body.success).toBe(true);
+      expect(res.body.title).toBe('Deep Residual Learning Overview');
+      expect(res.body.description).toContain('residual connections');
+      expect(res.body.description).toContain('Uploaded document (2.4 MB)');
+      expect(res.body.tags.map((t: any) => t.name)).toEqual(
+        expect.arrayContaining(['machine-learning', 'neural-networks'])
+      );
+
+      // Verify DB persistence
+      const updatedRow = db.prepare('SELECT * FROM bookmarks WHERE id = ?').get(pdfBookmarkId) as any;
+      expect(updatedRow.title).toBe('Deep Residual Learning Overview');
+      expect(updatedRow.description).toContain('residual connections');
+      expect(updatedRow.description).toContain('Uploaded document (2.4 MB)');
+    });
+
+    it('supports summarizing via POST /api/bookmarks/:id/summarize-pdf', async () => {
+      const db = getDb();
+      const insertPdf = db.prepare(`
+        INSERT INTO bookmarks (user_id, url, title, description, content_type, image_path, raw_text)
+        VALUES (?, ?, ?, ?, 'document', ?, ?)
+      `).run(
+        2,
+        'https://example.com/quantum-computing.pdf',
+        'quantum-computing.pdf',
+        'PDF document',
+        null,
+        'quantum-computing.pdf'
+      );
+      const pdfId = Number(insertPdf.lastInsertRowid);
+
+      jest.spyOn(axios, 'get').mockResolvedValueOnce({
+        data: samplePdfBuffer,
+        headers: { 'content-type': 'application/pdf' }
+      } as any);
+
+      jest.spyOn(axios, 'post').mockResolvedValueOnce({
+        data: {
+          choices: [
+            {
+              message: {
+                content: JSON.stringify({
+                  title: 'Quantum Algorithms Guide',
+                  description: '• Comprehensive review of Shor and Grover algorithms',
+                  tags: ['quantum', 'algorithms'],
+                  newTags: []
+                })
+              }
+            }
+          ]
+        }
+      } as any);
+
+      const res = await request(app)
+        .post(`/api/bookmarks/${pdfId}/summarize-pdf`)
+        .set('Authorization', `Bearer ${regularToken}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.title).toBe('Quantum Algorithms Guide');
+    });
+
+    it('rejects summarizing non-PDF bookmark types', async () => {
+      const db = getDb();
+      const insertNote = db.prepare(`
+        INSERT INTO bookmarks (user_id, url, title, description, content_type)
+        VALUES (?, ?, ?, ?, 'note')
+      `).run(2, 'slip://note/sample-note-1', 'Note title', 'Note content');
+      const noteId = Number(insertNote.lastInsertRowid);
+
+      const res = await request(app)
+        .post('/api/ai/summarize-pdf')
+        .set('Authorization', `Bearer ${regularToken}`)
+        .send({ bookmarkId: noteId });
+
+      expect(res.status).toBe(500);
+      expect(res.body.message).toMatch(/not a PDF document/i);
+    });
+  });
 });

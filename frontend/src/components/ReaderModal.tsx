@@ -4,6 +4,8 @@ import { Bookmark, Highlight, Tag } from '../types';
 import { fetchHighlights, createHighlight, deleteHighlight } from '../api';
 import { renderFormattedNote, renderInlineMarkdown } from '../utils/markdown';
 import { copyToClipboard } from '../utils/clipboard';
+import { isNoteSlip, isDocumentSlip, extractPdfOriginalFilename } from '../utils/bookmarkUtils';
+import { useEscapeKey } from '../hooks/useEscapeKey';
 
 interface ReaderModalProps {
   bookmark: Bookmark | null;
@@ -32,7 +34,11 @@ export const ReaderModal: React.FC<ReaderModalProps> = ({
   const articleRef = useRef<HTMLDivElement>(null);
   const tagInputRef = useRef<HTMLInputElement>(null);
 
-  const isNote = currentBookmark ? (currentBookmark.content_type === 'note' || currentBookmark.url.startsWith('slip://note/')) : false;
+  const isNote = isNoteSlip(currentBookmark);
+  const isDoc = isDocumentSlip(currentBookmark);
+  const pdfFilename = isDoc ? extractPdfOriginalFilename(currentBookmark) : null;
+
+  useEscapeKey(onClose, Boolean(currentBookmark));
 
   useEffect(() => {
     if (bookmark) {
@@ -239,11 +245,16 @@ export const ReaderModal: React.FC<ReaderModalProps> = ({
         <div className="modal-header">
           <div>
             <span className="reader-badge">
-              {isNote ? '📝 Markdown Note' : 'Reader Mode'}
+              {isNote ? '📝 Markdown Note' : isDoc ? '📄 PDF Summary' : 'Reader Mode'}
             </span>
             <h1 className="reader-title">
               {renderInlineMarkdown(currentBookmark.title)}
             </h1>
+            {isDoc && pdfFilename && (
+              <div style={{ fontSize: '12px', color: 'var(--color-muted)', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span>File: {pdfFilename}</span>
+              </div>
+            )}
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             {!isNote && (
@@ -255,7 +266,7 @@ export const ReaderModal: React.FC<ReaderModalProps> = ({
                 style={{ height: '34px', padding: '0 12px', fontSize: '13px' }}
               >
                 <ExternalLink size={14} />
-                <span className="btn-text-hide-mobile">Original</span>
+                <span className="btn-text-hide-mobile">{isDoc ? 'Open PDF' : 'Original'}</span>
               </a>
             )}
             <button className="modal-close" onClick={onClose} title="Close Reader">
@@ -270,7 +281,7 @@ export const ReaderModal: React.FC<ReaderModalProps> = ({
             className={`reader-tab-btn ${activeTab === 'article' ? 'active' : ''}`}
             onClick={() => setActiveTab('article')}
           >
-            {isNote ? 'Note Content' : 'Article Text'}
+            {isNote ? 'Note Content' : isDoc ? 'Summary & Insights' : 'Article Text'}
           </button>
           <button
             className={`reader-tab-btn ${activeTab === 'highlights' ? 'active' : ''}`}
@@ -289,9 +300,9 @@ export const ReaderModal: React.FC<ReaderModalProps> = ({
               onMouseUp={handleTextSelection}
               onTouchEnd={handleTextSelection}
             >
-              {isNote ? (
+              {isNote || isDoc ? (
                 <div style={{ fontSize: '16px', lineHeight: 1.7, color: 'var(--color-on-surface)' }}>
-                  {renderFormattedNote(currentBookmark.personal_note || currentBookmark.description || '')}
+                  {renderFormattedNote(currentBookmark.description || currentBookmark.personal_note || '')}
                 </div>
               ) : currentBookmark.reader_html ? (
                 <div dangerouslySetInnerHTML={{ __html: currentBookmark.reader_html }} />

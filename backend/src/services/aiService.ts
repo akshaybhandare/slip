@@ -1,6 +1,10 @@
+import fs from 'fs';
+import path from 'path';
 import axios from 'axios';
 import { getDb } from '../db';
 import { decryptSecret } from './aiCrypto';
+import { CACHE_DIR, isSafeFilename } from './thumbnail';
+const { PDFParse } = require('pdf-parse');
 
 export type AIProviderId = 'openai' | 'claude' | 'gemini' | 'custom';
 
@@ -138,26 +142,30 @@ export function normalizeTag(tag: string): string {
     .slice(0, 50);
 }
 
-export function parseAndSanitizeTags(rawText: string): { tags: string[]; newTags: string[] } {
-  let parsed: any = {};
-  if (rawText) {
-    const trimmed = rawText.trim();
+export function parseLLMJsonResponse<T = any>(rawText: string): T {
+  if (!rawText || typeof rawText !== 'string') return {} as T;
+  const trimmed = rawText.trim();
+  try {
+    return JSON.parse(trimmed);
+  } catch {
+    // Strip outer markdown fences only
+    const fenced = trimmed.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
     try {
-      parsed = JSON.parse(trimmed);
+      return JSON.parse(fenced);
     } catch {
-      // Strip outer markdown fences only
-      const fenced = trimmed.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
-      try {
-        parsed = JSON.parse(fenced);
-      } catch {
-        const match = trimmed.match(/\{[\s\S]*\}/);
-        if (match) {
-          try { parsed = JSON.parse(match[0]); } catch {}
-        }
+      const match = trimmed.match(/\{[\s\S]*\}/);
+      if (match) {
+        try {
+          return JSON.parse(match[0]);
+        } catch {}
       }
     }
   }
+  return {} as T;
+}
 
+export function parseAndSanitizeTags(rawText: string): { tags: string[]; newTags: string[] } {
+  const parsed = parseLLMJsonResponse<{ tags?: string[]; newTags?: string[] }>(rawText);
   const tags = Array.isArray(parsed.tags) ? parsed.tags.map(normalizeTag).filter(Boolean) : [];
   const newTags = Array.isArray(parsed.newTags) ? parsed.newTags.map(normalizeTag).filter(Boolean) : [];
   return { tags, newTags };
@@ -750,23 +758,7 @@ export async function performSmartSearch(params: {
   }
 
   // 3. Parse JSON output
-  let parsed: any = {};
-  if (rawOutput) {
-    const trimmed = rawOutput.trim();
-    try {
-      parsed = JSON.parse(trimmed);
-    } catch {
-      const fenced = trimmed.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
-      try {
-        parsed = JSON.parse(fenced);
-      } catch {
-        const match = trimmed.match(/\{[\s\S]*\}/);
-        if (match) {
-          try { parsed = JSON.parse(match[0]); } catch {}
-        }
-      }
-    }
-  }
+  const parsed = parseLLMJsonResponse<{ matches?: any[] }>(rawOutput);
 
   const rawMatches: any[] = Array.isArray(parsed.matches) ? parsed.matches : [];
   if (rawMatches.length === 0) {
@@ -1209,5 +1201,449 @@ export async function assistNote(params: NoteAssistParams): Promise<NoteAssistRe
   return {
     result: cleanedResult,
     proposedTitle
+  };
+}
+
+export const PDF_SUMMARIZE_SYSTEM_PROMPT = `You are an intelligent PDF document analyzer and automatic content summarizer for Slip.
+
+Your task is to analyze the extracted content of a PDF document and generate a structured title, markdown summary, and tags.
+
+### 1. Title Rules:
+- Generate a short, clean, human-readable title (max 8-10 words) that captures the core subject of the PDF.
+- Refine or clarify the original filename if helpful, removing extensions, hash strings, and random identifiers.
+
+### 2. Description (Summary) Rules:
+- Generate a concise, crisp summary formatted in clean Markdown (2 to 4 bullet points or concise paragraphs).
+- Highlight key takeaways, topic overview, methodology, or core findings present in the content.
+
+### 3. Tagging Rules (Uniform System Rules):
+1. Prefer existing tags whenever they accurately describe the content.
+2. NEVER create a new tag if an existing tag has the same or substantially similar meaning. Treat synonyms, abbreviations, spelling variations, formatting variations, and equivalent terms as the same tag (e.g. "bambulab" <-> "bambu-lab", "3d-printing" <-> "3d-print", "javascript" <-> "js"). When in doubt, use the existing tag.
+3. Create a new tag only when no existing tag accurately represents the concept.
+4. Do not create tags that are merely more specific versions of an existing tag unless the distinction represents a genuinely different concept.
+5. Avoid duplicate, synonymous, redundant, or overlapping tags.
+6. Tags must describe meaningful concepts present in the content. Do not speculate or infer information that is not supported by the content.
+7. Use as few tags as necessary. Prefer precision over quantity. Assign AT MOST 3 tags in total across both existing and new tags.
+8. New tags must be short, clear, lowercase, and reusable across other content.
+9. Return only the final result. Do not explain your reasoning.
+
+### Output Format
+Return valid JSON ONLY matching this schema without preamble or commentary:
+{
+  "title": "Short Clean Title",
+  "description": "• Key takeaway 1\\n• Key takeaway 2\\n• Key takeaway 3",
+  "tags": ["existing-tag-1", "existing-tag-2"],
+  "newTags": ["genuinely-new-tag"]
+}`;
+
+export async function extractPdfText(
+  pdfBuffer: Buffer | Uint8Array,
+  maxPages: number = 5,
+  maxChars: number = 8000
+): Promise<{ text: string; pagesCount: number; totalPages: number }> {
+  try {
+    const uint8 = pdfBuffer instanceof Uint8Array ? pdfBuffer : new Uint8Array(pdfBuffer);
+    const parser = new PDFParse({
+      data: uint8,
+      disableWorker: true,
+      isEvalSupported: false
+    });
+    const res = await parser.getText({ first: maxPages });
+    const pageTexts = (res.pages || []).map((p: any) => p.text || '').join('\n');
+    const raw = (res.text || pageTexts).replace(/\r\n/g, '\n').replace(/[ \t]+/g, ' ').trim();
+    // Clean up page marker noise like "-- 1 of 5 --"
+    const cleaned = raw.replace(/-- \d+ of \d+ --/g, '').trim();
+    const finalText = cleaned || pageTexts.trim();
+    const truncated = finalText.slice(0, maxChars);
+    if (truncated.length > 0) {
+      return {
+        text: truncated,
+        pagesCount: res.pages?.length || (res.total ? Math.min(res.total, maxPages) : 1),
+        totalPages: res.total || 1
+      };
+    }
+  } catch (err: any) {
+    // Parser fallback for environments where PDFParse worker setup fails (e.g. test VMs)
+  }
+
+  // Resilient fallback: fast binary stream extractor for uncompressed or raw text streams
+  try {
+    const buf = Buffer.isBuffer(pdfBuffer) ? pdfBuffer : Buffer.from(pdfBuffer);
+    const str = buf.toString('binary');
+    const pageMatches = str.match(/\/Type\s*\/Page\b/g) || [];
+    const totalPages = pageMatches.length;
+
+    const texts: string[] = [];
+    const tjRegex = /\(([^)]+)\)\s*Tj/g;
+    let m;
+    while ((m = tjRegex.exec(str)) !== null) {
+      if (m[1].trim()) texts.push(m[1].trim());
+    }
+
+    const tjArrayRegex = /\[([^\]]+)\]\s*TJ/g;
+    while ((m = tjArrayRegex.exec(str)) !== null) {
+      const innerTj = m[1].match(/\(([^)]+)\)/g);
+      if (innerTj) {
+        texts.push(innerTj.map((s) => s.slice(1, -1)).join(' '));
+      }
+    }
+
+    const combined = texts.join(' ').replace(/\s+/g, ' ').trim().slice(0, maxChars);
+    return {
+      text: combined,
+      pagesCount: totalPages > 0 ? totalPages : (combined.length > 0 ? 1 : 0),
+      totalPages
+    };
+  } catch {
+    return { text: '', pagesCount: 0, totalPages: 0 };
+  }
+}
+
+export async function generatePdfSummary(params: {
+  text: string;
+  filename: string;
+  originalTitle?: string;
+  existingTags: string[];
+  config?: { provider: AIProviderId; apiKey: string; apiUrl?: string; model?: string };
+}): Promise<{ title: string; description: string; tags: string[]; newTags: string[] }> {
+  const activeConfig = params.config || getActiveAIConfig();
+  if (!activeConfig || !activeConfig.apiKey) {
+    throw new Error('AI provider is not configured or connected. Please connect an AI provider in settings.');
+  }
+
+  const { provider, apiKey, apiUrl } = activeConfig;
+  const model = (activeConfig.model || '').trim() || KNOWN_AI_PROVIDERS[provider]?.defaultModel || 'default';
+  const existingTagsStr = params.existingTags && params.existingTags.length > 0
+    ? JSON.stringify(params.existingTags)
+    : '[]';
+
+  let userPrompt = `Existing user tags in library:\n${existingTagsStr}\n\nOriginal PDF Filename / Title: ${params.filename || params.originalTitle || 'Untitled Document'}\n\n`;
+  if (params.text && params.text.trim()) {
+    userPrompt += `Extracted PDF Text (first pages):\n"""\n${params.text.trim()}\n"""\n\nGenerate structured title, markdown summary, and tags.`;
+  } else {
+    userPrompt += `Note: The PDF has no extractable text layer (e.g. scanned document or diagram image). Generate a clean, descriptive title based on the filename, a clear markdown note in description stating it is a visual/scanned PDF along with topic info, and 2-3 relevant tags.`;
+  }
+
+  let rawOutput = '';
+
+  try {
+    if (provider === 'openai') {
+      const baseUrl = apiUrl || KNOWN_AI_PROVIDERS.openai.defaultUrl;
+      const res = await axios.post(
+        `${baseUrl}/chat/completions`,
+        {
+          model,
+          messages: [
+            { role: 'system', content: PDF_SUMMARIZE_SYSTEM_PROMPT },
+            { role: 'user', content: userPrompt }
+          ],
+          response_format: { type: 'json_object' },
+          temperature: 0.2
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${apiKey}`,
+            'Content-Type': 'application/json'
+          },
+          timeout: 25000
+        }
+      );
+      rawOutput = res.data?.choices?.[0]?.message?.content || '';
+    } else if (provider === 'claude') {
+      const baseUrl = apiUrl || KNOWN_AI_PROVIDERS.claude.defaultUrl;
+      const res = await axios.post(
+        `${baseUrl}/messages`,
+        {
+          model,
+          system: PDF_SUMMARIZE_SYSTEM_PROMPT,
+          messages: [
+            { role: 'user', content: userPrompt }
+          ],
+          max_tokens: 1500,
+          temperature: 0.2
+        },
+        {
+          headers: {
+            'x-api-key': apiKey,
+            'anthropic-version': '2023-06-01',
+            'content-type': 'application/json'
+          },
+          timeout: 25000
+        }
+      );
+      rawOutput = res.data?.content?.[0]?.text || '';
+    } else if (provider === 'gemini') {
+      const baseUrl = apiUrl || KNOWN_AI_PROVIDERS.gemini.defaultUrl;
+      const cleanModel = model.replace(/^models\//, '');
+      const res = await axios.post(
+        `${baseUrl}/models/${cleanModel}:generateContent?key=${encodeURIComponent(apiKey)}`,
+        {
+          systemInstruction: {
+            parts: [{ text: PDF_SUMMARIZE_SYSTEM_PROMPT }]
+          },
+          contents: [
+            {
+              parts: [{ text: userPrompt }]
+            }
+          ],
+          generationConfig: {
+            responseMimeType: 'application/json',
+            temperature: 0.2
+          }
+        },
+        {
+          headers: { 'Content-Type': 'application/json' },
+          timeout: 25000
+        }
+      );
+      rawOutput = res.data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    } else {
+      // Custom provider (OpenAI compatible)
+      const base = apiUrl?.includes('://') ? apiUrl : `https://${apiUrl || ''}`;
+      const targetUrl = base.endsWith('/chat/completions') || base.includes('/generate')
+        ? base
+        : `${base.replace(/\/+$/, '')}/chat/completions`;
+
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        'HTTP-Referer': 'https://github.com/slip-archive/slip',
+        'X-Title': 'Slip Visual Bookmarks'
+      };
+      if (apiKey) {
+        headers['Authorization'] = `Bearer ${apiKey}`;
+      }
+
+      let res: any;
+      try {
+        res = await axios.post(
+          targetUrl,
+          {
+            model,
+            messages: [
+              { role: 'system', content: PDF_SUMMARIZE_SYSTEM_PROMPT },
+              { role: 'user', content: userPrompt }
+            ],
+            max_tokens: 1500,
+            temperature: 0.2
+          },
+          {
+            headers,
+            timeout: 25000
+          }
+        );
+      } catch {
+        const combinedPrompt = `${PDF_SUMMARIZE_SYSTEM_PROMPT}\n\n---\n\n${userPrompt}`;
+        res = await axios.post(
+          targetUrl,
+          {
+            model,
+            messages: [
+              { role: 'user', content: combinedPrompt }
+            ],
+            max_tokens: 1500,
+            temperature: 0.2
+          },
+          {
+            headers,
+            timeout: 25000
+          }
+        );
+      }
+      rawOutput = res.data?.choices?.[0]?.message?.content || res.data?.response || '';
+    }
+  } catch (err: any) {
+    const errorDetail = err.response?.data?.error?.message || err.response?.data?.message || err.message || 'AI request failed';
+    throw new Error(`AI PDF Summarize Error (${provider} / ${model}): ${errorDetail}`);
+  }
+
+  // Parse JSON response
+  const parsed = parseLLMJsonResponse<{ title?: string; description?: string; tags?: string[]; newTags?: string[] }>(rawOutput);
+
+  const title = (parsed.title || '').trim().replace(/^["']+|["']+$/g, '');
+  const description = (parsed.description || '').trim();
+  const tags = Array.isArray(parsed.tags) ? parsed.tags.map(normalizeTag).filter(Boolean) : [];
+  const newTags = Array.isArray(parsed.newTags) ? parsed.newTags.map(normalizeTag).filter(Boolean) : [];
+
+  return { title, description, tags, newTags };
+}
+
+export async function summarizePdfBookmark(params: {
+  bookmarkId: number | bigint;
+  userId: number;
+  config?: { provider: AIProviderId; apiKey: string; apiUrl?: string; model?: string };
+}): Promise<{
+  bookmark: any;
+  title: string;
+  description: string;
+  tags: { id: number; name: string }[];
+  pagesExtracted: number;
+  extractedChars: number;
+}> {
+  const { bookmarkId, userId } = params;
+  const numericId = Number(bookmarkId);
+  const db = getDb();
+
+  const bookmark = db.prepare(`
+    SELECT id, user_id, url, title, description, personal_note, content_type, image_path, raw_text
+    FROM bookmarks
+    WHERE id = ? AND user_id = ? AND deleted_at IS NULL
+  `).get(numericId, userId) as any;
+
+  if (!bookmark) {
+    throw new Error('Bookmark not found or unauthorized');
+  }
+
+  const isDoc = bookmark.content_type === 'document' || bookmark.url?.endsWith('.pdf') || bookmark.image_path?.endsWith('.pdf');
+  if (!isDoc) {
+    throw new Error('Bookmark is not a PDF document');
+  }
+
+  const activeConfig = params.config || getActiveAIConfig();
+  if (!activeConfig || !activeConfig.apiKey) {
+    throw new Error('AI provider is not configured or connected. Please connect an AI provider in settings.');
+  }
+
+  // 1. Retrieve PDF buffer
+  let pdfBuffer: Buffer | null = null;
+  const localCandidate = bookmark.image_path || bookmark.url;
+  if (localCandidate && localCandidate.startsWith('/api/cache/')) {
+    const filename = path.basename(localCandidate);
+    if (isSafeFilename(filename)) {
+      const filePath = path.join(CACHE_DIR, filename);
+      if (fs.existsSync(filePath)) {
+        pdfBuffer = await fs.promises.readFile(filePath);
+      }
+    }
+  }
+
+  if (!pdfBuffer && bookmark.url && /^https?:\/\//i.test(bookmark.url)) {
+    try {
+      const res = await axios.get(bookmark.url, {
+        responseType: 'arraybuffer',
+        timeout: 15000,
+        maxContentLength: 50 * 1024 * 1024,
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+          'Accept': 'application/pdf,*/*'
+        }
+      });
+      pdfBuffer = Buffer.from(res.data);
+    } catch (err: any) {
+      throw new Error(`Failed to download PDF from URL: ${err.message || 'Network error'}`);
+    }
+  }
+
+  if (!pdfBuffer || pdfBuffer.length === 0) {
+    throw new Error('Could not retrieve PDF file data');
+  }
+
+  // 2. Fast text extraction (first 5 pages, capped at 8000 chars)
+  const extraction = await extractPdfText(pdfBuffer, 5, 8000);
+
+  // 3. Fetch existing tags across the system for auto-tagging alignment
+  const allTags = db.prepare(`SELECT DISTINCT name FROM tags ORDER BY name ASC`).all() as { name: string }[];
+  const existingTags = allTags.map(t => t.name);
+
+  // 4. Derive human-readable filename (avoiding cache sha256 hashes)
+  let filename = '';
+  const descFileMatch = bookmark.description ? bookmark.description.match(/Uploaded (?:document|file):\s*([^\s()]+\.pdf)/i) : null;
+  if (descFileMatch && !/^[a-f0-9]{32,}\.pdf$/i.test(descFileMatch[1])) {
+    filename = descFileMatch[1];
+  } else if (bookmark.title && bookmark.title.toLowerCase().endsWith('.pdf') && !/^[a-f0-9]{32,}\.pdf$/i.test(bookmark.title)) {
+    filename = bookmark.title;
+  } else if (bookmark.url && !bookmark.url.startsWith('/api/cache/')) {
+    try {
+      const parsedUrl = new URL(bookmark.url);
+      const urlBase = path.basename(parsedUrl.pathname);
+      if (urlBase && urlBase.toLowerCase().endsWith('.pdf') && !/^[a-f0-9]{32,}\.pdf$/i.test(urlBase)) {
+        filename = decodeURIComponent(urlBase);
+      }
+    } catch {}
+  }
+  if (!filename && bookmark.title && !/^[a-f0-9]{32,}/i.test(bookmark.title)) {
+    const slug = bookmark.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '').slice(0, 40);
+    filename = slug ? `${slug}.pdf` : 'document.pdf';
+  }
+  if (!filename) {
+    filename = 'document.pdf';
+  }
+
+  // 5. Call AI
+  const aiResult = await generatePdfSummary({
+    text: extraction.text,
+    filename,
+    originalTitle: bookmark.title,
+    existingTags,
+    config: activeConfig
+  });
+
+  const finalTitle = aiResult.title.slice(0, 150) || bookmark.title;
+
+  // Preserve uploaded document size/type metadata if present
+  const uploadMetaMatch = bookmark.description ? bookmark.description.match(/(Uploaded (?:document|file|image)(?::\s*[^\s()]+)?\s*\([^)]+\))/i) : null;
+  const uploadMeta = uploadMetaMatch
+    ? uploadMetaMatch[1]
+    : (pdfBuffer ? `Uploaded document: ${filename} (${(pdfBuffer.length / (1024 * 1024)).toFixed(2)} MB, application/pdf)` : '');
+
+  let finalDesc = aiResult.description || bookmark.description || '';
+  if (uploadMeta && !finalDesc.includes(uploadMeta)) {
+    finalDesc = `${finalDesc.trim()}\n\n${uploadMeta}`.trim();
+  }
+
+  const validatedTags = processTags(aiResult, existingTags, 3);
+
+  // 6. Persist to DB in a transaction
+  const findOrCreateTag = db.prepare(`
+    INSERT INTO tags (name) VALUES (?)
+    ON CONFLICT(name) DO UPDATE SET name=excluded.name
+    RETURNING id
+  `);
+
+  const linkTag = db.prepare(`
+    INSERT OR IGNORE INTO bookmark_tags (bookmark_id, tag_id) VALUES (?, ?)
+  `);
+
+  const updatedRawText = `${finalTitle}\n${finalDesc}\n${extraction.text.slice(0, 1000)}`;
+
+  const tx = db.transaction(() => {
+    db.prepare(`
+      UPDATE bookmarks
+      SET title = ?, description = ?, raw_text = ?, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ? AND user_id = ?
+    `).run(finalTitle, finalDesc, updatedRawText, numericId, userId);
+
+    // Keep default 'document' & 'pdf' tags if present, and add the new validated tags
+    const tagSet = new Set<string>(['document', 'pdf', ...validatedTags]);
+    for (const tagName of tagSet) {
+      const clean = normalizeTag(tagName);
+      if (clean) {
+        const tagRecord = findOrCreateTag.get(clean) as { id: number };
+        linkTag.run(numericId, tagRecord.id);
+      }
+    }
+  });
+
+  tx();
+
+  // 7. Return refreshed bookmark
+  const updatedBookmark = db.prepare(`
+    SELECT * FROM bookmarks WHERE id = ?
+  `).get(numericId) as any;
+
+  const finalTags = db.prepare(`
+    SELECT t.id, t.name FROM tags t
+    JOIN bookmark_tags bt ON t.id = bt.tag_id
+    WHERE bt.bookmark_id = ?
+  `).all(numericId) as { id: number; name: string }[];
+
+  updatedBookmark.tags = finalTags;
+
+  return {
+    bookmark: updatedBookmark,
+    title: finalTitle,
+    description: finalDesc,
+    tags: finalTags,
+    pagesExtracted: extraction.pagesCount,
+    extractedChars: extraction.text.length
   };
 }

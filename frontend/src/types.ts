@@ -37,6 +37,7 @@ export interface Bookmark {
   image_path?: string | null;
   favicon_path?: string | null;
   reader_html?: string | null;
+  raw_text?: string | null;
   is_pinned?: boolean | number;
   pinned_at?: string | null;
   deleted_at?: string | null;

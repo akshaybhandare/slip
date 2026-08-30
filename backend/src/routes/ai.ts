@@ -8,7 +8,8 @@ import {
   KNOWN_AI_PROVIDERS,
   getActiveAIConfig,
   assistNote,
-  NoteAssistAction
+  NoteAssistAction,
+  summarizePdfBookmark
 } from '../services/aiService';
 
 const router = Router();
@@ -241,6 +242,46 @@ router.post('/note-assist', authenticate, async (req: AuthenticatedRequest, res:
     console.error('Note assist error:', err);
     return res.status(500).json({
       message: err.message || 'Failed to process note assistance request.'
+    });
+  }
+});
+
+// 6. POST /api/ai/summarize-pdf - Extract text from PDF, generate summary, title, and tags
+router.post('/summarize-pdf', authenticate, async (req: AuthenticatedRequest, res: Response) => {
+  const userId = req.user!.id;
+  const { bookmarkId } = req.body;
+
+  if (!bookmarkId) {
+    return res.status(400).json({ message: 'bookmarkId is required.' });
+  }
+
+  const activeConfig = getActiveAIConfig();
+  if (!activeConfig || !activeConfig.apiKey) {
+    return res.status(400).json({
+      message: 'AI provider is not connected. Please connect an AI provider in Settings.'
+    });
+  }
+
+  try {
+    const result = await summarizePdfBookmark({
+      bookmarkId: Number(bookmarkId),
+      userId,
+      config: activeConfig
+    });
+
+    return res.status(200).json({
+      success: true,
+      bookmark: result.bookmark,
+      title: result.title,
+      description: result.description,
+      tags: result.tags,
+      pagesExtracted: result.pagesExtracted,
+      extractedChars: result.extractedChars
+    });
+  } catch (err: any) {
+    console.error('PDF AI summarize error:', err);
+    return res.status(500).json({
+      message: err.message || 'Failed to summarize PDF document.'
     });
   }
 });
