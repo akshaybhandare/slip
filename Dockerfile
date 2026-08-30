@@ -50,12 +50,18 @@ COPY docker-entrypoint.sh ./docker-entrypoint.sh
 COPY slip.config.json ./slip.config.json
 RUN chmod +x ./docker-entrypoint.sh
 
+# Pre-download default embedding model for 100% offline runtime
+ENV MODELS_DIR=/app/models
+RUN mkdir -p /app/models && \
+    (node -e "import('@huggingface/transformers').then(async m => { m.env.cacheDir = '/app/models'; await m.pipeline('feature-extraction', 'Xenova/bge-small-en-v1.5', { dtype: 'fp32' }); });" || true)
+
 # Unraid and Docker environment defaults
 ENV NODE_ENV=production \
     PORT=3000 \
     HOST=0.0.0.0 \
     DB_PATH=/config/bookmarks.db \
     CACHE_DIR=/config/cache \
+    MODELS_DIR=/app/models \
     FRONTEND_DIST=/app/frontend/dist \
     PUID=99 \
     PGID=100

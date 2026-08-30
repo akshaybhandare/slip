@@ -5,6 +5,7 @@ import { parseNetscapeHtml, generateNetscapeHtml, BookmarkExportItem } from '../
 import { scrapeUrl, extractPlatformTag } from '../services/scraper';
 import { scrapeQueue } from '../services/queue';
 import { cacheThumbnail } from '../services/thumbnail';
+import { queueBookmarkIndex } from '../services/embeddingService';
 
 const router = Router();
 
@@ -79,6 +80,10 @@ router.post('/import', (req: AuthenticatedRequest, res: Response) => {
     });
 
     importTransaction();
+
+    for (const id of importedIds) {
+      queueBookmarkIndex(id);
+    }
 
     // Trigger background metadata / thumbnail enrichment without blocking HTTP response
     if (process.env.NODE_ENV !== 'test') {

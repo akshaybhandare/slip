@@ -55,3 +55,4 @@ export class JobQueue {
 }
 
 export const scrapeQueue = new JobQueue(2);
+export const embeddingQueue = new JobQueue(1);

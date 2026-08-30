@@ -562,3 +562,10 @@ export async function fetchAppVersion(): Promise<{ version: string; name?: strin
   return apiFetch<{ version: string; name?: string; node_env?: string }>('/version');
 }
 
+// --- Related Slips API (Issue #40) ---
+
+export async function fetchRelatedBookmarks(bookmarkId: number, limit: number = 3): Promise<Bookmark[]> {
+  return apiFetch<Bookmark[]>(`/bookmarks/${bookmarkId}/related?limit=${limit}`);
+}
+
+
