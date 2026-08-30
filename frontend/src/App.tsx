@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Bookmark, ContentType, Tag, User } from './types';
+import { Bookmark, ContentType, Tag, User, SortBy, SortOrder, GroupBy } from './types';
 import {
   fetchBookmarks,
   searchBookmarks,
@@ -26,6 +26,7 @@ import {
 } from './api';
 import { Navbar } from './components/Navbar';
 import { FilterTabs } from './components/FilterTabs';
+import { FeedToolbar } from './components/FeedToolbar';
 import { MasonryGrid } from './components/MasonryGrid';
 import { BulkActionBar } from './components/BulkActionBar';
 import { ActionId } from './config/actionRegistry';
@@ -42,6 +43,7 @@ import { AddToClipModal } from './components/AddToClipModal';
 import { BookmarkPlus, Plus, Sparkles, RotateCcw, X } from 'lucide-react';
 import { useTheme } from './hooks/useTheme';
 import { useAIConfig } from './hooks/useAIConfig';
+import { sortBookmarks } from './utils/feedUtils';
 
 export const App: React.FC = () => {
   const {
@@ -67,6 +69,55 @@ export const App: React.FC = () => {
   const [activeType, setActiveType] = useState<ContentType>('all');
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+
+  // View Preferences: Sort and Group By (Feed Controls & Settings Extensibility)
+  const [sortBy, setSortBy] = useState<SortBy>(() => {
+    try {
+      const saved = localStorage.getItem('slip_sort_by');
+      if (saved === 'title' || saved === 'updated_at' || saved === 'created_at') return saved as SortBy;
+      return 'created_at';
+    } catch {
+      return 'created_at';
+    }
+  });
+
+  const [sortOrder, setSortOrder] = useState<SortOrder>(() => {
+    try {
+      const saved = localStorage.getItem('slip_sort_order');
+      if (saved === 'asc' || saved === 'desc') return saved as SortOrder;
+      return 'desc';
+    } catch {
+      return 'desc';
+    }
+  });
+
+  const [groupBy, setGroupBy] = useState<GroupBy>(() => {
+    try {
+      const saved = localStorage.getItem('slip_group_by');
+      if (saved === 'type' || saved === 'none') return saved as GroupBy;
+      return 'none';
+    } catch {
+      return 'none';
+    }
+  });
+
+  const handleSortChange = useCallback((newSortBy: SortBy, newOrder: SortOrder) => {
+    setSortBy(newSortBy);
+    setSortOrder(newOrder);
+    try {
+      localStorage.setItem('slip_sort_by', newSortBy);
+      localStorage.setItem('slip_sort_order', newOrder);
+    } catch {}
+    setBookmarks((prev) => sortBookmarks(prev, newSortBy, newOrder));
+  }, []);
+
+  const handleGroupByChange = useCallback((newGroupBy: GroupBy) => {
+    setGroupBy(newGroupBy);
+    try {
+      localStorage.setItem('slip_group_by', newGroupBy);
+    } catch {}
+  }, []);
+
   const [isSmartSearch, setIsSmartSearch] = useState<boolean>(() => {
     try {
       return localStorage.getItem('slip_smart_search') === 'true';
@@ -245,25 +296,25 @@ export const App: React.FC = () => {
           try {
             setSearchNotice(null);
             const searchResults = await smartSearchBookmarks(cleanQ);
-            setBookmarks(searchResults);
+            setBookmarks(sortBookmarks(searchResults, sortBy, sortOrder));
           } catch (aiErr: any) {
             console.warn('Smart search provider error, smoothly falling back to keyword search:', aiErr);
             const fallbackResults = await searchBookmarks(cleanQ);
-            setBookmarks(fallbackResults);
+            setBookmarks(sortBookmarks(fallbackResults, sortBy, sortOrder));
             setSearchNotice(`AI Smart Search encountered a provider issue (${aiErr.message || 'Provider busy'}). Showing keyword search matches below.`);
           }
         } else {
           setSearchNotice(null);
           const searchResults = await searchBookmarks(cleanQ);
-          setBookmarks(searchResults);
+          setBookmarks(sortBookmarks(searchResults, sortBy, sortOrder));
         }
       } else {
         setSearchNotice(null);
         const [bList, tList] = await Promise.all([
-          fetchBookmarks(activeType, selectedTag || undefined),
+          fetchBookmarks(activeType, selectedTag || undefined, sortBy, sortOrder),
           fetchTags()
         ]);
-        setBookmarks(bList);
+        setBookmarks(sortBookmarks(bList, sortBy, sortOrder));
         setTags(tList);
       }
       setNeedsAuth(false);
@@ -275,7 +326,7 @@ export const App: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [activeType, selectedTag, searchQuery, isSmartSearch, aiConfig.isConnected, needsAuth]);
+  }, [activeType, selectedTag, searchQuery, isSmartSearch, aiConfig.isConnected, needsAuth, sortBy, sortOrder]);
 
   // Handle live search vs enter-to-search
   useEffect(() => {
@@ -434,17 +485,7 @@ export const App: React.FC = () => {
       const updated = await togglePinBookmark(id);
       setBookmarks((prev) => {
         const nextList = prev.map((b) => (b.id === id ? updated : b));
-        return nextList.sort((a, b) => {
-          const aPin = Boolean(a.is_pinned) ? 1 : 0;
-          const bPin = Boolean(b.is_pinned) ? 1 : 0;
-          if (aPin !== bPin) return bPin - aPin;
-          if (aPin && bPin) {
-            const aPinnedTime = a.pinned_at ? new Date(a.pinned_at).getTime() : 0;
-            const bPinnedTime = b.pinned_at ? new Date(b.pinned_at).getTime() : 0;
-            if (aPinnedTime !== bPinnedTime) return bPinnedTime - aPinnedTime;
-          }
-          return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
-        });
+        return sortBookmarks(nextList, sortBy, sortOrder);
       });
       if (searchNotice && searchNotice.includes('Pinboard full')) {
         setSearchNotice(null);
@@ -572,21 +613,11 @@ export const App: React.FC = () => {
     }
   };
 
-function mergeRestored(prev: Bookmark[], restoredItems: Bookmark[]): Bookmark[] {
+function mergeRestored(prev: Bookmark[], restoredItems: Bookmark[], activeSortBy: SortBy, activeOrder: SortOrder): Bookmark[] {
   const restoredList = restoredItems.map((b) => ({ ...b, deleted_at: null }));
   const existingIds = new Set(restoredItems.map((b) => b.id));
   const updated = [...restoredList, ...prev.filter((b) => !existingIds.has(b.id))];
-  return updated.sort((a, b) => {
-    const aPin = a.is_pinned ? 1 : 0;
-    const bPin = b.is_pinned ? 1 : 0;
-    if (aPin !== bPin) return bPin - aPin;
-    if (aPin && bPin) {
-      const aPinnedTime = a.pinned_at ? new Date(a.pinned_at).getTime() : 0;
-      const bPinnedTime = b.pinned_at ? new Date(b.pinned_at).getTime() : 0;
-      if (aPinnedTime !== bPinnedTime) return bPinnedTime - aPinnedTime;
-    }
-    return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
-  });
+  return sortBookmarks(updated, activeSortBy, activeOrder);
 }
 
   const handleUndoDelete = async () => {
@@ -600,11 +631,11 @@ function mergeRestored(prev: Bookmark[], restoredItems: Bookmark[]): Bookmark[] 
         const ids = bulkBookmarks.map((b) => b.id);
         await bulkRestoreBookmarks(ids);
         setRecycleCount((prev) => Math.max(0, prev - ids.length));
-        setBookmarks((prev) => mergeRestored(prev, bulkBookmarks));
+        setBookmarks((prev) => mergeRestored(prev, bulkBookmarks, sortBy, sortOrder));
       } else {
         await restoreBookmark(id);
         setRecycleCount((prev) => Math.max(0, prev - 1));
-        setBookmarks((prev) => mergeRestored(prev, [bookmark]));
+        setBookmarks((prev) => mergeRestored(prev, [bookmark], sortBy, sortOrder));
       }
       fetchTags().then(setTags).catch(() => {});
     } catch (err: any) {
@@ -677,6 +708,18 @@ function mergeRestored(prev: Bookmark[], restoredItems: Bookmark[]): Bookmark[] 
             </div>
           )}
 
+          {/* Feed Sort & Group By Controls Toolbar */}
+          {!loading && bookmarks.length > 0 && (
+            <FeedToolbar
+              sortBy={sortBy}
+              sortOrder={sortOrder}
+              groupBy={groupBy}
+              onSortChange={handleSortChange}
+              onGroupByChange={handleGroupByChange}
+              totalCount={bookmarks.length}
+            />
+          )}
+
           {searchNotice && (
             <div style={{
               maxWidth: '800px',
@@ -734,6 +777,9 @@ function mergeRestored(prev: Bookmark[], restoredItems: Bookmark[]): Bookmark[] 
                 selectedSlipIds={selectedSlipIds}
                 isSelectionMode={selectedSlipIds.size > 0}
                 onToggleSelectSlip={toggleSelectSlip}
+                groupBy={groupBy}
+                sortBy={sortBy}
+                sortOrder={sortOrder}
               />
 
               {selectedSlipIds.size > 0 && (
@@ -832,6 +878,25 @@ function mergeRestored(prev: Bookmark[], restoredItems: Bookmark[]): Bookmark[] 
       <ReaderModal
         bookmark={readerBookmark}
         onClose={() => setReaderBookmark(null)}
+        onTagClick={(tagName) => {
+          setSelectedTag(tagName);
+          setReaderBookmark(null);
+        }}
+        onUpdateTags={async (id, tagNames) => {
+          const target = bookmarks.find((b) => b.id === id) || readerBookmark;
+          if (!target) return;
+          const updated = await updateBookmark(id, {
+            title: target.title,
+            description: target.description,
+            personalNote: target.personal_note || undefined,
+            contentType: target.content_type || 'website',
+            tags: tagNames
+          });
+          setBookmarks((prev) => prev.map((b) => (b.id === id ? updated : b)));
+          setReaderBookmark(updated);
+          fetchTags().then(setTags).catch(() => {});
+        }}
+        availableTags={tags}
       />
 
       <ShareModal

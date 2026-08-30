@@ -127,7 +127,7 @@ describe('Frontend SPA Component Architecture & Mobile UI Interactions', () => {
     fireEvent.click(articleTab);
 
     await waitFor(() => {
-      expect(api.fetchBookmarks).toHaveBeenCalledWith('article', undefined);
+      expect(api.fetchBookmarks).toHaveBeenCalledWith('article', undefined, 'created_at', 'desc');
     });
   });
 
@@ -280,7 +280,7 @@ describe('Frontend SPA Component Architecture & Mobile UI Interactions', () => {
     fireEvent.click(notesTab);
 
     await waitFor(() => {
-      expect(api.fetchBookmarks).toHaveBeenCalledWith('note', undefined);
+      expect(api.fetchBookmarks).toHaveBeenCalledWith('note', undefined, 'created_at', 'desc');
     });
 
     const docsTab = screen.getByRole('button', { name: /Documents/i });
@@ -288,7 +288,7 @@ describe('Frontend SPA Component Architecture & Mobile UI Interactions', () => {
     fireEvent.click(docsTab);
 
     await waitFor(() => {
-      expect(api.fetchBookmarks).toHaveBeenCalledWith('document', undefined);
+      expect(api.fetchBookmarks).toHaveBeenCalledWith('document', undefined, 'created_at', 'desc');
     });
   });
 

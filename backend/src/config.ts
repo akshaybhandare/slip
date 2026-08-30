@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
 import { getDb } from './db';
+import { getSlipDir } from './paths';
 
 let cachedSecret: string | null = null;
 
@@ -26,6 +27,7 @@ interface SlipConfigFile {
 
 export function readSlipConfig(): SlipConfigFile {
   const candidatePaths = [
+    path.resolve(getSlipDir(), 'slip.config.json'),
     path.resolve(projectRoot, 'slip.config.json'),
     path.resolve(process.cwd(), 'slip.config.json'),
     path.resolve('/config', 'slip.config.json')

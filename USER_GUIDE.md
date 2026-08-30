@@ -92,6 +92,7 @@ flowchart TD
 
 * **🏷️ Tags**: Flat, quick labels like `#inspiration` or `#development`. Tap them on any card to instantly filter your view.
 * **📁 Clips**: Think of these as secret compartments. You can nest them (e.g. `Hobbies` ➔ `3D Printing`). 
+* **🔄 Sort & Group Controls**: Use the feed toolbar right above your stream to switch between **Newest First**, **Oldest First**, **Title (A-Z)**, or **Group by Type** to view collapsible sections for Articles, Notes, Documents, Images, Websites, and Videos with live counters. Preferences are automatically saved in your browser.
 
 > [!IMPORTANT]
 > **Slippy's Organizing Trick**: Unlike standard folders that crowd your view, Clips are **hidden by default**. Your dashboard stays clean. You can "pin" your favorite Clips to the sidebar to jump to them quickly!

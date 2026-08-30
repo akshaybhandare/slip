@@ -74,6 +74,32 @@
 
 ---
 
+## ⚡ 1-Line Standalone Install (macOS, Linux, Windows)
+
+Install and run Slip immediately with zero container dependencies:
+
+### macOS & Linux:
+```bash
+curl -fsSL https://raw.githubusercontent.com/akshaybhandare/Slip/main/install.sh | bash
+```
+> *Custom path or port:* `curl -fsSL .../install.sh | bash -s -- --dir /custom/path --port 4000`
+
+### Windows (PowerShell):
+```powershell
+irm https://raw.githubusercontent.com/akshaybhandare/Slip/main/install.ps1 | iex
+```
+
+### Manage Slip CLI:
+```bash
+slip status      # Check server status
+slip stop        # Stop background server
+slip start -d    # Start background daemon
+slip logs        # View live application logs
+slip uninstall   # Uninstall cleanly with data preservation
+```
+
+---
+
 ## 🚀 Quick Start with Docker Compose
 
 Create a `docker-compose.yml` file:

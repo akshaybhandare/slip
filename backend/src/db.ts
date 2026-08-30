@@ -1,20 +1,12 @@
 import Database from 'better-sqlite3';
 import path from 'path';
 import fs from 'fs';
-import dotenv from 'dotenv';
+import { getResolvedDbPath, ensureDirSync } from './paths';
 
 let dbInstance: Database.Database | null = null;
 
-// Load environmental variables from the project root
-const projectRoot = path.resolve(__dirname, '../..');
-dotenv.config({ path: path.resolve(projectRoot, '.env') });
-
 export function getDbPath(): string {
-  if (process.env.NODE_ENV === 'test') {
-    return ':memory:';
-  }
-  const rawPath = process.env.DB_PATH || 'backend/db/bookmarks.db';
-  return path.isAbsolute(rawPath) ? rawPath : path.resolve(projectRoot, rawPath);
+  return getResolvedDbPath();
 }
 
 export function initDb(dbPath = getDbPath()): Database.Database {

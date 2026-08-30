@@ -1,5 +1,15 @@
 export type ContentType = 'all' | 'article' | 'image' | 'document' | 'note' | 'product' | 'video' | 'website';
 
+export type SortBy = 'created_at' | 'title' | 'updated_at';
+export type SortOrder = 'desc' | 'asc';
+export type GroupBy = 'none' | 'type';
+
+export interface ViewPreferences {
+  sortBy: SortBy;
+  sortOrder: SortOrder;
+  groupBy: GroupBy;
+}
+
 export interface Tag {
   id: number;
   name: string;
