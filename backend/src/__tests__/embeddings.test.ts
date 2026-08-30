@@ -192,13 +192,13 @@ describe('On-Device Semantic Embeddings & Related Slips (Issues #37 & #40)', () 
     beforeAll(async () => {
       const r1 = db.prepare(`
         INSERT INTO bookmarks (user_id, url, title, description)
-        VALUES (?, 'https://react.dev/blog', 'React Server Actions', 'How to mutate data with server actions and forms in React')
+        VALUES (?, 'https://react.dev/blog', 'React Server Actions Guide', 'How to mutate data with server actions and forms in React 19')
       `).run(userId);
       reactSlipId = Number(r1.lastInsertRowid);
 
       const r2 = db.prepare(`
         INSERT INTO bookmarks (user_id, url, title, description)
-        VALUES (?, 'https://vuejs.org/guide', 'Vue Composable Functions', 'Reusing stateful logic in Vue single page applications')
+        VALUES (?, 'https://react.dev/reference/react', 'React Components and Hooks API', 'Comprehensive reference for React 19 component hooks and server actions')
       `).run(userId);
       vueSlipId = Number(r2.lastInsertRowid);
 
@@ -220,14 +220,15 @@ describe('On-Device Semantic Embeddings & Related Slips (Issues #37 & #40)', () 
       await indexBookmark(cookingSlipId);
     });
 
-    it('finds top semantically related slips excluding the target slip itself', async () => {
+    it('finds top semantically related slips with >= 70% confidence excluding self', async () => {
       const related = await findRelatedBookmarks(reactSlipId, userId, 3);
       expect(related.length).toBeGreaterThanOrEqual(1);
 
       const relatedIds = related.map((r) => r.bookmark.id);
       expect(relatedIds).not.toContain(reactSlipId); // Never includes self
-      expect(relatedIds).toContain(vueSlipId); // Frontend library related
+      expect(relatedIds).toContain(vueSlipId); // Strongly related React slip
       expect(relatedIds).not.toContain(cookingSlipId); // Soup should not be related to React
+      expect(related[0].similarityScore).toBeGreaterThanOrEqual(70);
     });
 
     it('GET /api/bookmarks/:id/related returns related slips with similarity score', async () => {

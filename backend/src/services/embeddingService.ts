@@ -311,7 +311,7 @@ export async function findRelatedBookmarks(
   bookmarkId: number,
   userId: number,
   limit = 5,
-  minSimilarity = 0.35
+  minSimilarity = 0.70
 ): Promise<{ bookmark: any; similarityScore: number }[]> {
   const db = getDb();
 

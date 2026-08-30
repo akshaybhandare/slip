@@ -48,7 +48,7 @@ export const ReaderModal: React.FC<ReaderModalProps> = ({
         .then(setHighlights)
         .catch(() => setHighlights([]));
       Promise.resolve(fetchRelatedBookmarks(bookmark.id, 3))
-        .then((res) => setRelatedSlips(Array.isArray(res) ? res.slice(0, 3) : []))
+        .then((res) => setRelatedSlips(Array.isArray(res) ? res.filter((s) => (s.similarityScore ?? 100) >= 70).slice(0, 3) : []))
         .catch(() => setRelatedSlips([]));
       Promise.resolve(fetchBookmarkById(bookmark.id))
         .then((fullBookmark) => {
@@ -73,7 +73,7 @@ export const ReaderModal: React.FC<ReaderModalProps> = ({
       .then(setHighlights)
       .catch(() => setHighlights([]));
     Promise.resolve(fetchRelatedBookmarks(rel.id, 3))
-      .then((res) => setRelatedSlips(Array.isArray(res) ? res.slice(0, 3) : []))
+      .then((res) => setRelatedSlips(Array.isArray(res) ? res.filter((s) => (s.similarityScore ?? 100) >= 70).slice(0, 3) : []))
       .catch(() => setRelatedSlips([]));
     Promise.resolve(fetchBookmarkById(rel.id))
       .then((fullBookmark) => {

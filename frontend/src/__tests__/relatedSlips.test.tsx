@@ -75,8 +75,31 @@ describe('On-Device Related Slips in Reader Mode (Issue #40)', () => {
     expect(screen.getByText('Related Slips')).toBeInTheDocument();
     expect(screen.getByText('Next.js App Router Architecture')).toBeInTheDocument();
     expect(screen.getByText('88%')).toBeInTheDocument();
-    expect(screen.getByText('Vue 3 Composition API Guide')).toBeInTheDocument();
-    expect(screen.getByText('65%')).toBeInTheDocument();
+    // 65% match is below the 70% confidence threshold so it must not be shown
+    expect(screen.queryByText('Vue 3 Composition API Guide')).not.toBeInTheDocument();
+    expect(screen.queryByText('65%')).not.toBeInTheDocument();
+  });
+
+  it('does not render related slips section if all matches are below 70%', async () => {
+    vi.mocked(api.fetchRelatedBookmarks).mockResolvedValueOnce([
+      {
+        ...mockRelatedBookmarks[1],
+        similarityScore: 55
+      }
+    ]);
+
+    render(
+      <ReaderModal
+        bookmark={mockPrimaryBookmark}
+        onClose={vi.fn()}
+      />
+    );
+
+    await waitFor(() => {
+      expect(api.fetchRelatedBookmarks).toHaveBeenCalledWith(101, 3);
+    });
+
+    expect(screen.queryByTestId('reader-related-section')).not.toBeInTheDocument();
   });
 
   it('clicking a related slip switches the reader modal to view that slip', async () => {
